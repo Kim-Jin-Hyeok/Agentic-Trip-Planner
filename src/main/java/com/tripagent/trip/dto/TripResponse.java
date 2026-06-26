@@ -1,0 +1,32 @@
+package com.tripagent.trip.dto;
+
+import com.tripagent.trip.domain.Transportation;
+import com.tripagent.trip.domain.Trip;
+import com.tripagent.trip.domain.TripConcept;
+import java.time.LocalDate;
+import java.time.LocalTime;
+
+public record TripResponse(
+        Long tripId,
+        String destination,
+        LocalDate startDate,
+        LocalDate endDate,
+        LocalTime dailyStartTime,
+        TripConcept concept,
+        Transportation transportation,
+        String lastAccommodationArea
+) {
+
+    public static TripResponse from(Trip trip) {
+        return new TripResponse(
+                trip.getTripId(),
+                trip.getDestination(),
+                trip.getStartDate(),
+                trip.getEndDate(),
+                trip.getDailyStartTime(),
+                trip.getConcept(),
+                trip.getTransportation(),
+                trip.getLastAccommodationArea()
+        );
+    }
+}
