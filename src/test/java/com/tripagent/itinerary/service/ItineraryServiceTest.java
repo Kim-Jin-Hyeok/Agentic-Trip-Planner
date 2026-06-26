@@ -20,6 +20,7 @@ import com.tripagent.trip.repository.TripRepository;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -104,6 +105,42 @@ class ItineraryServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Itinerary dayNo and orderNo already exist in this trip.");
         verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
+    void getItinerariesReturnsTripItineraries() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary itinerary = Itinerary.create(
+                trip,
+                place,
+                1,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 30),
+                0,
+                "첫 일정으로 방문하기 좋습니다."
+        );
+        setId(itinerary, "itineraryId", 100L);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(itinerary));
+
+        List<ItineraryResponse> responses = itineraryService.getItineraries(1L);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).itineraryId()).isEqualTo(100L);
+        assertThat(responses.get(0).tripId()).isEqualTo(1L);
+        assertThat(responses.get(0).placeId()).isEqualTo(10L);
+    }
+
+    @Test
+    void getItinerariesRejectsUnknownTrip() {
+        when(tripRepository.existsById(1L)).thenReturn(false);
+
+        assertThatThrownBy(() -> itineraryService.getItineraries(1L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Trip not found. tripId=1");
     }
 
     private ItineraryCreateRequest request(Long placeId, Integer dayNo, Integer orderNo) {
