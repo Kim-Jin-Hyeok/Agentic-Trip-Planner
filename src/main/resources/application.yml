@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/trip_planner?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:trip}
+    password: ${DB_PASSWORD:trippw}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
