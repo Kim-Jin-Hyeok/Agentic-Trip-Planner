@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     List<Place> findByUseYnTrueOrderByHealingScoreDesc();
+
+    boolean existsByNameAndAddress(String name, String address);
 }

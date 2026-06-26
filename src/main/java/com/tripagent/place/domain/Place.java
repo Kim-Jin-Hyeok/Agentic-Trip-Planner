@@ -72,6 +72,88 @@ public class Place {
     protected Place() {
     }
 
+    private Place(
+            String name,
+            String category,
+            String region,
+            String address,
+            Double latitude,
+            Double longitude,
+            Integer avgStayMinutes,
+            Boolean indoorYn,
+            Boolean parkingYn,
+            Integer rainyDayScore,
+            Integer healingScore,
+            Integer foodScore,
+            Integer cafeScore,
+            Integer photoScore,
+            Integer coupleScore,
+            Integer familyScore,
+            String description,
+            Boolean useYn
+    ) {
+        this.name = name;
+        this.category = category;
+        this.region = region;
+        this.address = address;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.avgStayMinutes = avgStayMinutes;
+        this.indoorYn = indoorYn;
+        this.parkingYn = parkingYn;
+        this.rainyDayScore = rainyDayScore;
+        this.healingScore = healingScore;
+        this.foodScore = foodScore;
+        this.cafeScore = cafeScore;
+        this.photoScore = photoScore;
+        this.coupleScore = coupleScore;
+        this.familyScore = familyScore;
+        this.description = description;
+        this.useYn = useYn;
+    }
+
+    public static Place create(
+            String name,
+            String category,
+            String region,
+            String address,
+            Double latitude,
+            Double longitude,
+            Integer avgStayMinutes,
+            Boolean indoorYn,
+            Boolean parkingYn,
+            Integer rainyDayScore,
+            Integer healingScore,
+            Integer foodScore,
+            Integer cafeScore,
+            Integer photoScore,
+            Integer coupleScore,
+            Integer familyScore,
+            String description,
+            Boolean useYn
+    ) {
+        return new Place(
+                name,
+                category,
+                region,
+                address,
+                latitude,
+                longitude,
+                avgStayMinutes,
+                indoorYn,
+                parkingYn,
+                rainyDayScore,
+                healingScore,
+                foodScore,
+                cafeScore,
+                photoScore,
+                coupleScore,
+                familyScore,
+                description,
+                useYn
+        );
+    }
+
     public Long getPlaceId() {
         return placeId;
     }
