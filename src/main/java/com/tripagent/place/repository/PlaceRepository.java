@@ -8,5 +8,15 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     List<Place> findByUseYnTrueOrderByHealingScoreDesc();
 
+    List<Place> findByUseYnTrueOrderByFoodScoreDesc();
+
+    List<Place> findByUseYnTrueOrderByCafeScoreDesc();
+
+    List<Place> findByUseYnTrueOrderByPhotoScoreDesc();
+
+    List<Place> findByUseYnTrueOrderByCoupleScoreDesc();
+
+    List<Place> findByUseYnTrueOrderByFamilyScoreDesc();
+
     boolean existsByNameAndAddress(String name, String address);
 }

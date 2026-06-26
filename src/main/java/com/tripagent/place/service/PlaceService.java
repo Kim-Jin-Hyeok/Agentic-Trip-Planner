@@ -21,6 +21,11 @@ public class PlaceService {
     public List<PlaceResponse> recommendPlaces(PlaceRecommendConcept concept) {
         List<Place> places = switch (concept) {
             case HEALING -> placeRepository.findByUseYnTrueOrderByHealingScoreDesc();
+            case FOOD -> placeRepository.findByUseYnTrueOrderByFoodScoreDesc();
+            case CAFE -> placeRepository.findByUseYnTrueOrderByCafeScoreDesc();
+            case PHOTO -> placeRepository.findByUseYnTrueOrderByPhotoScoreDesc();
+            case COUPLE -> placeRepository.findByUseYnTrueOrderByCoupleScoreDesc();
+            case FAMILY -> placeRepository.findByUseYnTrueOrderByFamilyScoreDesc();
         };
 
         return places.stream()
