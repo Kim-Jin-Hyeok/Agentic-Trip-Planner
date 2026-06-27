@@ -4,11 +4,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
-@Profile({"prod", "openai"})
+@Profile("(prod | openai) & !local & !dev & !test")
 public class OpenAiLlmClient implements LlmClient {
 
     private static final String OPENAI_BASE_URL = "https://api.openai.com";
@@ -35,6 +36,7 @@ public class OpenAiLlmClient implements LlmClient {
         OpenAiResponsesResponse response = restClient.post()
                 .uri("/v1/responses")
                 .header("Authorization", "Bearer " + openAiProperties.getApiKey())
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
@@ -65,10 +67,16 @@ public class OpenAiLlmClient implements LlmClient {
 
         StringBuilder outputText = new StringBuilder();
         for (OpenAiOutputItem outputItem : response.output()) {
+            if (outputItem == null) {
+                continue;
+            }
             if (outputItem.content() == null) {
                 continue;
             }
             for (OpenAiContentItem contentItem : outputItem.content()) {
+                if (contentItem == null) {
+                    continue;
+                }
                 if ("refusal".equals(contentItem.type())) {
                     throw new IllegalStateException("OpenAI response was refused.");
                 }

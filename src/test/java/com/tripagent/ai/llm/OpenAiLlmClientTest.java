@@ -11,6 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -26,6 +27,7 @@ class OpenAiLlmClientTest {
         server.expect(requestTo("https://api.openai.com/v1/responses"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("Authorization", "Bearer test-api-key"))
+                .andExpect(header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE))
                 .andExpect(content().json("""
                         {
                           "model": "test-model",
@@ -162,6 +164,31 @@ class OpenAiLlmClientTest {
         assertThatThrownBy(() -> client.generate("prompt"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("OpenAI response does not contain output_text.");
+    }
+
+    @Test
+    void generateIgnoresNullOutputAndContentItems() {
+        OpenAiLlmClient client = clientWithResponse("""
+                {
+                  "output": [
+                    null,
+                    {
+                      "type": "message",
+                      "content": [
+                        null,
+                        {
+                          "type": "output_text",
+                          "text": "[{\\\"placeId\\\":10}]"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """);
+
+        String response = client.generate("prompt");
+
+        assertThat(response).isEqualTo("[{\"placeId\":10}]");
     }
 
     private OpenAiLlmClient clientWithResponse(String responseBody) {

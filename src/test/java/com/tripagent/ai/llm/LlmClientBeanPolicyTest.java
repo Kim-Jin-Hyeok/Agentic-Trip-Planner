@@ -80,6 +80,42 @@ class LlmClientBeanPolicyTest {
                 });
     }
 
+    @Test
+    void localAndOpenaiProfilesRegisterMockLlmClientOnly() {
+        contextRunner
+                .withPropertyValues("spring.profiles.active=local,openai")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(LlmClient.class);
+                    assertThat(context).hasSingleBean(MockLlmClient.class);
+                    assertThat(context).doesNotHaveBean(OpenAiLlmClient.class);
+                    assertThat(context).doesNotHaveBean(FailFastLlmClient.class);
+                });
+    }
+
+    @Test
+    void devAndProdProfilesRegisterMockLlmClientOnly() {
+        contextRunner
+                .withPropertyValues("spring.profiles.active=dev,prod")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(LlmClient.class);
+                    assertThat(context).hasSingleBean(MockLlmClient.class);
+                    assertThat(context).doesNotHaveBean(OpenAiLlmClient.class);
+                    assertThat(context).doesNotHaveBean(FailFastLlmClient.class);
+                });
+    }
+
+    @Test
+    void customProfileRegistersFailFastLlmClient() {
+        contextRunner
+                .withPropertyValues("spring.profiles.active=staging")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(LlmClient.class);
+                    assertThat(context).hasSingleBean(FailFastLlmClient.class);
+                    assertThat(context).doesNotHaveBean(MockLlmClient.class);
+                    assertThat(context).doesNotHaveBean(OpenAiLlmClient.class);
+                });
+    }
+
     @Configuration
     @Import({MockLlmClient.class, FailFastLlmClient.class, OpenAiLlmClient.class, OpenAiProperties.class})
     static class TestLlmClientConfiguration {

@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("!local & !dev & !test & !prod & !openai")
+@Profile("!local & !dev & !test & !(prod | openai)")
 @ConditionalOnMissingBean(LlmClient.class)
 public class FailFastLlmClient implements LlmClient {
 
