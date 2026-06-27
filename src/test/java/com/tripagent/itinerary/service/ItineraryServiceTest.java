@@ -52,6 +52,7 @@ class ItineraryServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
         when(itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(1L, 1, 1)).thenReturn(false);
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of());
         when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(invocation -> {
             Itinerary itinerary = invocation.getArgument(0);
             setId(itinerary, "itineraryId", 100L);
@@ -93,6 +94,20 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void createItineraryRejectsDayNoOutsideTripPeriod() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        ItineraryCreateRequest request = request(10L, 4, 1);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+
+        assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary dayNo must be within trip period. maxDayNo=3");
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
     void createItineraryRejectsDuplicatedDayNoAndOrderNoInTrip() {
         Trip trip = trip(1L);
         Place place = place(10L);
@@ -105,6 +120,80 @@ class ItineraryServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Itinerary dayNo and orderNo already exist in this trip.");
         verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
+    void createItineraryRejectsTimeOverlapInSameTripDay() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                10L,
+                1,
+                2,
+                LocalTime.of(10, 0),
+                LocalTime.of(11, 0),
+                30,
+                "Overlap request"
+        );
+        Itinerary existingItinerary = Itinerary.create(
+                trip,
+                place,
+                1,
+                1,
+                LocalTime.of(9, 30),
+                LocalTime.of(10, 30),
+                0,
+                "Existing itinerary"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+        when(itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(1L, 1, 2)).thenReturn(false);
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(existingItinerary));
+
+        assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary time overlaps with existing itinerary.");
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
+    void createItineraryAllowsAdjacentTimeInSameTripDay() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                10L,
+                1,
+                2,
+                LocalTime.of(10, 30),
+                LocalTime.of(11, 30),
+                30,
+                "Adjacent request"
+        );
+        Itinerary existingItinerary = Itinerary.create(
+                trip,
+                place,
+                1,
+                1,
+                LocalTime.of(9, 30),
+                LocalTime.of(10, 30),
+                0,
+                "Existing itinerary"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+        when(itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(1L, 1, 2)).thenReturn(false);
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(existingItinerary));
+        when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(invocation -> {
+            Itinerary itinerary = invocation.getArgument(0);
+            setId(itinerary, "itineraryId", 101L);
+            return itinerary;
+        });
+
+        ItineraryResponse response = itineraryService.createItinerary(1L, request);
+
+        assertThat(response.itineraryId()).isEqualTo(101L);
+        assertThat(response.orderNo()).isEqualTo(2);
+        verify(itineraryRepository).save(any(Itinerary.class));
     }
 
     @Test

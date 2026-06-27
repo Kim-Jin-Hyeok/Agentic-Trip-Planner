@@ -8,6 +8,7 @@ import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.repository.TripRepository;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,8 @@ public class ItineraryService {
         Place place = placeRepository.findById(request.placeId())
                 .orElseThrow(() -> new NoSuchElementException("Place not found. placeId=" + request.placeId()));
 
+        validateDayNoInTripPeriod(trip, request.dayNo());
+
         if (itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(
                 tripId,
                 request.dayNo(),
@@ -47,6 +50,7 @@ public class ItineraryService {
         )) {
             throw new IllegalArgumentException("Itinerary dayNo and orderNo already exist in this trip.");
         }
+        validateNoTimeOverlap(tripId, request);
 
         Itinerary itinerary = Itinerary.create(
                 trip,
@@ -96,6 +100,30 @@ public class ItineraryService {
         }
         if (request.travelMinutesFromPrevious() == null || request.travelMinutesFromPrevious() < 0) {
             throw new IllegalArgumentException("Itinerary travelMinutesFromPrevious must be greater than or equal to 0.");
+        }
+    }
+
+    private void validateDayNoInTripPeriod(Trip trip, Integer dayNo) {
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        if (dayNo > tripDays) {
+            throw new IllegalArgumentException(
+                    "Itinerary dayNo must be within trip period. maxDayNo=" + tripDays
+            );
+        }
+    }
+
+    private void validateNoTimeOverlap(Long tripId, ItineraryCreateRequest request) {
+        List<Itinerary> sameDayItineraries = itineraryRepository.findByTrip_TripIdAndDayNo(
+                tripId,
+                request.dayNo()
+        );
+
+        for (Itinerary itinerary : sameDayItineraries) {
+            boolean overlaps = request.startTime().isBefore(itinerary.getEndTime())
+                    && itinerary.getStartTime().isBefore(request.endTime());
+            if (overlaps) {
+                throw new IllegalArgumentException("Itinerary time overlaps with existing itinerary.");
+            }
         }
     }
 }
