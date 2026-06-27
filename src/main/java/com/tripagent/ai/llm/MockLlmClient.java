@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile({"local", "test"})
+@Profile({"local", "dev", "test"})
 public class MockLlmClient implements LlmClient {
 
     private static final Pattern PLACE_ID_PATTERN = Pattern.compile("placeId:\\s*(\\d+)");
