@@ -8,6 +8,7 @@ import com.tripagent.place.domain.Place;
 import com.tripagent.place.dto.PlaceRecommendConcept;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.repository.PlaceRepository;
+import com.tripagent.trip.domain.TripConcept;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -87,6 +88,72 @@ class PlaceServiceTest {
         List<PlaceResponse> responses = placeService.recommendPlaces(PlaceRecommendConcept.FAMILY);
 
         assertThat(responses).extracting(PlaceResponse::name).containsExactly("Family Place");
+        verify(placeRepository).findByUseYnTrueOrderByFamilyScoreDesc();
+    }
+
+    @Test
+    void findCandidatePlacesMapsHealingTripConcept() {
+        Place place = place("Healing Candidate");
+        when(placeRepository.findByUseYnTrueOrderByHealingScoreDesc()).thenReturn(List.of(place));
+
+        List<PlaceResponse> responses = placeService.findCandidatePlaces(TripConcept.HEALING);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Healing Candidate");
+        verify(placeRepository).findByUseYnTrueOrderByHealingScoreDesc();
+    }
+
+    @Test
+    void findCandidatePlacesMapsFoodTripConcept() {
+        Place place = place("Food Candidate");
+        when(placeRepository.findByUseYnTrueOrderByFoodScoreDesc()).thenReturn(List.of(place));
+
+        List<PlaceResponse> responses = placeService.findCandidatePlaces(TripConcept.FOOD);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Food Candidate");
+        verify(placeRepository).findByUseYnTrueOrderByFoodScoreDesc();
+    }
+
+    @Test
+    void findCandidatePlacesMapsCafeTripConcept() {
+        Place place = place("Cafe Candidate");
+        when(placeRepository.findByUseYnTrueOrderByCafeScoreDesc()).thenReturn(List.of(place));
+
+        List<PlaceResponse> responses = placeService.findCandidatePlaces(TripConcept.CAFE);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Cafe Candidate");
+        verify(placeRepository).findByUseYnTrueOrderByCafeScoreDesc();
+    }
+
+    @Test
+    void findCandidatePlacesMapsPhotoTripConcept() {
+        Place place = place("Photo Candidate");
+        when(placeRepository.findByUseYnTrueOrderByPhotoScoreDesc()).thenReturn(List.of(place));
+
+        List<PlaceResponse> responses = placeService.findCandidatePlaces(TripConcept.PHOTO);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Photo Candidate");
+        verify(placeRepository).findByUseYnTrueOrderByPhotoScoreDesc();
+    }
+
+    @Test
+    void findCandidatePlacesMapsCoupleTripConcept() {
+        Place place = place("Couple Candidate");
+        when(placeRepository.findByUseYnTrueOrderByCoupleScoreDesc()).thenReturn(List.of(place));
+
+        List<PlaceResponse> responses = placeService.findCandidatePlaces(TripConcept.COUPLE);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Couple Candidate");
+        verify(placeRepository).findByUseYnTrueOrderByCoupleScoreDesc();
+    }
+
+    @Test
+    void findCandidatePlacesMapsFamilyTripConcept() {
+        Place place = place("Family Candidate");
+        when(placeRepository.findByUseYnTrueOrderByFamilyScoreDesc()).thenReturn(List.of(place));
+
+        List<PlaceResponse> responses = placeService.findCandidatePlaces(TripConcept.FAMILY);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Family Candidate");
         verify(placeRepository).findByUseYnTrueOrderByFamilyScoreDesc();
     }
 
