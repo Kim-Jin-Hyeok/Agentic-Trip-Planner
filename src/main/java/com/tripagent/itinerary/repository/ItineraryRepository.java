@@ -8,5 +8,7 @@ public interface ItineraryRepository extends JpaRepository<Itinerary, Long> {
 
     boolean existsByTrip_TripIdAndDayNoAndOrderNo(Long tripId, Integer dayNo, Integer orderNo);
 
+    boolean existsByTrip_TripId(Long tripId);
+
     List<Itinerary> findByTrip_TripIdOrderByDayNoAscOrderNoAsc(Long tripId);
 }

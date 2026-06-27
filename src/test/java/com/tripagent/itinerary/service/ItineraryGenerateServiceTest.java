@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.trip.domain.Transportation;
@@ -40,6 +42,9 @@ class ItineraryGenerateServiceTest {
 
     @Mock
     private ItineraryService itineraryService;
+
+    @Mock
+    private ItineraryRepository itineraryRepository;
 
     @InjectMocks
     private ItineraryGenerateService itineraryGenerateService;
@@ -100,6 +105,7 @@ class ItineraryGenerateServiceTest {
                 place(10L, 60),
                 place(20L, 90)
         );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
@@ -121,6 +127,21 @@ class ItineraryGenerateServiceTest {
         verify(itineraryService).createItinerary(
                 1L,
                 request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+    }
+
+    @Test
+    void generateItinerariesRejectsTripThatAlreadyHasItinerary() {
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary already exists for this trip.");
+        verify(tripRepository, never()).findById(1L);
+        verify(placeService, never()).findCandidatePlaces(TripConcept.FOOD);
+        verify(itineraryService, never()).createItinerary(
+                1L,
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
         );
     }
 
