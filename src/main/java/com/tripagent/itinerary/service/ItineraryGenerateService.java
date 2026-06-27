@@ -2,6 +2,7 @@ package com.tripagent.itinerary.service;
 
 import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.trip.domain.Trip;
@@ -22,15 +23,25 @@ public class ItineraryGenerateService {
     private final TripRepository tripRepository;
     private final PlaceService placeService;
     private final CandidatePlaceValidator candidatePlaceValidator;
+    private final ItineraryService itineraryService;
 
     public ItineraryGenerateService(
             TripRepository tripRepository,
             PlaceService placeService,
-            CandidatePlaceValidator candidatePlaceValidator
+            CandidatePlaceValidator candidatePlaceValidator,
+            ItineraryService itineraryService
     ) {
         this.tripRepository = tripRepository;
         this.placeService = placeService;
         this.candidatePlaceValidator = candidatePlaceValidator;
+        this.itineraryService = itineraryService;
+    }
+
+    @Transactional
+    public List<ItineraryResponse> generateItineraries(Long tripId) {
+        return generateDraftItineraries(tripId).stream()
+                .map(request -> itineraryService.createItinerary(tripId, request))
+                .toList();
     }
 
     public List<ItineraryCreateRequest> generateDraftItineraries(Long tripId) {

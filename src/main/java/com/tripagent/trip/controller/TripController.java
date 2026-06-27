@@ -1,8 +1,11 @@
 package com.tripagent.trip.controller;
 
+import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,9 +20,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class TripController {
 
     private final TripService tripService;
+    private final ItineraryGenerateService itineraryGenerateService;
 
-    public TripController(TripService tripService) {
+    public TripController(
+            TripService tripService,
+            ItineraryGenerateService itineraryGenerateService
+    ) {
         this.tripService = tripService;
+        this.itineraryGenerateService = itineraryGenerateService;
     }
 
     @PostMapping
@@ -31,5 +39,10 @@ public class TripController {
     @GetMapping("/{tripId}")
     public TripResponse getTrip(@PathVariable Long tripId) {
         return tripService.getTrip(tripId);
+    }
+
+    @PostMapping("/{tripId}/generate")
+    public List<ItineraryResponse> generateItineraries(@PathVariable Long tripId) {
+        return itineraryGenerateService.generateItineraries(tripId);
     }
 }

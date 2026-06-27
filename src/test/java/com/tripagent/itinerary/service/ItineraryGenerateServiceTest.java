@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.trip.domain.Transportation;
@@ -36,6 +37,9 @@ class ItineraryGenerateServiceTest {
 
     @Mock
     private CandidatePlaceValidator candidatePlaceValidator;
+
+    @Mock
+    private ItineraryService itineraryService;
 
     @InjectMocks
     private ItineraryGenerateService itineraryGenerateService;
@@ -89,6 +93,37 @@ class ItineraryGenerateServiceTest {
                 .hasMessage("Trip id is required.");
     }
 
+    @Test
+    void generateItinerariesSavesDraftsAndReturnsResponses() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
+                .thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+                .thenReturn(response(200L, 1L, 20L, 2));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).extracting(ItineraryResponse::itineraryId)
+                .containsExactly(100L, 200L);
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L, 20L);
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+        verify(itineraryService).createItinerary(
+                1L,
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        verify(itineraryService).createItinerary(
+                1L,
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+    }
+
     private Trip trip(Long tripId, TripConcept concept) {
         Trip trip = Trip.create(
                 "JEJU",
@@ -123,6 +158,38 @@ class ItineraryGenerateServiceTest {
                 4,
                 3,
                 "description"
+        );
+    }
+
+    private ItineraryCreateRequest request(
+            Long placeId,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
+        return new ItineraryCreateRequest(
+                placeId,
+                1,
+                orderNo,
+                startTime,
+                endTime,
+                travelMinutesFromPrevious,
+                "Mock itinerary item selected from candidate places."
+        );
+    }
+
+    private ItineraryResponse response(Long itineraryId, Long tripId, Long placeId, Integer orderNo) {
+        return new ItineraryResponse(
+                itineraryId,
+                tripId,
+                placeId,
+                1,
+                orderNo,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0),
+                0,
+                "Mock itinerary item selected from candidate places."
         );
     }
 
