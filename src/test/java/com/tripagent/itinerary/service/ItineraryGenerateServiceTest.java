@@ -6,6 +6,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 
+import com.tripagent.ai.llm.LlmClient;
+import com.tripagent.ai.llm.LlmItineraryResponseConverter;
+import com.tripagent.ai.llm.dto.LlmItineraryItemResponse;
+import com.tripagent.ai.llm.parser.LlmItineraryJsonParser;
+import com.tripagent.ai.prompt.ItineraryPromptGenerator;
 import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
@@ -38,6 +43,18 @@ class ItineraryGenerateServiceTest {
     private PlaceService placeService;
 
     @Mock
+    private ItineraryPromptGenerator itineraryPromptGenerator;
+
+    @Mock
+    private LlmClient llmClient;
+
+    @Mock
+    private LlmItineraryJsonParser llmItineraryJsonParser;
+
+    @Mock
+    private LlmItineraryResponseConverter llmItineraryResponseConverter;
+
+    @Mock
     private CandidatePlaceValidator candidatePlaceValidator;
 
     @Mock
@@ -55,31 +72,46 @@ class ItineraryGenerateServiceTest {
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
                 place(20L, 90),
-                place(30L, 120),
-                place(40L, 60)
+                place(30L, 120)
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
         List<ItineraryCreateRequest> drafts = itineraryGenerateService.generateDraftItineraries(1L);
 
-        assertThat(drafts).hasSize(3);
+        assertThat(drafts).hasSize(2);
         assertThat(drafts).extracting(ItineraryCreateRequest::placeId)
-                .containsExactly(10L, 20L, 30L);
+                .containsExactly(10L, 20L);
         assertThat(drafts).extracting(ItineraryCreateRequest::dayNo)
-                .containsExactly(1, 1, 1);
+                .containsExactly(1, 1);
         assertThat(drafts).extracting(ItineraryCreateRequest::orderNo)
-                .containsExactly(1, 2, 3);
+                .containsExactly(1, 2);
         assertThat(drafts.get(0).startTime()).isEqualTo(LocalTime.of(9, 0));
         assertThat(drafts.get(0).endTime()).isEqualTo(LocalTime.of(10, 0));
         assertThat(drafts.get(1).startTime()).isEqualTo(LocalTime.of(10, 30));
         assertThat(drafts.get(1).endTime()).isEqualTo(LocalTime.of(12, 0));
-        assertThat(drafts.get(2).startTime()).isEqualTo(LocalTime.of(12, 30));
-        assertThat(drafts.get(2).endTime()).isEqualTo(LocalTime.of(14, 30));
         assertThat(drafts).extracting(ItineraryCreateRequest::travelMinutesFromPrevious)
-                .containsExactly(0, 30, 30);
+                .containsExactly(0, 30);
         verify(placeService).findCandidatePlaces(TripConcept.FOOD);
-        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L, 30L));
+        verify(itineraryPromptGenerator).generate(trip, candidatePlaces);
+        verify(llmClient).generate(prompt);
+        verify(llmItineraryJsonParser).parse(rawResponse);
+        verify(llmItineraryResponseConverter).toCreateRequests(parsedItems);
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
     }
 
     @Test
@@ -105,9 +137,23 @@ class ItineraryGenerateServiceTest {
                 place(10L, 60),
                 place(20L, 90)
         );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
         when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
@@ -179,6 +225,24 @@ class ItineraryGenerateServiceTest {
                 4,
                 3,
                 "description"
+        );
+    }
+
+    private LlmItineraryItemResponse llmItem(
+            Long placeId,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
+        return new LlmItineraryItemResponse(
+                placeId,
+                1,
+                orderNo,
+                startTime,
+                endTime,
+                travelMinutesFromPrevious,
+                "Mock LLM itinerary item selected from candidate places."
         );
     }
 

@@ -1,5 +1,10 @@
 package com.tripagent.itinerary.service;
 
+import com.tripagent.ai.llm.LlmClient;
+import com.tripagent.ai.llm.LlmItineraryResponseConverter;
+import com.tripagent.ai.llm.dto.LlmItineraryItemResponse;
+import com.tripagent.ai.llm.parser.LlmItineraryJsonParser;
+import com.tripagent.ai.prompt.ItineraryPromptGenerator;
 import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
@@ -8,7 +13,6 @@ import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.repository.TripRepository;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
@@ -18,11 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ItineraryGenerateService {
 
-    private static final int MOCK_PLACE_LIMIT = 3;
-    private static final int DEFAULT_TRAVEL_MINUTES = 30;
-
     private final TripRepository tripRepository;
     private final PlaceService placeService;
+    private final ItineraryPromptGenerator itineraryPromptGenerator;
+    private final LlmClient llmClient;
+    private final LlmItineraryJsonParser llmItineraryJsonParser;
+    private final LlmItineraryResponseConverter llmItineraryResponseConverter;
     private final CandidatePlaceValidator candidatePlaceValidator;
     private final ItineraryService itineraryService;
     private final ItineraryRepository itineraryRepository;
@@ -30,12 +35,20 @@ public class ItineraryGenerateService {
     public ItineraryGenerateService(
             TripRepository tripRepository,
             PlaceService placeService,
+            ItineraryPromptGenerator itineraryPromptGenerator,
+            LlmClient llmClient,
+            LlmItineraryJsonParser llmItineraryJsonParser,
+            LlmItineraryResponseConverter llmItineraryResponseConverter,
             CandidatePlaceValidator candidatePlaceValidator,
             ItineraryService itineraryService,
             ItineraryRepository itineraryRepository
     ) {
         this.tripRepository = tripRepository;
         this.placeService = placeService;
+        this.itineraryPromptGenerator = itineraryPromptGenerator;
+        this.llmClient = llmClient;
+        this.llmItineraryJsonParser = llmItineraryJsonParser;
+        this.llmItineraryResponseConverter = llmItineraryResponseConverter;
         this.candidatePlaceValidator = candidatePlaceValidator;
         this.itineraryService = itineraryService;
         this.itineraryRepository = itineraryRepository;
@@ -59,56 +72,22 @@ public class ItineraryGenerateService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         List<PlaceResponse> candidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
-        List<PlaceResponse> selectedPlaces = selectMockPlaces(candidatePlaces);
-        List<Long> selectedPlaceIds = selectedPlaces.stream()
-                .map(PlaceResponse::placeId)
+        String prompt = itineraryPromptGenerator.generate(trip, candidatePlaces);
+        String rawResponse = llmClient.generate(prompt);
+        List<LlmItineraryItemResponse> parsedItems = llmItineraryJsonParser.parse(rawResponse);
+        List<ItineraryCreateRequest> createRequests = llmItineraryResponseConverter.toCreateRequests(parsedItems);
+        List<Long> selectedPlaceIds = createRequests.stream()
+                .map(ItineraryCreateRequest::placeId)
                 .toList();
 
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
 
-        return createDraftRequests(trip.getDailyStartTime(), selectedPlaces);
+        return createRequests;
     }
 
     private void validateTripId(Long tripId) {
         if (tripId == null) {
             throw new IllegalArgumentException("Trip id is required.");
         }
-    }
-
-    private List<PlaceResponse> selectMockPlaces(List<PlaceResponse> candidatePlaces) {
-        return candidatePlaces.stream()
-                .limit(MOCK_PLACE_LIMIT)
-                .toList();
-    }
-
-    private List<ItineraryCreateRequest> createDraftRequests(
-            LocalTime dailyStartTime,
-            List<PlaceResponse> selectedPlaces
-    ) {
-        LocalTime nextStartTime = dailyStartTime;
-        java.util.ArrayList<ItineraryCreateRequest> draftRequests = new java.util.ArrayList<>();
-
-        for (int index = 0; index < selectedPlaces.size(); index++) {
-            PlaceResponse place = selectedPlaces.get(index);
-            int travelMinutesFromPrevious = index == 0 ? 0 : DEFAULT_TRAVEL_MINUTES;
-            LocalTime startTime = index == 0
-                    ? nextStartTime
-                    : nextStartTime.plusMinutes(DEFAULT_TRAVEL_MINUTES);
-            LocalTime endTime = startTime.plusMinutes(place.avgStayMinutes());
-
-            draftRequests.add(new ItineraryCreateRequest(
-                    place.placeId(),
-                    1,
-                    index + 1,
-                    startTime,
-                    endTime,
-                    travelMinutesFromPrevious,
-                    "Mock itinerary item selected from candidate places."
-            ));
-
-            nextStartTime = endTime;
-        }
-
-        return draftRequests;
     }
 }
