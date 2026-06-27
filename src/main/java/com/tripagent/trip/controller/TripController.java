@@ -3,6 +3,7 @@ package com.tripagent.trip.controller;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.trip.dto.TripCreateRequest;
+import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
 import java.util.List;
@@ -37,7 +38,7 @@ public class TripController {
     }
 
     @GetMapping("/{tripId}")
-    public TripResponse getTrip(@PathVariable Long tripId) {
+    public TripDetailResponse getTrip(@PathVariable Long tripId) {
         return tripService.getTrip(tripId);
     }
 

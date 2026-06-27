@@ -1,11 +1,15 @@
 package com.tripagent.trip.service;
 
+import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.dto.TripCreateRequest;
+import com.tripagent.trip.dto.TripDetailResponse;
+import com.tripagent.trip.dto.TripItineraryResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,9 +22,14 @@ public class TripService {
     private static final long MAX_NIGHTS = 3;
 
     private final TripRepository tripRepository;
+    private final ItineraryRepository itineraryRepository;
 
-    public TripService(TripRepository tripRepository) {
+    public TripService(
+            TripRepository tripRepository,
+            ItineraryRepository itineraryRepository
+    ) {
         this.tripRepository = tripRepository;
+        this.itineraryRepository = itineraryRepository;
     }
 
     @Transactional
@@ -40,11 +49,16 @@ public class TripService {
         return TripResponse.from(tripRepository.save(trip));
     }
 
-    public TripResponse getTrip(Long tripId) {
+    public TripDetailResponse getTrip(Long tripId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        List<TripItineraryResponse> itineraries = itineraryRepository
+                .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
+                .stream()
+                .map(TripItineraryResponse::from)
+                .toList();
 
-        return TripResponse.from(trip);
+        return TripDetailResponse.from(trip, itineraries);
     }
 
     private void validateCreateRequest(TripCreateRequest request) {
