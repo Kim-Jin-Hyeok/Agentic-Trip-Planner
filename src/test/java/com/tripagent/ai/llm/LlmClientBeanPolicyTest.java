@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.web.client.RestClient;
 
 class LlmClientBeanPolicyTest {
 
@@ -55,18 +57,36 @@ class LlmClientBeanPolicyTest {
     }
 
     @Test
-    void prodProfileRegistersFailFastLlmClient() {
+    void prodProfileRegistersOpenAiLlmClientOnly() {
         contextRunner
                 .withPropertyValues("spring.profiles.active=prod")
                 .run(context -> {
                     assertThat(context).hasSingleBean(LlmClient.class);
-                    assertThat(context).hasSingleBean(FailFastLlmClient.class);
+                    assertThat(context).hasSingleBean(OpenAiLlmClient.class);
                     assertThat(context).doesNotHaveBean(MockLlmClient.class);
+                    assertThat(context).doesNotHaveBean(FailFastLlmClient.class);
+                });
+    }
+
+    @Test
+    void openaiProfileRegistersOpenAiLlmClientOnly() {
+        contextRunner
+                .withPropertyValues("spring.profiles.active=openai")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(LlmClient.class);
+                    assertThat(context).hasSingleBean(OpenAiLlmClient.class);
+                    assertThat(context).doesNotHaveBean(MockLlmClient.class);
+                    assertThat(context).doesNotHaveBean(FailFastLlmClient.class);
                 });
     }
 
     @Configuration
-    @Import({MockLlmClient.class, FailFastLlmClient.class})
+    @Import({MockLlmClient.class, FailFastLlmClient.class, OpenAiLlmClient.class, OpenAiProperties.class})
     static class TestLlmClientConfiguration {
+
+        @Bean
+        RestClient.Builder restClientBuilder() {
+            return RestClient.builder();
+        }
     }
 }
