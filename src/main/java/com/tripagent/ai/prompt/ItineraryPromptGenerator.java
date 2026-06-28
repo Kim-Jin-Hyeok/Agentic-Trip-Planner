@@ -1,5 +1,6 @@
 package com.tripagent.ai.prompt;
 
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Trip;
 import java.time.temporal.ChronoUnit;
@@ -10,6 +11,10 @@ import org.springframework.stereotype.Component;
 public class ItineraryPromptGenerator {
 
     public String generate(Trip trip, List<PlaceResponse> candidatePlaces) {
+        return generate(trip, candidatePlaces, null);
+    }
+
+    public String generate(Trip trip, List<PlaceResponse> candidatePlaces, ItineraryGenerateRequest request) {
         if (trip == null) {
             throw new IllegalArgumentException("Trip is required.");
         }
@@ -26,6 +31,8 @@ public class ItineraryPromptGenerator {
         prompt.append("- Do not use any placeId that is not included in candidatePlaces.\n");
         prompt.append("- Every itinerary item must reference an existing placeId from candidatePlaces.\n");
         prompt.append("- Do not use the same placeId more than once in one generated itinerary.\n");
+        prompt.append("- You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.\n");
+        prompt.append("- You must never include any placeId listed in excludedPlaceIds in the generated itinerary.\n");
         prompt.append("- For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.\n");
         prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");
         prompt.append("- For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.\n");
@@ -41,6 +48,9 @@ public class ItineraryPromptGenerator {
         prompt.append("- concept: ").append(trip.getConcept()).append("\n");
         prompt.append("- transportation: ").append(trip.getTransportation()).append("\n");
         prompt.append("- lastAccommodationArea: ").append(trip.getLastAccommodationArea()).append("\n\n");
+        prompt.append("Place controls:\n");
+        prompt.append("- mustVisitPlaceIds: ").append(mustVisitPlaceIds(request)).append("\n");
+        prompt.append("- excludedPlaceIds: ").append(excludedPlaceIds(request)).append("\n\n");
         prompt.append("candidatePlaces:\n");
         for (PlaceResponse place : candidatePlaces) {
             prompt.append("- placeId: ").append(place.placeId()).append("\n");
@@ -69,5 +79,19 @@ public class ItineraryPromptGenerator {
 
     private long calculateTripDays(Trip trip) {
         return ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+    }
+
+    private List<Long> mustVisitPlaceIds(ItineraryGenerateRequest request) {
+        if (request == null) {
+            return List.of();
+        }
+        return request.normalizedMustVisitPlaceIds();
+    }
+
+    private List<Long> excludedPlaceIds(ItineraryGenerateRequest request) {
+        if (request == null) {
+            return List.of();
+        }
+        return request.normalizedExcludedPlaceIds();
     }
 }

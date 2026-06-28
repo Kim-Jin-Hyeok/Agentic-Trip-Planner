@@ -19,6 +19,7 @@ import com.tripagent.ai.llm.parser.LlmItineraryJsonParser;
 import com.tripagent.ai.prompt.ItineraryPromptGenerator;
 import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceSummaryResponse;
@@ -139,6 +140,76 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateDraftItinerariesRejectsMustVisitPlaceIdOutsideCandidatePlaces() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(999L), null);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("mustVisitPlaceIds must be included in candidate places. placeId=999");
+        verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsExcludedPlaceIdOutsideCandidatePlaces() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, List.of(999L));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("excludedPlaceIds must be included in candidate places. placeId=999");
+        verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsOverlappedMustVisitAndExcludedPlaceIds() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(10L), List.of(10L));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("mustVisitPlaceIds and excludedPlaceIds must not contain the same placeId. placeId=10");
+        verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsDuplicatedMustVisitPlaceIds() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(10L, 10L), null);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("mustVisitPlaceIds must not contain duplicated placeId. placeId=10");
+        verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsDuplicatedExcludedPlaceIds() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, List.of(10L, 10L));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("excludedPlaceIds must not contain duplicated placeId. placeId=10");
+        verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
     void generateItinerariesSavesDraftsAndReturnsResponses() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
@@ -230,6 +301,138 @@ class ItineraryGenerateServiceTest {
                 1L,
                 request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
         );
+    }
+
+    @Test
+    void generateItinerariesSucceedsWhenMustVisitPlaceIdsAreIncluded() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(20L), null);
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+        when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
+                .thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+                .thenReturn(response(200L, 1L, 20L, 2));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L, 20L);
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+    }
+
+    @Test
+    void generateItinerariesRetriesWhenMustVisitPlaceIdIsMissingAndThenSucceeds() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(20L), null);
+        String prompt = "prompt";
+        String firstRawResponse = "first raw response";
+        String secondRawResponse = "second raw response";
+        List<LlmItineraryItemResponse> firstParsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<LlmItineraryItemResponse> secondParsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> firstCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> secondCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
+        when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
+        when(llmItineraryResponseConverter.toCreateRequests(secondParsedItems)).thenReturn(secondCreateRequests);
+        when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
+                .thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+                .thenReturn(response(200L, 1L, 20L, 2));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L, 20L);
+        verify(llmClient, times(2)).generate(prompt);
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+    }
+
+    @Test
+    void generateItinerariesRetriesWhenExcludedPlaceIdIsIncludedAndThenSucceeds() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        PlaceResponse firstPlace = place(10L, 60);
+        PlaceResponse secondPlace = place(20L, 90);
+        PlaceResponse excludedPlace = place(30L, 120);
+        List<PlaceResponse> candidatePlaces = List.of(firstPlace, secondPlace, excludedPlace);
+        List<PlaceResponse> filteredCandidatePlaces = List.of(firstPlace, secondPlace);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, List.of(30L));
+        String prompt = "prompt";
+        String firstRawResponse = "first raw response";
+        String secondRawResponse = "second raw response";
+        List<LlmItineraryItemResponse> firstParsedItems = List.of(
+                llmItem(30L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<LlmItineraryItemResponse> secondParsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> firstCreateRequests = List.of(
+                request(30L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> secondCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, filteredCandidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
+        when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
+        when(llmItineraryResponseConverter.toCreateRequests(secondParsedItems)).thenReturn(secondCreateRequests);
+        when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
+                .thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+                .thenReturn(response(200L, 1L, 20L, 2));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L, 20L);
+        verify(llmClient, times(2)).generate(prompt);
+        verify(candidatePlaceValidator).validatePlaceIds(filteredCandidatePlaces, List.of(10L, 20L));
     }
 
     @Test
@@ -569,6 +772,40 @@ class ItineraryGenerateServiceTest {
         verify(itineraryService, never()).createItinerary(
                 1L,
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 15)
+        );
+    }
+
+    @Test
+    void regenerateItinerariesDoesNotDeleteExistingItineraryWhenMustVisitMissingAfterRetries() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(20L), null);
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        assertThatThrownBy(() -> itineraryGenerateService.regenerateItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Generated itinerary must include mustVisitPlaceId. placeId=20");
+        verify(llmClient, times(3)).generate(prompt);
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+        verify(itineraryService, never()).createItinerary(
+                1L,
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
         );
     }
 

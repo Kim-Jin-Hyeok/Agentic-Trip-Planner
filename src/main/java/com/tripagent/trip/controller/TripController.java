@@ -1,6 +1,7 @@
 package com.tripagent.trip.controller;
 
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
@@ -43,12 +44,18 @@ public class TripController {
     }
 
     @PostMapping("/{tripId}/generate")
-    public List<ItineraryResponse> generateItineraries(@PathVariable Long tripId) {
-        return itineraryGenerateService.generateItineraries(tripId);
+    public List<ItineraryResponse> generateItineraries(
+            @PathVariable Long tripId,
+            @RequestBody(required = false) ItineraryGenerateRequest request
+    ) {
+        return itineraryGenerateService.generateItineraries(tripId, request);
     }
 
     @PostMapping("/{tripId}/regenerate")
-    public List<ItineraryResponse> regenerateItineraries(@PathVariable Long tripId) {
-        return itineraryGenerateService.regenerateItineraries(tripId);
+    public List<ItineraryResponse> regenerateItineraries(
+            @PathVariable Long tripId,
+            @RequestBody(required = false) ItineraryGenerateRequest request
+    ) {
+        return itineraryGenerateService.regenerateItineraries(tripId, request);
     }
 }

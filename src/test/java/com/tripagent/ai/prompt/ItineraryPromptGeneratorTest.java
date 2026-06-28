@@ -3,6 +3,7 @@ package com.tripagent.ai.prompt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
@@ -39,6 +40,8 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("Do not create new place names.");
         assertThat(prompt).contains("Do not use any placeId that is not included in candidatePlaces.");
         assertThat(prompt).contains("Do not use the same placeId more than once in one generated itinerary.");
+        assertThat(prompt).contains("You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.");
+        assertThat(prompt).contains("You must never include any placeId listed in excludedPlaceIds in the generated itinerary.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.");
         assertThat(prompt).contains("For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.");
@@ -68,6 +71,32 @@ class ItineraryPromptGeneratorTest {
         assertThatThrownBy(() -> generator.generate(null, List.of(place(10L, "Place", "NATURE", "EAST", 60, "Description"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip is required.");
+    }
+
+    @Test
+    void generateIncludesMustVisitAndExcludedPlaceControls() {
+        Trip trip = Trip.create(
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.FOOD,
+                Transportation.RENT_CAR,
+                "SEOGWIPO"
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, "Food Place", "FOOD", "NORTH", 60, "Local food place."),
+                place(20L, "Cafe Place", "CAFE", "WEST", 70, "Ocean view cafe.")
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(10L), List.of(30L));
+
+        String prompt = generator.generate(trip, candidatePlaces, request);
+
+        assertThat(prompt).contains("- mustVisitPlaceIds: [10]");
+        assertThat(prompt).contains("- excludedPlaceIds: [30]");
+        assertThat(prompt).contains("You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.");
+        assertThat(prompt).contains("You must never include any placeId listed in excludedPlaceIds in the generated itinerary.");
     }
 
     @Test
