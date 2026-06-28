@@ -6,7 +6,10 @@ public record PlaceSummaryResponse(
         Long placeId,
         String name,
         String category,
+        String region,
         String address,
+        Double latitude,
+        Double longitude,
         String description
 ) {
 
@@ -15,7 +18,10 @@ public record PlaceSummaryResponse(
                 place.getPlaceId(),
                 place.getName(),
                 place.getCategory(),
+                place.getRegion(),
                 place.getAddress(),
+                place.getLatitude(),
+                place.getLongitude(),
                 place.getDescription()
         );
     }

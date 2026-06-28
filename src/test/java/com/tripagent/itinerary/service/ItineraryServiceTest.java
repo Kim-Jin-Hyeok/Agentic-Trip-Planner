@@ -68,7 +68,10 @@ class ItineraryServiceTest {
         assertThat(response.place().placeId()).isEqualTo(10L);
         assertThat(response.place().name()).isEqualTo("Test Place");
         assertThat(response.place().category()).isEqualTo("NATURE");
+        assertThat(response.place().region()).isEqualTo("EAST");
         assertThat(response.place().address()).isEqualTo("Test Address");
+        assertThat(response.place().latitude()).isEqualTo(33.458056);
+        assertThat(response.place().longitude()).isEqualTo(126.942500);
         assertThat(response.place().description()).isEqualTo("Test description");
         assertThat(response.dayNo()).isEqualTo(1);
         assertThat(response.orderNo()).isEqualTo(1);

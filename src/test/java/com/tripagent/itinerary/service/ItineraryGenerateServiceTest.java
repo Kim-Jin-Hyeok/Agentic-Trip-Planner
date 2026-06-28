@@ -1045,7 +1045,10 @@ class ItineraryGenerateServiceTest {
                         placeId,
                         "Place " + placeId,
                         "NATURE",
+                        "EAST",
                         "JEJU",
+                        33.0,
+                        126.0,
                         "description"
                 ),
                 1,

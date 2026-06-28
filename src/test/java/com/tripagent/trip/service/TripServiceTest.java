@@ -174,8 +174,14 @@ class TripServiceTest {
                 .containsExactly(10L, 20L);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().category())
                 .containsExactly("NATURE", "NATURE");
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().region())
+                .containsExactly("EAST", "EAST");
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().address())
                 .containsExactly("JEJU", "JEJU");
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().latitude())
+                .containsExactly(33.0, 33.0);
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().longitude())
+                .containsExactly(126.0, 126.0);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().description())
                 .containsExactly("description", "description");
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.dayNo())
