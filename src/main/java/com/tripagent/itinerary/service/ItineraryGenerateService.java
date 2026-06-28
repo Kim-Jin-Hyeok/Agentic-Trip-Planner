@@ -135,6 +135,7 @@ public class ItineraryGenerateService {
         validateDayAndOrderPolicies(trip, createRequests);
         validateFirstTravelMinutes(createRequests);
         validateFirstStartTimes(trip, createRequests);
+        validateDailyEndTimes(trip, createRequests);
         validateNoDraftTimeOverlap(createRequests);
     }
 
@@ -182,6 +183,17 @@ public class ItineraryGenerateService {
                     && request.startTime().isBefore(trip.getDailyStartTime())) {
                 throw new IllegalArgumentException(
                         "First itinerary item of each day must start at or after trip dailyStartTime. dayNo="
+                                + request.dayNo()
+                );
+            }
+        }
+    }
+
+    private void validateDailyEndTimes(Trip trip, List<ItineraryCreateRequest> createRequests) {
+        for (ItineraryCreateRequest request : createRequests) {
+            if (request.endTime().isAfter(trip.getDailyEndTime())) {
+                throw new IllegalArgumentException(
+                        "Itinerary endTime must be at or before trip dailyEndTime. dayNo="
                                 + request.dayNo()
                 );
             }

@@ -10,6 +10,7 @@ public record TripCreateRequest(
         LocalDate startDate,
         LocalDate endDate,
         LocalTime dailyStartTime,
+        LocalTime dailyEndTime,
         TripConcept concept,
         Transportation transportation,
         String lastAccommodationArea

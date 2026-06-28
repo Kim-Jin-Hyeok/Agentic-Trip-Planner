@@ -184,6 +184,7 @@ public class ItineraryService {
         validateDayNoInTripPeriod(trip, dayNo);
         validateFirstTravelMinutes(orderNo, travelMinutesFromPrevious);
         validateFirstStartTime(trip, orderNo, startTime);
+        validateDailyEndTime(trip, endTime);
         validateNoDuplicatedOrder(trip.getTripId(), excludedItineraryId, dayNo, orderNo);
         validateNoTimeOverlap(trip.getTripId(), excludedItineraryId, dayNo, startTime, endTime);
     }
@@ -205,6 +206,12 @@ public class ItineraryService {
             throw new IllegalArgumentException(
                     "First itinerary item of each day must start at or after trip dailyStartTime."
             );
+        }
+    }
+
+    private void validateDailyEndTime(Trip trip, LocalTime endTime) {
+        if (endTime.isAfter(trip.getDailyEndTime())) {
+            throw new IllegalArgumentException("Itinerary endTime must be at or before trip dailyEndTime.");
         }
     }
 

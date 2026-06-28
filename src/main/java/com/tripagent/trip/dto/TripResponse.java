@@ -12,6 +12,7 @@ public record TripResponse(
         LocalDate startDate,
         LocalDate endDate,
         LocalTime dailyStartTime,
+        LocalTime dailyEndTime,
         TripConcept concept,
         Transportation transportation,
         String lastAccommodationArea
@@ -24,6 +25,7 @@ public record TripResponse(
                 trip.getStartDate(),
                 trip.getEndDate(),
                 trip.getDailyStartTime(),
+                trip.getDailyEndTime(),
                 trip.getConcept(),
                 trip.getTransportation(),
                 trip.getLastAccommodationArea()

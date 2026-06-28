@@ -412,6 +412,46 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesRejectsEndTimeAfterDailyEndTimeBeforeSaving() {
+        Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(9, 0), LocalTime.of(10, 30));
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime. dayNo=1");
+        verify(llmClient, times(3)).generate(prompt);
+        verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+        verify(itineraryService, never()).createItinerary(
+                1L,
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        verify(itineraryService, never()).createItinerary(
+                1L,
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+    }
+
+    @Test
     void generateDraftItinerariesAllowsFirstStartTimeAtOrAfterDailyStartTime() {
         Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(10, 30));
         List<PlaceResponse> candidatePlaces = List.of(
@@ -552,11 +592,16 @@ class ItineraryGenerateServiceTest {
     }
 
     private Trip trip(Long tripId, TripConcept concept, LocalTime dailyStartTime) {
+        return trip(tripId, concept, dailyStartTime, LocalTime.of(18, 0));
+    }
+
+    private Trip trip(Long tripId, TripConcept concept, LocalTime dailyStartTime, LocalTime dailyEndTime) {
         Trip trip = Trip.create(
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
                 dailyStartTime,
+                dailyEndTime,
                 concept,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"

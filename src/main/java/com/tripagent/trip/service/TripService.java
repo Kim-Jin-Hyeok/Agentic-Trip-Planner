@@ -41,6 +41,7 @@ public class TripService {
                 request.startDate(),
                 request.endDate(),
                 request.dailyStartTime(),
+                request.dailyEndTime(),
                 request.concept(),
                 request.transportation(),
                 request.lastAccommodationArea()
@@ -77,6 +78,12 @@ public class TripService {
         }
         if (request.dailyStartTime() == null) {
             throw new IllegalArgumentException("Trip dailyStartTime is required.");
+        }
+        if (request.dailyEndTime() == null) {
+            throw new IllegalArgumentException("Trip dailyEndTime is required.");
+        }
+        if (!request.dailyStartTime().isBefore(request.dailyEndTime())) {
+            throw new IllegalArgumentException("Trip dailyStartTime must be before dailyEndTime.");
         }
         if (request.concept() == null) {
             throw new IllegalArgumentException("Trip concept is required.");

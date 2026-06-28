@@ -31,6 +31,9 @@ public class Trip {
     @Column(nullable = false)
     private LocalTime dailyStartTime;
 
+    @Column(nullable = false)
+    private LocalTime dailyEndTime;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private TripConcept concept;
@@ -50,6 +53,7 @@ public class Trip {
             LocalDate startDate,
             LocalDate endDate,
             LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
             TripConcept concept,
             Transportation transportation,
             String lastAccommodationArea
@@ -58,6 +62,7 @@ public class Trip {
         this.startDate = startDate;
         this.endDate = endDate;
         this.dailyStartTime = dailyStartTime;
+        this.dailyEndTime = dailyEndTime;
         this.concept = concept;
         this.transportation = transportation;
         this.lastAccommodationArea = lastAccommodationArea;
@@ -68,6 +73,7 @@ public class Trip {
             LocalDate startDate,
             LocalDate endDate,
             LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
             TripConcept concept,
             Transportation transportation,
             String lastAccommodationArea
@@ -77,6 +83,7 @@ public class Trip {
                 startDate,
                 endDate,
                 dailyStartTime,
+                dailyEndTime,
                 concept,
                 transportation,
                 lastAccommodationArea
@@ -101,6 +108,10 @@ public class Trip {
 
     public LocalTime getDailyStartTime() {
         return dailyStartTime;
+    }
+
+    public LocalTime getDailyEndTime() {
+        return dailyEndTime;
     }
 
     public TripConcept getConcept() {

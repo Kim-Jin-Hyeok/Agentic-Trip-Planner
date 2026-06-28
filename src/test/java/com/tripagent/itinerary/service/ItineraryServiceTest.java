@@ -198,6 +198,27 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void createItineraryRejectsEndTimeAfterDailyEndTime() {
+        Trip trip = trip(1L, LocalTime.of(9, 0), LocalTime.of(10, 0));
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                10L,
+                1,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 30),
+                0,
+                "End time is too late."
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime.");
+        verify(placeRepository, never()).findById(10L);
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
     void createItineraryAllowsAdjacentTimeInSameTripDay() {
         Trip trip = trip(1L);
         Place place = place(10L);
@@ -408,6 +429,28 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void updateItineraryRejectsEndTimeAfterDailyEndTime() {
+        Trip trip = trip(1L, LocalTime.of(9, 0), LocalTime.of(10, 0));
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(
+                null,
+                null,
+                null,
+                null,
+                LocalTime.of(10, 30),
+                null,
+                null
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime.");
+    }
+
+    @Test
     void deleteItineraryDeletesExistingItinerary() {
         Trip trip = trip(1L);
         Place place = place(10L);
@@ -524,11 +567,16 @@ class ItineraryServiceTest {
     }
 
     private Trip trip(Long tripId, LocalTime dailyStartTime) {
+        return trip(tripId, dailyStartTime, LocalTime.of(18, 0));
+    }
+
+    private Trip trip(Long tripId, LocalTime dailyStartTime, LocalTime dailyEndTime) {
         Trip trip = Trip.create(
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
                 dailyStartTime,
+                dailyEndTime,
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"

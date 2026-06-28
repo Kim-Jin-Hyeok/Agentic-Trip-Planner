@@ -28,6 +28,7 @@ public class ItineraryPromptGenerator {
         prompt.append("- Do not use the same placeId more than once in one generated itinerary.\n");
         prompt.append("- For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.\n");
         prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");
+        prompt.append("- For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.\n");
         prompt.append("- Write every reason in Korean.\n");
         prompt.append("- Return JSON only. Do not include markdown or explanation outside JSON.\n\n");
         prompt.append("Trip:\n");
@@ -36,6 +37,7 @@ public class ItineraryPromptGenerator {
         prompt.append("- endDate: ").append(trip.getEndDate()).append("\n");
         prompt.append("- days: ").append(calculateTripDays(trip)).append("\n");
         prompt.append("- dailyStartTime: ").append(trip.getDailyStartTime()).append("\n");
+        prompt.append("- dailyEndTime: ").append(trip.getDailyEndTime()).append("\n");
         prompt.append("- concept: ").append(trip.getConcept()).append("\n");
         prompt.append("- transportation: ").append(trip.getTransportation()).append("\n");
         prompt.append("- lastAccommodationArea: ").append(trip.getLastAccommodationArea()).append("\n\n");

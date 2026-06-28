@@ -48,6 +48,7 @@ class TripServiceTest {
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
                 LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"
@@ -57,6 +58,8 @@ class TripServiceTest {
         TripResponse response = tripService.createTrip(request);
 
         assertThat(response.destination()).isEqualTo("JEJU");
+        assertThat(response.dailyStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(response.dailyEndTime()).isEqualTo(LocalTime.of(18, 0));
         assertThat(response.concept()).isEqualTo(TripConcept.HEALING);
         assertThat(response.transportation()).isEqualTo(Transportation.RENT_CAR);
         verify(tripRepository).save(any(Trip.class));
@@ -69,6 +72,7 @@ class TripServiceTest {
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
                 LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"
@@ -87,6 +91,7 @@ class TripServiceTest {
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 5),
                 LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"
@@ -95,6 +100,25 @@ class TripServiceTest {
         assertThatThrownBy(() -> tripService.createTrip(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip duration must be 1 night 2 days to 3 nights 4 days.");
+        verify(tripRepository, never()).save(any(Trip.class));
+    }
+
+    @Test
+    void createTripRejectsDailyStartTimeNotBeforeDailyEndTime() {
+        TripCreateRequest request = new TripCreateRequest(
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(18, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO"
+        );
+
+        assertThatThrownBy(() -> tripService.createTrip(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip dailyStartTime must be before dailyEndTime.");
         verify(tripRepository, never()).save(any(Trip.class));
     }
 
@@ -140,6 +164,7 @@ class TripServiceTest {
 
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.destination()).isEqualTo("JEJU");
+        assertThat(response.dailyEndTime()).isEqualTo(LocalTime.of(18, 0));
         assertThat(response.itineraries()).hasSize(2);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.placeId())
                 .containsExactly(10L, 20L);
@@ -166,6 +191,7 @@ class TripServiceTest {
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
                 LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"

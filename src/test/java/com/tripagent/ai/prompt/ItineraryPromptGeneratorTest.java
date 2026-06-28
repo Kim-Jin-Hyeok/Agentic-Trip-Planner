@@ -23,6 +23,7 @@ class ItineraryPromptGeneratorTest {
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
                 LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
                 TripConcept.FOOD,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"
@@ -40,10 +41,12 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("Do not use the same placeId more than once in one generated itinerary.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.");
+        assertThat(prompt).contains("For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.");
         assertThat(prompt).contains("Write every reason in Korean.");
         assertThat(prompt).contains("- concept: FOOD");
         assertThat(prompt).contains("- days: 3");
         assertThat(prompt).contains("- dailyStartTime: 09:00");
+        assertThat(prompt).contains("- dailyEndTime: 18:00");
         assertThat(prompt).contains("placeId: 10");
         assertThat(prompt).contains("name: Food Place");
         assertThat(prompt).contains("category: FOOD");
@@ -74,6 +77,7 @@ class ItineraryPromptGeneratorTest {
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
                 LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
                 TripConcept.FOOD,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"
