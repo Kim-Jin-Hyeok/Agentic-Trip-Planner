@@ -2,6 +2,8 @@ package com.tripagent.itinerary.service;
 
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryReorderRequest;
+import com.tripagent.itinerary.dto.ItineraryReorderRequestItem;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.repository.ItineraryRepository;
@@ -11,8 +13,13 @@ import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -114,6 +121,40 @@ public class ItineraryService {
         );
 
         return ItineraryResponse.from(itinerary);
+    }
+
+    @Transactional
+    public List<ItineraryResponse> reorderItineraries(Long tripId, ItineraryReorderRequest request) {
+        validateReorderRequest(tripId, request);
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        Map<Long, ItineraryReorderRequestItem> reorderItems = validateAndMapReorderItems(tripId, request);
+        List<Itinerary> tripItineraries = itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId);
+        List<ReorderState> finalStates = buildReorderStates(tripItineraries, reorderItems);
+
+        validateFinalReorderStates(trip, finalStates);
+
+        for (Itinerary itinerary : tripItineraries) {
+            ItineraryReorderRequestItem item = reorderItems.get(itinerary.getItineraryId());
+            if (item == null) {
+                continue;
+            }
+            itinerary.update(
+                    itinerary.getPlace(),
+                    item.dayNo(),
+                    item.orderNo(),
+                    itinerary.getStartTime(),
+                    itinerary.getEndTime(),
+                    itinerary.getTravelMinutesFromPrevious(),
+                    itinerary.getReason()
+            );
+        }
+
+        return tripItineraries.stream()
+                .sorted(Comparator.comparing(Itinerary::getDayNo).thenComparing(Itinerary::getOrderNo))
+                .map(ItineraryResponse::from)
+                .toList();
     }
 
     @Transactional
@@ -278,6 +319,118 @@ public class ItineraryService {
         return excludedItineraryId != null && excludedItineraryId.equals(itinerary.getItineraryId());
     }
 
+    private void validateReorderRequest(Long tripId, ItineraryReorderRequest request) {
+        if (tripId == null) {
+            throw new IllegalArgumentException("Trip id is required.");
+        }
+        if (request == null) {
+            throw new IllegalArgumentException("Itinerary reorder request is required.");
+        }
+        if (request.items() == null || request.items().isEmpty()) {
+            throw new IllegalArgumentException("Itinerary reorder items must not be empty.");
+        }
+    }
+
+    private Map<Long, ItineraryReorderRequestItem> validateAndMapReorderItems(
+            Long tripId,
+            ItineraryReorderRequest request
+    ) {
+        Map<Long, ItineraryReorderRequestItem> reorderItems = new HashMap<>();
+
+        for (ItineraryReorderRequestItem item : request.items()) {
+            validateReorderRequestItem(item);
+            if (reorderItems.putIfAbsent(item.itineraryId(), item) != null) {
+                throw new IllegalArgumentException(
+                        "Itinerary reorder items must not contain duplicated itineraryId. itineraryId="
+                                + item.itineraryId()
+                );
+            }
+        }
+
+        for (ItineraryReorderRequestItem item : reorderItems.values()) {
+            Itinerary itinerary = itineraryRepository.findById(item.itineraryId())
+                    .orElseThrow(() -> new NoSuchElementException(
+                            "Itinerary not found. itineraryId=" + item.itineraryId()
+                    ));
+            validateItineraryBelongsToTrip(itinerary, tripId);
+        }
+
+        return reorderItems;
+    }
+
+    private void validateReorderRequestItem(ItineraryReorderRequestItem item) {
+        if (item == null) {
+            throw new IllegalArgumentException("Itinerary reorder item must not be null.");
+        }
+        if (item.itineraryId() == null) {
+            throw new IllegalArgumentException("Itinerary id is required.");
+        }
+        if (item.dayNo() == null || item.dayNo() < 1) {
+            throw new IllegalArgumentException("Itinerary dayNo must be greater than or equal to 1.");
+        }
+        if (item.orderNo() == null || item.orderNo() < 1) {
+            throw new IllegalArgumentException("Itinerary orderNo must be greater than or equal to 1.");
+        }
+    }
+
+    private List<ReorderState> buildReorderStates(
+            List<Itinerary> tripItineraries,
+            Map<Long, ItineraryReorderRequestItem> reorderItems
+    ) {
+        return tripItineraries.stream()
+                .map(itinerary -> {
+                    ItineraryReorderRequestItem item = reorderItems.get(itinerary.getItineraryId());
+                    Integer dayNo = item == null ? itinerary.getDayNo() : item.dayNo();
+                    Integer orderNo = item == null ? itinerary.getOrderNo() : item.orderNo();
+
+                    return new ReorderState(
+                            itinerary.getItineraryId(),
+                            dayNo,
+                            orderNo,
+                            itinerary.getStartTime(),
+                            itinerary.getEndTime(),
+                            itinerary.getTravelMinutesFromPrevious()
+                    );
+                })
+                .toList();
+    }
+
+    private void validateFinalReorderStates(Trip trip, List<ReorderState> finalStates) {
+        Set<String> dayOrderKeys = new HashSet<>();
+
+        for (ReorderState state : finalStates) {
+            validateTimeRange(state.startTime(), state.endTime());
+            validateDayNoInTripPeriod(trip, state.dayNo());
+            validateFirstTravelMinutes(state.orderNo(), state.travelMinutesFromPrevious());
+            validateFirstStartTime(trip, state.orderNo(), state.startTime());
+            validateDailyEndTime(trip, state.endTime());
+
+            String dayOrderKey = state.dayNo() + ":" + state.orderNo();
+            if (!dayOrderKeys.add(dayOrderKey)) {
+                throw new IllegalArgumentException(
+                        "Itinerary dayNo and orderNo already exist in this trip."
+                );
+            }
+        }
+
+        validateNoFinalTimeOverlap(finalStates);
+    }
+
+    private void validateNoFinalTimeOverlap(List<ReorderState> finalStates) {
+        List<ReorderState> sortedStates = finalStates.stream()
+                .sorted(Comparator.comparing(ReorderState::dayNo).thenComparing(ReorderState::startTime))
+                .toList();
+
+        for (int index = 1; index < sortedStates.size(); index++) {
+            ReorderState previous = sortedStates.get(index - 1);
+            ReorderState current = sortedStates.get(index);
+
+            if (previous.dayNo().equals(current.dayNo()) && current.startTime().isBefore(previous.endTime())) {
+                throw new IllegalArgumentException("Itinerary time overlaps with existing itinerary.");
+            }
+        }
+    }
+
     private void validateUpdateRequest(Long tripId, Long itineraryId, ItineraryUpdateRequest request) {
         validateTripAndItineraryIds(tripId, itineraryId);
         if (request == null) {
@@ -307,5 +460,15 @@ public class ItineraryService {
         if (!itinerary.getTrip().getTripId().equals(tripId)) {
             throw new IllegalArgumentException("Itinerary does not belong to trip. itineraryId=" + itinerary.getItineraryId());
         }
+    }
+
+    private record ReorderState(
+            Long itineraryId,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
     }
 }

@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryReorderRequest;
+import com.tripagent.itinerary.dto.ItineraryReorderRequestItem;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.repository.ItineraryRepository;
@@ -454,6 +456,176 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void reorderItinerariesUpdatesDayNoAndOrderNoAndReturnsSortedResponses() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary second = itinerary(200L, trip, place, 1, 3, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        ItineraryReorderRequest request = reorderRequest(item(200L, 1, 2));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(second, first));
+
+        List<ItineraryResponse> responses = itineraryService.reorderItineraries(1L, request);
+
+        assertThat(second.getDayNo()).isEqualTo(1);
+        assertThat(second.getOrderNo()).isEqualTo(2);
+        assertThat(responses).extracting(ItineraryResponse::itineraryId)
+                .containsExactly(100L, 200L);
+        assertThat(responses).extracting(ItineraryResponse::orderNo)
+                .containsExactly(1, 2);
+    }
+
+    @Test
+    void reorderItinerariesRejectsEmptyItems() {
+        ItineraryReorderRequest request = reorderRequest();
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary reorder items must not be empty.");
+        verify(tripRepository, never()).findById(1L);
+    }
+
+    @Test
+    void reorderItinerariesRejectsDuplicatedItineraryId() {
+        Trip trip = trip(1L);
+        ItineraryReorderRequest request = reorderRequest(
+                item(100L, 1, 1),
+                item(100L, 1, 2)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary reorder items must not contain duplicated itineraryId. itineraryId=100");
+    }
+
+    @Test
+    void reorderItinerariesRejectsItineraryInOtherTrip() {
+        Trip trip = trip(1L);
+        Trip otherTrip = trip(2L);
+        Place place = place(10L);
+        Itinerary otherTripItinerary = itinerary(
+                100L,
+                otherTrip,
+                place,
+                1,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0),
+                0
+        );
+        ItineraryReorderRequest request = reorderRequest(item(100L, 1, 1));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(otherTripItinerary));
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary does not belong to trip. itineraryId=100");
+        verify(itineraryRepository, never()).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
+    }
+
+    @Test
+    void reorderItinerariesRejectsDayNoOutsideTripPeriod() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        ItineraryReorderRequest request = reorderRequest(item(100L, 4, 1));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of(itinerary));
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary dayNo must be within trip period. maxDayNo=3");
+    }
+
+    @Test
+    void reorderItinerariesRejectsFinalDuplicatedOrderNoInSameDay() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary second = itinerary(200L, trip, place, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 0);
+        ItineraryReorderRequest request = reorderRequest(item(200L, 1, 1));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(first, second));
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary dayNo and orderNo already exist in this trip.");
+    }
+
+    @Test
+    void reorderItinerariesRejectsTimeOverlapAfterDayNoChange() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary second = itinerary(200L, trip, place, 2, 1, LocalTime.of(9, 30), LocalTime.of(10, 30), 0);
+        ItineraryReorderRequest request = reorderRequest(item(200L, 1, 2));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(first, second));
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary time overlaps with existing itinerary.");
+    }
+
+    @Test
+    void reorderItinerariesAllowsAdjacentTimeAfterDayNoChange() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary second = itinerary(200L, trip, place, 2, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 30);
+        ItineraryReorderRequest request = reorderRequest(item(200L, 1, 2));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(first, second));
+
+        List<ItineraryResponse> responses = itineraryService.reorderItineraries(1L, request);
+
+        assertThat(second.getDayNo()).isEqualTo(1);
+        assertThat(second.getOrderNo()).isEqualTo(2);
+        assertThat(responses).extracting(ItineraryResponse::itineraryId)
+                .containsExactly(100L, 200L);
+    }
+
+    @Test
+    void reorderItinerariesRejectsFirstOrderWithTravelMinutes() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, trip, place, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        ItineraryReorderRequest request = reorderRequest(item(100L, 1, 1));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of(itinerary));
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("First itinerary item of each day must have travelMinutesFromPrevious 0.");
+    }
+
+    @Test
+    void reorderItinerariesRejectsFirstStartTimeBeforeDailyStartTime() {
+        Trip trip = trip(1L, LocalTime.of(10, 30));
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, trip, place, 1, 2, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        ItineraryReorderRequest request = reorderRequest(item(100L, 1, 1));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of(itinerary));
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("First itinerary item of each day must start at or after trip dailyStartTime.");
+    }
+
+    @Test
     void deleteItineraryDeletesExistingItinerary() {
         Trip trip = trip(1L);
         Place place = place(10L);
@@ -551,6 +723,14 @@ class ItineraryServiceTest {
         assertThatThrownBy(() -> itineraryService.getItineraries(1L))
                 .isInstanceOf(NoSuchElementException.class)
                 .hasMessage("Trip not found. tripId=1");
+    }
+
+    private ItineraryReorderRequest reorderRequest(ItineraryReorderRequestItem... items) {
+        return new ItineraryReorderRequest(List.of(items));
+    }
+
+    private ItineraryReorderRequestItem item(Long itineraryId, Integer dayNo, Integer orderNo) {
+        return new ItineraryReorderRequestItem(itineraryId, dayNo, orderNo);
     }
 
     private ItineraryCreateRequest request(Long placeId, Integer dayNo, Integer orderNo) {

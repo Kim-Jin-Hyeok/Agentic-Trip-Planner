@@ -2,6 +2,7 @@ package com.tripagent.itinerary.controller;
 
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryReorderRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.service.ItineraryService;
@@ -40,6 +41,14 @@ public class ItineraryController {
     @GetMapping
     public ApiResponse<List<ItineraryResponse>> getItineraries(@PathVariable Long tripId) {
         return ApiResponse.success(itineraryService.getItineraries(tripId));
+    }
+
+    @PatchMapping("/reorder")
+    public ApiResponse<List<ItineraryResponse>> reorderItineraries(
+            @PathVariable Long tripId,
+            @Valid @RequestBody ItineraryReorderRequest request
+    ) {
+        return ApiResponse.success(itineraryService.reorderItineraries(tripId, request));
     }
 
     @PatchMapping("/{itineraryId}")

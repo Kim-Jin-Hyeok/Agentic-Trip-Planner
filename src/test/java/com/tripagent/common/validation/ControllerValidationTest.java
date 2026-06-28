@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryReorderRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
@@ -110,6 +111,48 @@ class ControllerValidationTest {
                 .andExpect(jsonPath("$.message").exists());
 
         verify(itineraryService, never()).updateItinerary(any(), any(), any(ItineraryUpdateRequest.class));
+    }
+
+    @Test
+    void reorderItinerariesReturnsInvalidRequestWhenItemsAreEmpty() throws Exception {
+        String requestBody = """
+                {
+                  "items": []
+                }
+                """;
+
+        itineraryMockMvc.perform(patch("/api/trips/1/itineraries/reorder")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").exists());
+
+        verify(itineraryService, never()).reorderItineraries(any(), any(ItineraryReorderRequest.class));
+    }
+
+    @Test
+    void reorderItinerariesReturnsCommonSuccessResponse() throws Exception {
+        String requestBody = """
+                {
+                  "items": [
+                    {
+                      "itineraryId": 100,
+                      "dayNo": 1,
+                      "orderNo": 1
+                    }
+                  ]
+                }
+                """;
+        when(itineraryService.reorderItineraries(any(), any(ItineraryReorderRequest.class))).thenReturn(List.of());
+
+        itineraryMockMvc.perform(patch("/api/trips/1/itineraries/reorder")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
