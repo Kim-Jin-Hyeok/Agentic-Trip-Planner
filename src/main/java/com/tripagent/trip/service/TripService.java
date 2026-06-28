@@ -1,11 +1,11 @@
 package com.tripagent.trip.service;
 
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
-import com.tripagent.trip.dto.TripItineraryResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.temporal.ChronoUnit;
@@ -52,10 +52,10 @@ public class TripService {
     public TripDetailResponse getTrip(Long tripId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
-        List<TripItineraryResponse> itineraries = itineraryRepository
+        List<ItineraryResponse> itineraries = itineraryRepository
                 .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
                 .stream()
-                .map(TripItineraryResponse::from)
+                .map(ItineraryResponse::from)
                 .toList();
 
         return TripDetailResponse.from(trip, itineraries);

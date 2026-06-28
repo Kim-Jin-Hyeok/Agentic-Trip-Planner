@@ -1,5 +1,6 @@
 package com.tripagent.trip.dto;
 
+import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
@@ -16,10 +17,10 @@ public record TripDetailResponse(
         TripConcept concept,
         Transportation transportation,
         String lastAccommodationArea,
-        List<TripItineraryResponse> itineraries
+        List<ItineraryResponse> itineraries
 ) {
 
-    public static TripDetailResponse from(Trip trip, List<TripItineraryResponse> itineraries) {
+    public static TripDetailResponse from(Trip trip, List<ItineraryResponse> itineraries) {
         return new TripDetailResponse(
                 trip.getTripId(),
                 trip.getDestination(),

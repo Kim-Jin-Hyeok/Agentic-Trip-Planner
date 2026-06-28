@@ -21,6 +21,7 @@ import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.place.dto.PlaceSummaryResponse;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.trip.domain.Transportation;
@@ -628,6 +629,13 @@ class ItineraryGenerateServiceTest {
                 itineraryId,
                 tripId,
                 placeId,
+                new PlaceSummaryResponse(
+                        placeId,
+                        "Place " + placeId,
+                        "NATURE",
+                        "JEJU",
+                        "description"
+                ),
                 1,
                 orderNo,
                 LocalTime.of(9, 0),

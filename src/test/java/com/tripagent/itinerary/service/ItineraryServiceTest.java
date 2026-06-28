@@ -64,6 +64,11 @@ class ItineraryServiceTest {
         assertThat(response.itineraryId()).isEqualTo(100L);
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.placeId()).isEqualTo(10L);
+        assertThat(response.place().placeId()).isEqualTo(10L);
+        assertThat(response.place().name()).isEqualTo("Test Place");
+        assertThat(response.place().category()).isEqualTo("NATURE");
+        assertThat(response.place().address()).isEqualTo("Test Address");
+        assertThat(response.place().description()).isEqualTo("Test description");
         assertThat(response.dayNo()).isEqualTo(1);
         assertThat(response.orderNo()).isEqualTo(1);
         verify(itineraryRepository).save(any(Itinerary.class));
@@ -248,7 +253,7 @@ class ItineraryServiceTest {
                 LocalTime.of(9, 0),
                 LocalTime.of(10, 30),
                 0,
-                "첫 일정으로 방문하기 좋습니다."
+                "First itinerary"
         );
         setId(itinerary, "itineraryId", 100L);
         when(tripRepository.existsById(1L)).thenReturn(true);
@@ -261,6 +266,8 @@ class ItineraryServiceTest {
         assertThat(responses.get(0).itineraryId()).isEqualTo(100L);
         assertThat(responses.get(0).tripId()).isEqualTo(1L);
         assertThat(responses.get(0).placeId()).isEqualTo(10L);
+        assertThat(responses.get(0).place().placeId()).isEqualTo(10L);
+        assertThat(responses.get(0).place().name()).isEqualTo("Test Place");
     }
 
     @Test
@@ -280,7 +287,7 @@ class ItineraryServiceTest {
                 LocalTime.of(9, 0),
                 LocalTime.of(10, 30),
                 0,
-                "첫 일정으로 방문하기 좋습니다."
+                "First itinerary"
         );
     }
 
@@ -304,10 +311,10 @@ class ItineraryServiceTest {
 
     private Place place(Long placeId) {
         Place place = Place.create(
-                "성산일출봉",
+                "Test Place",
                 "NATURE",
                 "EAST",
-                "제주특별자치도 서귀포시 성산읍 성산리 1",
+                "Test Address",
                 33.458056,
                 126.942500,
                 90,
@@ -320,7 +327,7 @@ class ItineraryServiceTest {
                 5,
                 4,
                 4,
-                "제주 동쪽을 대표하는 일출 명소입니다.",
+                "Test description",
                 true
         );
         setId(place, "placeId", placeId);

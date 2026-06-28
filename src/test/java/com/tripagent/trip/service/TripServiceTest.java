@@ -143,8 +143,16 @@ class TripServiceTest {
         assertThat(response.itineraries()).hasSize(2);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.placeId())
                 .containsExactly(10L, 20L);
-        assertThat(response.itineraries()).extracting(itinerary -> itinerary.placeName())
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().name())
                 .containsExactly("First Place", "Second Place");
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().placeId())
+                .containsExactly(10L, 20L);
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().category())
+                .containsExactly("NATURE", "NATURE");
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().address())
+                .containsExactly("JEJU", "JEJU");
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().description())
+                .containsExactly("description", "description");
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.dayNo())
                 .containsExactly(1, 1);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.orderNo())
