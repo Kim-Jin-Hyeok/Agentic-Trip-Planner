@@ -46,4 +46,9 @@ public class TripController {
     public List<ItineraryResponse> generateItineraries(@PathVariable Long tripId) {
         return itineraryGenerateService.generateItineraries(tripId);
     }
+
+    @PostMapping("/{tripId}/regenerate")
+    public List<ItineraryResponse> regenerateItineraries(@PathVariable Long tripId) {
+        return itineraryGenerateService.regenerateItineraries(tripId);
+    }
 }

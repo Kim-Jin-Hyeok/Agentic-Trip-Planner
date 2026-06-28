@@ -66,6 +66,18 @@ public class ItineraryGenerateService {
                 .toList();
     }
 
+    @Transactional
+    public List<ItineraryResponse> regenerateItineraries(Long tripId) {
+        validateTripId(tripId);
+
+        List<ItineraryCreateRequest> createRequests = generateDraftItineraries(tripId);
+        itineraryRepository.deleteByTrip_TripId(tripId);
+
+        return createRequests.stream()
+                .map(request -> itineraryService.createItinerary(tripId, request))
+                .toList();
+    }
+
     public List<ItineraryCreateRequest> generateDraftItineraries(Long tripId) {
         validateTripId(tripId);
 
