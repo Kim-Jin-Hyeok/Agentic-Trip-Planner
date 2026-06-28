@@ -9,6 +9,7 @@ import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
@@ -248,7 +249,7 @@ public class ItineraryGenerateService {
     }
 
     private void validateGenerateRequest(List<PlaceResponse> candidatePlaces, ItineraryGenerateRequest request) {
-        if (!hasPlaceControls(request)) {
+        if (request == null) {
             return;
         }
 
@@ -260,6 +261,7 @@ public class ItineraryGenerateService {
 
         validateControlPlaceIds("mustVisitPlaceIds", mustVisitPlaceIds, candidatePlaceIds);
         validateControlPlaceIds("excludedPlaceIds", excludedPlaceIds, candidatePlaceIds);
+        validatePreferredCategories(request.normalizedPreferredCategories());
 
         Set<Long> excludedPlaceIdSet = new HashSet<>(excludedPlaceIds);
         for (Long mustVisitPlaceId : mustVisitPlaceIds) {
@@ -267,6 +269,21 @@ public class ItineraryGenerateService {
                 throw new IllegalArgumentException(
                         "mustVisitPlaceIds and excludedPlaceIds must not contain the same placeId. placeId="
                                 + mustVisitPlaceId
+                );
+            }
+        }
+    }
+
+    private void validatePreferredCategories(List<PlaceCategory> preferredCategories) {
+        Set<PlaceCategory> seenCategories = new HashSet<>();
+
+        for (PlaceCategory preferredCategory : preferredCategories) {
+            if (preferredCategory == null) {
+                throw new IllegalArgumentException("preferredCategories must not contain null.");
+            }
+            if (!seenCategories.add(preferredCategory)) {
+                throw new IllegalArgumentException(
+                        "preferredCategories must not contain duplicated category. category=" + preferredCategory
                 );
             }
         }

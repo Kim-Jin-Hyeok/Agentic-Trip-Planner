@@ -23,6 +23,7 @@ import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceSummaryResponse;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
@@ -240,6 +241,98 @@ class ItineraryGenerateServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("excludedPlaceIds must not contain duplicated placeId. placeId=10");
         verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsDuplicatedPreferredCategories() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                List.of(PlaceCategory.FOOD, PlaceCategory.FOOD)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("preferredCategories must not contain duplicated category. category=FOOD");
+        verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
+    void generateDraftItinerariesAllowsMustVisitPlaceIdOutsidePreferredCategories() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, "NATURE", 60),
+                place(20L, "FOOD", 90)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                List.of(10L),
+                null,
+                null,
+                List.of(PlaceCategory.FOOD)
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        List<ItineraryCreateRequest> drafts = itineraryGenerateService.generateDraftItineraries(1L, request);
+
+        assertThat(drafts).extracting(ItineraryCreateRequest::placeId)
+                .containsExactly(10L, 20L);
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+    }
+
+    @Test
+    void generateDraftItinerariesExcludesPlaceIdsRegardlessOfPreferredCategories() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        PlaceResponse firstPlace = place(10L, "FOOD", 60);
+        PlaceResponse excludedPlace = place(20L, "FOOD", 90);
+        List<PlaceResponse> candidatePlaces = List.of(firstPlace, excludedPlace);
+        List<PlaceResponse> filteredCandidatePlaces = List.of(firstPlace);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                List.of(20L),
+                null,
+                List.of(PlaceCategory.FOOD)
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, filteredCandidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        List<ItineraryCreateRequest> drafts = itineraryGenerateService.generateDraftItineraries(1L, request);
+
+        assertThat(drafts).extracting(ItineraryCreateRequest::placeId)
+                .containsExactly(10L);
+        verify(itineraryPromptGenerator).generate(trip, filteredCandidatePlaces, request);
+        verify(candidatePlaceValidator).validatePlaceIds(filteredCandidatePlaces, List.of(10L));
     }
 
     @Test
@@ -881,10 +974,14 @@ class ItineraryGenerateServiceTest {
     }
 
     private PlaceResponse place(Long placeId, Integer avgStayMinutes) {
+        return place(placeId, "NATURE", avgStayMinutes);
+    }
+
+    private PlaceResponse place(Long placeId, String category, Integer avgStayMinutes) {
         return new PlaceResponse(
                 placeId,
                 "Place " + placeId,
-                "NATURE",
+                category,
                 "EAST",
                 "JEJU",
                 33.0,

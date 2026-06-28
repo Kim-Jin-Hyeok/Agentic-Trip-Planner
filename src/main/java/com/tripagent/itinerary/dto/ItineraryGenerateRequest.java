@@ -1,18 +1,28 @@
 package com.tripagent.itinerary.dto;
 
+import com.tripagent.place.dto.PlaceCategory;
 import java.util.List;
 
 public record ItineraryGenerateRequest(
         List<Long> mustVisitPlaceIds,
         List<Long> excludedPlaceIds,
-        ItineraryPace pace
+        ItineraryPace pace,
+        List<PlaceCategory> preferredCategories
 ) {
 
     public ItineraryGenerateRequest(
             List<Long> mustVisitPlaceIds,
             List<Long> excludedPlaceIds
     ) {
-        this(mustVisitPlaceIds, excludedPlaceIds, null);
+        this(mustVisitPlaceIds, excludedPlaceIds, null, null);
+    }
+
+    public ItineraryGenerateRequest(
+            List<Long> mustVisitPlaceIds,
+            List<Long> excludedPlaceIds,
+            ItineraryPace pace
+    ) {
+        this(mustVisitPlaceIds, excludedPlaceIds, pace, null);
     }
 
     public List<Long> normalizedMustVisitPlaceIds() {
@@ -34,5 +44,12 @@ public record ItineraryGenerateRequest(
             return ItineraryPace.NORMAL;
         }
         return pace;
+    }
+
+    public List<PlaceCategory> normalizedPreferredCategories() {
+        if (preferredCategories == null) {
+            return List.of();
+        }
+        return preferredCategories;
     }
 }

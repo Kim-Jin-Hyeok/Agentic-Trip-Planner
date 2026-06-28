@@ -2,6 +2,7 @@ package com.tripagent.ai.prompt;
 
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
+import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Trip;
 import java.time.temporal.ChronoUnit;
@@ -34,6 +35,9 @@ public class ItineraryPromptGenerator {
         prompt.append("- Do not use the same placeId more than once in one generated itinerary.\n");
         prompt.append("- You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.\n");
         prompt.append("- You must never include any placeId listed in excludedPlaceIds in the generated itinerary.\n");
+        prompt.append("- If preferredCategories is not empty, prioritize places in those categories when building the itinerary.\n");
+        prompt.append("- mustVisitPlaceIds must be included even if their categories are not in preferredCategories.\n");
+        prompt.append("- excludedPlaceIds must never be included regardless of preferredCategories.\n");
         prompt.append("- Follow the selected pace when choosing how many places to schedule each day.\n");
         prompt.append("- For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.\n");
         prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");
@@ -53,6 +57,8 @@ public class ItineraryPromptGenerator {
         prompt.append("Place controls:\n");
         prompt.append("- mustVisitPlaceIds: ").append(mustVisitPlaceIds(request)).append("\n");
         prompt.append("- excludedPlaceIds: ").append(excludedPlaceIds(request)).append("\n\n");
+        prompt.append("Category preferences:\n");
+        prompt.append("- preferredCategories: ").append(preferredCategories(request)).append("\n\n");
         prompt.append("Pace:\n");
         prompt.append("- selectedPace: ").append(pace(request)).append("\n");
         prompt.append("- RELAXED: Plan about 2 itinerary items per day with generous travel and rest time.\n");
@@ -100,6 +106,13 @@ public class ItineraryPromptGenerator {
             return List.of();
         }
         return request.normalizedExcludedPlaceIds();
+    }
+
+    private List<PlaceCategory> preferredCategories(ItineraryGenerateRequest request) {
+        if (request == null) {
+            return List.of();
+        }
+        return request.normalizedPreferredCategories();
     }
 
     private ItineraryPace pace(ItineraryGenerateRequest request) {

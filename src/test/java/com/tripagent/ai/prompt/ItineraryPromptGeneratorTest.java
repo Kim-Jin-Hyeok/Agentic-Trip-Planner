@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
+import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
@@ -43,6 +44,9 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("Do not use the same placeId more than once in one generated itinerary.");
         assertThat(prompt).contains("You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.");
         assertThat(prompt).contains("You must never include any placeId listed in excludedPlaceIds in the generated itinerary.");
+        assertThat(prompt).contains("If preferredCategories is not empty, prioritize places in those categories when building the itinerary.");
+        assertThat(prompt).contains("mustVisitPlaceIds must be included even if their categories are not in preferredCategories.");
+        assertThat(prompt).contains("excludedPlaceIds must never be included regardless of preferredCategories.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.");
         assertThat(prompt).contains("For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.");
@@ -51,6 +55,7 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("- days: 3");
         assertThat(prompt).contains("- dailyStartTime: 09:00");
         assertThat(prompt).contains("- dailyEndTime: 18:00");
+        assertThat(prompt).contains("- preferredCategories: []");
         assertThat(prompt).contains("- selectedPace: NORMAL");
         assertThat(prompt).contains("RELAXED: Plan about 2 itinerary items per day with generous travel and rest time.");
         assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
@@ -102,6 +107,23 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("- excludedPlaceIds: [30]");
         assertThat(prompt).contains("You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.");
         assertThat(prompt).contains("You must never include any placeId listed in excludedPlaceIds in the generated itinerary.");
+    }
+
+    @Test
+    void generateIncludesPreferredCategoriesRulesAndValues() {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                List.of(10L),
+                List.of(30L),
+                ItineraryPace.NORMAL,
+                List.of(PlaceCategory.FOOD, PlaceCategory.CAFE)
+        );
+
+        String prompt = generator.generate(trip(), candidatePlaces(), request);
+
+        assertThat(prompt).contains("- preferredCategories: [FOOD, CAFE]");
+        assertThat(prompt).contains("If preferredCategories is not empty, prioritize places in those categories when building the itinerary.");
+        assertThat(prompt).contains("mustVisitPlaceIds must be included even if their categories are not in preferredCategories.");
+        assertThat(prompt).contains("excludedPlaceIds must never be included regardless of preferredCategories.");
     }
 
     @Test
