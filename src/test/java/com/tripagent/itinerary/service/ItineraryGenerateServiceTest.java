@@ -7,6 +7,8 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 
 import com.tripagent.ai.llm.LlmClient;
+import com.tripagent.ai.llm.LlmException;
+import com.tripagent.ai.llm.LlmFailureType;
 import com.tripagent.ai.llm.LlmItineraryResponseConverter;
 import com.tripagent.ai.llm.dto.LlmItineraryItemResponse;
 import com.tripagent.ai.llm.parser.LlmItineraryJsonParser;
@@ -212,6 +214,34 @@ class ItineraryGenerateServiceTest {
         verify(itineraryService, never()).createItinerary(
                 1L,
                 request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+    }
+
+    @Test
+    void generateItinerariesDoesNotSaveWhenLlmFails() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        String prompt = "prompt";
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenThrow(
+                LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
+        );
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
+                .isInstanceOf(LlmException.class)
+                .hasMessage("OpenAI quota exceeded.");
+        verify(llmItineraryJsonParser, never()).parse("raw response");
+        verify(llmItineraryResponseConverter, never()).toCreateRequests(List.of());
+        verify(candidatePlaceValidator, never()).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+        verify(itineraryService, never()).createItinerary(
+                1L,
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
         );
     }
 

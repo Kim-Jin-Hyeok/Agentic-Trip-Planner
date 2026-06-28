@@ -7,11 +7,13 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -102,8 +104,122 @@ class OpenAiLlmClientTest {
                 .andRespond(withBadRequest().body("{\"error\":{\"message\":\"bad request\"}}"));
 
         assertThatThrownBy(() -> client.generate("prompt"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("OpenAI Responses API request failed.");
+                .isInstanceOf(LlmException.class)
+                .hasMessage("bad request")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.UNEXPECTED_RESPONSE);
+        server.verify();
+    }
+
+    @Test
+    void generateRejectsInsufficientQuota() {
+        OpenAiProperties properties = properties("test-api-key", "test-model");
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        server.expect(requestTo("https://api.openai.com/v1/responses"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "error": {
+                                    "message": "You exceeded your current quota.",
+                                    "type": "insufficient_quota",
+                                    "code": "insufficient_quota"
+                                  }
+                                }
+                                """));
+
+        assertThatThrownBy(() -> client.generate("prompt"))
+                .isInstanceOf(LlmException.class)
+                .hasMessage("You exceeded your current quota.")
+                .satisfies(exception -> {
+                    LlmException llmException = (LlmException) exception;
+                    assertThat(llmException.getFailureType()).isEqualTo(LlmFailureType.INSUFFICIENT_QUOTA);
+                    assertThat(llmException.getProviderErrorType()).isEqualTo("insufficient_quota");
+                    assertThat(llmException.getProviderErrorCode()).isEqualTo("insufficient_quota");
+                });
+        server.verify();
+    }
+
+    @Test
+    void generateRejectsAuthenticationFailure() {
+        OpenAiProperties properties = properties("test-api-key", "test-model");
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        server.expect(requestTo("https://api.openai.com/v1/responses"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "error": {
+                                    "message": "Invalid API key.",
+                                    "type": "authentication_error",
+                                    "code": "invalid_api_key"
+                                  }
+                                }
+                                """));
+
+        assertThatThrownBy(() -> client.generate("prompt"))
+                .isInstanceOf(LlmException.class)
+                .hasMessage("Invalid API key.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.AUTHENTICATION_FAILED);
+        server.verify();
+    }
+
+    @Test
+    void generateRejectsRateLimit() {
+        OpenAiProperties properties = properties("test-api-key", "test-model");
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        server.expect(requestTo("https://api.openai.com/v1/responses"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "error": {
+                                    "message": "Rate limit reached.",
+                                    "type": "requests",
+                                    "code": "rate_limit_exceeded"
+                                  }
+                                }
+                                """));
+
+        assertThatThrownBy(() -> client.generate("prompt"))
+                .isInstanceOf(LlmException.class)
+                .hasMessage("Rate limit reached.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.RATE_LIMITED);
+        server.verify();
+    }
+
+    @Test
+    void generateRejectsModelError() {
+        OpenAiProperties properties = properties("test-api-key", "test-model");
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        server.expect(requestTo("https://api.openai.com/v1/responses"))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "error": {
+                                    "message": "Model temporarily unavailable.",
+                                    "type": "server_error",
+                                    "code": "server_error"
+                                  }
+                                }
+                                """));
+
+        assertThatThrownBy(() -> client.generate("prompt"))
+                .isInstanceOf(LlmException.class)
+                .hasMessage("Model temporarily unavailable.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.MODEL_ERROR);
         server.verify();
     }
 
@@ -116,8 +232,10 @@ class OpenAiLlmClientTest {
                 """);
 
         assertThatThrownBy(() -> client.generate("prompt"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("OpenAI response output is empty.");
+                .isInstanceOf(LlmException.class)
+                .hasMessage("OpenAI response output is empty.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.EMPTY_OUTPUT);
     }
 
     @Test
@@ -139,8 +257,10 @@ class OpenAiLlmClientTest {
                 """);
 
         assertThatThrownBy(() -> client.generate("prompt"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("OpenAI response was refused.");
+                .isInstanceOf(LlmException.class)
+                .hasMessage("OpenAI response was refused.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.REFUSAL);
     }
 
     @Test
@@ -162,8 +282,10 @@ class OpenAiLlmClientTest {
                 """);
 
         assertThatThrownBy(() -> client.generate("prompt"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("OpenAI response does not contain output_text.");
+                .isInstanceOf(LlmException.class)
+                .hasMessage("OpenAI response does not contain output_text.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.UNEXPECTED_RESPONSE);
     }
 
     @Test

@@ -11,6 +11,6 @@ public class FailFastLlmClient implements LlmClient {
 
     @Override
     public String generate(String prompt) {
-        throw new IllegalStateException("LLM client is not configured.");
+        throw LlmException.of(LlmFailureType.UNEXPECTED_RESPONSE, "LLM client is not configured.");
     }
 }

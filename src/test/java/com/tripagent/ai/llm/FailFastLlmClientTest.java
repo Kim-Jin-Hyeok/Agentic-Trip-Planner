@@ -11,7 +11,9 @@ class FailFastLlmClientTest {
     @Test
     void generateAlwaysRejectsWhenLlmClientIsNotConfigured() {
         assertThatThrownBy(() -> failFastLlmClient.generate("prompt"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("LLM client is not configured.");
+                .isInstanceOf(LlmException.class)
+                .hasMessage("LLM client is not configured.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.UNEXPECTED_RESPONSE);
     }
 }
