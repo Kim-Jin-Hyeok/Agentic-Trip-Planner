@@ -1,20 +1,28 @@
 package com.tripagent.place.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tripagent.place.domain.Place;
+import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceRecommendConcept;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.trip.domain.TripConcept;
+import java.lang.reflect.Field;
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Sort;
 
 @ExtendWith(MockitoExtension.class)
 class PlaceServiceTest {
@@ -157,12 +165,100 @@ class PlaceServiceTest {
         verify(placeRepository).findByUseYnTrueOrderByFamilyScoreDesc();
     }
 
+    @Test
+    void searchPlacesReturnsOnlyActivePlacesByDefault() {
+        Place activePlace = place("Active Place", "NATURE", "JEJU", "description", true);
+        Place inactivePlace = place("Inactive Place", "NATURE", "JEJU", "description", false);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(activePlace, inactivePlace));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(null, null, null, null);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Active Place");
+        ArgumentCaptor<Sort> sortCaptor = ArgumentCaptor.forClass(Sort.class);
+        verify(placeRepository).findAll(sortCaptor.capture());
+        assertThat(sortCaptor.getValue().getOrderFor("placeId").getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    void searchPlacesReturnsInactivePlacesWhenUseYnFalse() {
+        Place activePlace = place("Active Place", "NATURE", "JEJU", "description", true);
+        Place inactivePlace = place("Inactive Place", "NATURE", "JEJU", "description", false);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(activePlace, inactivePlace));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(null, null, null, false);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Inactive Place");
+    }
+
+    @Test
+    void searchPlacesUsesConceptScoreSort() {
+        Place place = place("Food Place", "FOOD", "JEJU", "description", true);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(place));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(PlaceRecommendConcept.FOOD, null, null, null);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Food Place");
+        ArgumentCaptor<Sort> sortCaptor = ArgumentCaptor.forClass(Sort.class);
+        verify(placeRepository).findAll(sortCaptor.capture());
+        assertThat(sortCaptor.getValue().getOrderFor("foodScore").getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    void searchPlacesFiltersByCategory() {
+        Place naturePlace = place("Nature Place", "NATURE", "JEJU", "description", true);
+        Place foodPlace = place("Food Place", "FOOD", "JEJU", "description", true);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(naturePlace, foodPlace));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(null, PlaceCategory.FOOD, null, null);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Food Place");
+    }
+
+    @Test
+    void searchPlacesFiltersByKeyword() {
+        Place nameMatch = place("Ocean Cafe", "CAFE", "JEJU", "description", true);
+        Place addressMatch = place("Other Place", "NATURE", "Seogwipo Ocean Road", "description", true);
+        Place descriptionMatch = place("Third Place", "NATURE", "JEJU", "quiet ocean view", true);
+        Place noMatch = place("Mountain Place", "NATURE", "JEJU", "description", true);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(nameMatch, addressMatch, descriptionMatch, noMatch));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(null, null, "ocean", null);
+
+        assertThat(responses).extracting(PlaceResponse::name)
+                .containsExactly("Ocean Cafe", "Other Place", "Third Place");
+    }
+
+    @Test
+    void getPlaceReturnsPlace() {
+        Place place = place("Test Place");
+        setId(place, "placeId", 10L);
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+
+        PlaceResponse response = placeService.getPlace(10L);
+
+        assertThat(response.placeId()).isEqualTo(10L);
+        assertThat(response.name()).isEqualTo("Test Place");
+    }
+
+    @Test
+    void getPlaceRejectsUnknownPlaceId() {
+        when(placeRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> placeService.getPlace(10L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Place not found. placeId=10");
+    }
+
     private Place place(String name) {
+        return place(name, "NATURE", "JEJU", "description", true);
+    }
+
+    private Place place(String name, String category, String address, String description, Boolean useYn) {
         return Place.create(
                 name,
-                "NATURE",
+                category,
                 "EAST",
-                "JEJU",
+                address,
                 33.0,
                 126.0,
                 60,
@@ -175,8 +271,18 @@ class PlaceServiceTest {
                 5,
                 4,
                 3,
-                "description",
-                true
+                description,
+                useYn
         );
+    }
+
+    private void setId(Object target, String fieldName, Long id) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(target, id);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }
