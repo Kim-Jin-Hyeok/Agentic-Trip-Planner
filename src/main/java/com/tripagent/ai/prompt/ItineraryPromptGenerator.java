@@ -1,6 +1,7 @@
 package com.tripagent.ai.prompt;
 
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
+import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Trip;
 import java.time.temporal.ChronoUnit;
@@ -33,6 +34,7 @@ public class ItineraryPromptGenerator {
         prompt.append("- Do not use the same placeId more than once in one generated itinerary.\n");
         prompt.append("- You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.\n");
         prompt.append("- You must never include any placeId listed in excludedPlaceIds in the generated itinerary.\n");
+        prompt.append("- Follow the selected pace when choosing how many places to schedule each day.\n");
         prompt.append("- For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.\n");
         prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");
         prompt.append("- For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.\n");
@@ -51,6 +53,11 @@ public class ItineraryPromptGenerator {
         prompt.append("Place controls:\n");
         prompt.append("- mustVisitPlaceIds: ").append(mustVisitPlaceIds(request)).append("\n");
         prompt.append("- excludedPlaceIds: ").append(excludedPlaceIds(request)).append("\n\n");
+        prompt.append("Pace:\n");
+        prompt.append("- selectedPace: ").append(pace(request)).append("\n");
+        prompt.append("- RELAXED: Plan about 2 itinerary items per day with generous travel and rest time.\n");
+        prompt.append("- NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.\n");
+        prompt.append("- BUSY: Plan about 3 to 4 itinerary items per day to visit more places while staying realistic.\n\n");
         prompt.append("candidatePlaces:\n");
         for (PlaceResponse place : candidatePlaces) {
             prompt.append("- placeId: ").append(place.placeId()).append("\n");
@@ -93,5 +100,12 @@ public class ItineraryPromptGenerator {
             return List.of();
         }
         return request.normalizedExcludedPlaceIds();
+    }
+
+    private ItineraryPace pace(ItineraryGenerateRequest request) {
+        if (request == null) {
+            return ItineraryPace.NORMAL;
+        }
+        return request.normalizedPace();
     }
 }

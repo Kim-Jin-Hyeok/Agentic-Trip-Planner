@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
+import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
@@ -50,6 +51,10 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("- days: 3");
         assertThat(prompt).contains("- dailyStartTime: 09:00");
         assertThat(prompt).contains("- dailyEndTime: 18:00");
+        assertThat(prompt).contains("- selectedPace: NORMAL");
+        assertThat(prompt).contains("RELAXED: Plan about 2 itinerary items per day with generous travel and rest time.");
+        assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
+        assertThat(prompt).contains("BUSY: Plan about 3 to 4 itinerary items per day to visit more places while staying realistic.");
         assertThat(prompt).contains("placeId: 10");
         assertThat(prompt).contains("name: Food Place");
         assertThat(prompt).contains("category: FOOD");
@@ -100,6 +105,54 @@ class ItineraryPromptGeneratorTest {
     }
 
     @Test
+    void generateDefaultsToNormalPaceWhenRequestIsNull() {
+        String prompt = generator.generate(trip(), candidatePlaces());
+
+        assertThat(prompt).contains("- selectedPace: NORMAL");
+        assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
+    }
+
+    @Test
+    void generateDefaultsToNormalPaceWhenPaceIsNull() {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, null);
+
+        String prompt = generator.generate(trip(), candidatePlaces(), request);
+
+        assertThat(prompt).contains("- selectedPace: NORMAL");
+        assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
+    }
+
+    @Test
+    void generateIncludesRelaxedPaceRule() {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.RELAXED);
+
+        String prompt = generator.generate(trip(), candidatePlaces(), request);
+
+        assertThat(prompt).contains("- selectedPace: RELAXED");
+        assertThat(prompt).contains("RELAXED: Plan about 2 itinerary items per day with generous travel and rest time.");
+    }
+
+    @Test
+    void generateIncludesNormalPaceRule() {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.NORMAL);
+
+        String prompt = generator.generate(trip(), candidatePlaces(), request);
+
+        assertThat(prompt).contains("- selectedPace: NORMAL");
+        assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
+    }
+
+    @Test
+    void generateIncludesBusyPaceRule() {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.BUSY);
+
+        String prompt = generator.generate(trip(), candidatePlaces(), request);
+
+        assertThat(prompt).contains("- selectedPace: BUSY");
+        assertThat(prompt).contains("BUSY: Plan about 3 to 4 itinerary items per day to visit more places while staying realistic.");
+    }
+
+    @Test
     void generateRejectsEmptyCandidatePlaces() {
         Trip trip = Trip.create(
                 "JEJU",
@@ -115,6 +168,26 @@ class ItineraryPromptGeneratorTest {
         assertThatThrownBy(() -> generator.generate(trip, List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Candidate places are required.");
+    }
+
+    private Trip trip() {
+        return Trip.create(
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.FOOD,
+                Transportation.RENT_CAR,
+                "SEOGWIPO"
+        );
+    }
+
+    private List<PlaceResponse> candidatePlaces() {
+        return List.of(
+                place(10L, "Food Place", "FOOD", "NORTH", 60, "Local food place."),
+                place(20L, "Cafe Place", "CAFE", "WEST", 70, "Ocean view cafe.")
+        );
     }
 
     private PlaceResponse place(

@@ -108,9 +108,9 @@ public class ItineraryGenerateService {
         List<PlaceResponse> candidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
         validateGenerateRequest(candidatePlaces, request);
         List<PlaceResponse> filteredCandidatePlaces = filterExcludedCandidatePlaces(candidatePlaces, request);
-        String prompt = hasPlaceControls(request)
-                ? itineraryPromptGenerator.generate(trip, filteredCandidatePlaces, request)
-                : itineraryPromptGenerator.generate(trip, filteredCandidatePlaces);
+        String prompt = request == null
+                ? itineraryPromptGenerator.generate(trip, filteredCandidatePlaces)
+                : itineraryPromptGenerator.generate(trip, filteredCandidatePlaces, request);
 
         return generateValidatedDraftItineraries(trip, filteredCandidatePlaces, request, prompt);
     }

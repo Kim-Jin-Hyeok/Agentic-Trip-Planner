@@ -4,8 +4,16 @@ import java.util.List;
 
 public record ItineraryGenerateRequest(
         List<Long> mustVisitPlaceIds,
-        List<Long> excludedPlaceIds
+        List<Long> excludedPlaceIds,
+        ItineraryPace pace
 ) {
+
+    public ItineraryGenerateRequest(
+            List<Long> mustVisitPlaceIds,
+            List<Long> excludedPlaceIds
+    ) {
+        this(mustVisitPlaceIds, excludedPlaceIds, null);
+    }
 
     public List<Long> normalizedMustVisitPlaceIds() {
         if (mustVisitPlaceIds == null) {
@@ -19,5 +27,12 @@ public record ItineraryGenerateRequest(
             return List.of();
         }
         return excludedPlaceIds;
+    }
+
+    public ItineraryPace normalizedPace() {
+        if (pace == null) {
+            return ItineraryPace.NORMAL;
+        }
+        return pace;
     }
 }
