@@ -82,6 +82,7 @@ public class ItineraryGenerateService {
 
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
         validateFirstTravelMinutes(createRequests);
+        validateFirstStartTimes(trip, createRequests);
 
         return createRequests;
     }
@@ -92,6 +93,18 @@ public class ItineraryGenerateService {
                     && !Integer.valueOf(0).equals(request.travelMinutesFromPrevious())) {
                 throw new IllegalArgumentException(
                         "First itinerary item of each day must have travelMinutesFromPrevious 0. dayNo="
+                                + request.dayNo()
+                );
+            }
+        }
+    }
+
+    private void validateFirstStartTimes(Trip trip, List<ItineraryCreateRequest> createRequests) {
+        for (ItineraryCreateRequest request : createRequests) {
+            if (Integer.valueOf(1).equals(request.orderNo())
+                    && request.startTime().isBefore(trip.getDailyStartTime())) {
+                throw new IllegalArgumentException(
+                        "First itinerary item of each day must start at or after trip dailyStartTime. dayNo="
                                 + request.dayNo()
                 );
             }

@@ -176,6 +176,27 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void createItineraryRejectsFirstStartTimeBeforeDailyStartTime() {
+        Trip trip = trip(1L, LocalTime.of(10, 30));
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                10L,
+                1,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0),
+                0,
+                "First start time is too early."
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("First itinerary item of each day must start at or after trip dailyStartTime.");
+        verify(placeRepository, never()).findById(10L);
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
     void createItineraryAllowsAdjacentTimeInSameTripDay() {
         Trip trip = trip(1L);
         Place place = place(10L);
@@ -264,11 +285,15 @@ class ItineraryServiceTest {
     }
 
     private Trip trip(Long tripId) {
+        return trip(tripId, LocalTime.of(9, 0));
+    }
+
+    private Trip trip(Long tripId, LocalTime dailyStartTime) {
         Trip trip = Trip.create(
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
-                LocalTime.of(9, 0),
+                dailyStartTime,
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"

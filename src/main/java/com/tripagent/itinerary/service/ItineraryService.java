@@ -38,6 +38,7 @@ public class ItineraryService {
 
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        validateFirstStartTime(trip, request);
         Place place = placeRepository.findById(request.placeId())
                 .orElseThrow(() -> new NoSuchElementException("Place not found. placeId=" + request.placeId()));
 
@@ -103,6 +104,14 @@ public class ItineraryService {
         }
         if (Integer.valueOf(1).equals(request.orderNo()) && request.travelMinutesFromPrevious() != 0) {
             throw new IllegalArgumentException("First itinerary item of each day must have travelMinutesFromPrevious 0.");
+        }
+    }
+
+    private void validateFirstStartTime(Trip trip, ItineraryCreateRequest request) {
+        if (Integer.valueOf(1).equals(request.orderNo()) && request.startTime().isBefore(trip.getDailyStartTime())) {
+            throw new IllegalArgumentException(
+                    "First itinerary item of each day must start at or after trip dailyStartTime."
+            );
         }
     }
 
