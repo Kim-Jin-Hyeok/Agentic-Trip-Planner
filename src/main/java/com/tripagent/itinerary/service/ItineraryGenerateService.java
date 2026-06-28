@@ -1,6 +1,7 @@
 package com.tripagent.itinerary.service;
 
 import com.tripagent.ai.llm.LlmClient;
+import com.tripagent.ai.llm.LlmException;
 import com.tripagent.ai.llm.LlmItineraryResponseConverter;
 import com.tripagent.ai.llm.dto.LlmItineraryItemResponse;
 import com.tripagent.ai.llm.parser.LlmItineraryJsonParser;
@@ -23,6 +24,8 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,8 +33,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ItineraryGenerateService {
 
+    private static final Logger log = LoggerFactory.getLogger(ItineraryGenerateService.class);
+
     private static final int MAX_LLM_VALIDATION_RETRY_COUNT = 2;
     private static final int MAX_LLM_CANDIDATE_PLACE_COUNT = 30;
+    private static final String OPERATION_GENERATE = "generate";
+    private static final String OPERATION_REGENERATE = "regenerate";
+    private static final String OPERATION_GENERATE_DRAFT = "generateDraft";
 
     private final TripRepository tripRepository;
     private final PlaceService placeService;
@@ -77,7 +85,7 @@ public class ItineraryGenerateService {
             throw new IllegalArgumentException("Itinerary already exists for this trip.");
         }
 
-        return generateDraftItineraries(tripId, request).stream()
+        return generateDraftItineraries(tripId, request, OPERATION_GENERATE).stream()
                 .map(createRequest -> itineraryService.createItinerary(tripId, createRequest))
                 .toList();
     }
@@ -91,7 +99,11 @@ public class ItineraryGenerateService {
     public List<ItineraryResponse> regenerateItineraries(Long tripId, ItineraryGenerateRequest request) {
         validateTripId(tripId);
 
-        List<ItineraryCreateRequest> createRequests = generateDraftItineraries(tripId, request);
+        List<ItineraryCreateRequest> createRequests = generateDraftItineraries(
+                tripId,
+                request,
+                OPERATION_REGENERATE
+        );
         itineraryRepository.deleteByTrip_TripId(tripId);
 
         return createRequests.stream()
@@ -100,10 +112,18 @@ public class ItineraryGenerateService {
     }
 
     public List<ItineraryCreateRequest> generateDraftItineraries(Long tripId) {
-        return generateDraftItineraries(tripId, null);
+        return generateDraftItineraries(tripId, null, OPERATION_GENERATE_DRAFT);
     }
 
     public List<ItineraryCreateRequest> generateDraftItineraries(Long tripId, ItineraryGenerateRequest request) {
+        return generateDraftItineraries(tripId, request, OPERATION_GENERATE_DRAFT);
+    }
+
+    private List<ItineraryCreateRequest> generateDraftItineraries(
+            Long tripId,
+            ItineraryGenerateRequest request,
+            String operation
+    ) {
         validateTripId(tripId);
 
         Trip trip = tripRepository.findById(tripId)
@@ -115,25 +135,48 @@ public class ItineraryGenerateService {
                 ? itineraryPromptGenerator.generate(trip, selectedCandidatePlaces)
                 : itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request);
 
-        return generateValidatedDraftItineraries(trip, selectedCandidatePlaces, request, prompt);
+        return generateValidatedDraftItineraries(trip, selectedCandidatePlaces, request, prompt, operation);
     }
 
     private List<ItineraryCreateRequest> generateValidatedDraftItineraries(
             Trip trip,
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
-            String prompt
+            String prompt,
+            String operation
     ) {
         IllegalArgumentException lastValidationException = null;
+        int maxAttemptCount = MAX_LLM_VALIDATION_RETRY_COUNT + 1;
 
         for (int attempt = 0; attempt <= MAX_LLM_VALIDATION_RETRY_COUNT; attempt++) {
+            int attemptNumber = attempt + 1;
             try {
-                return generateValidatedDraftItinerary(trip, candidatePlaces, request, prompt);
+                List<ItineraryCreateRequest> createRequests = generateValidatedDraftItinerary(
+                        trip,
+                        candidatePlaces,
+                        request,
+                        prompt
+                );
+                logDraftGenerationSuccess(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces);
+                return createRequests;
+            } catch (LlmException exception) {
+                logLlmFailure(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces, exception);
+                throw exception;
             } catch (IllegalArgumentException exception) {
                 lastValidationException = exception;
+                logValidationFailure(
+                        trip,
+                        operation,
+                        attemptNumber,
+                        maxAttemptCount,
+                        request,
+                        candidatePlaces,
+                        exception
+                );
             }
         }
 
+        logFinalValidationFailure(trip, operation, maxAttemptCount, request, candidatePlaces, lastValidationException);
         throw lastValidationException;
     }
 
@@ -379,6 +422,126 @@ public class ItineraryGenerateService {
             case COUPLE -> place.coupleScore();
             case FAMILY -> place.familyScore();
         };
+    }
+
+    private void logDraftGenerationSuccess(
+            Trip trip,
+            String operation,
+            int attempt,
+            int maxAttemptCount,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> selectedCandidatePlaces
+    ) {
+        log.debug(
+                "LLM itinerary draft validation succeeded. tripId={}, operation={}, attempt={}, maxAttempts={}, "
+                        + "mustVisitPlaceIdsCount={}, excludedPlaceIdsCount={}, preferredCategoriesCount={}, "
+                        + "selectedCandidatePlacesCount={}, llmSuccess={}",
+                trip.getTripId(),
+                operation,
+                attempt,
+                maxAttemptCount,
+                mustVisitPlaceIdsCount(request),
+                excludedPlaceIdsCount(request),
+                preferredCategoriesCount(request),
+                selectedCandidatePlaces.size(),
+                true
+        );
+    }
+
+    private void logValidationFailure(
+            Trip trip,
+            String operation,
+            int attempt,
+            int maxAttemptCount,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> selectedCandidatePlaces,
+            IllegalArgumentException exception
+    ) {
+        log.warn(
+                "LLM itinerary draft validation failed. tripId={}, operation={}, attempt={}, maxAttempts={}, "
+                        + "reason={}, exceptionClass={}, mustVisitPlaceIdsCount={}, excludedPlaceIdsCount={}, "
+                        + "preferredCategoriesCount={}, selectedCandidatePlacesCount={}, llmSuccess={}",
+                trip.getTripId(),
+                operation,
+                attempt,
+                maxAttemptCount,
+                exception.getMessage(),
+                exception.getClass().getSimpleName(),
+                mustVisitPlaceIdsCount(request),
+                excludedPlaceIdsCount(request),
+                preferredCategoriesCount(request),
+                selectedCandidatePlaces.size(),
+                false
+        );
+    }
+
+    private void logFinalValidationFailure(
+            Trip trip,
+            String operation,
+            int maxAttemptCount,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> selectedCandidatePlaces,
+            IllegalArgumentException exception
+    ) {
+        log.warn(
+                "LLM itinerary draft validation finally failed. tripId={}, operation={}, attempt={}, maxAttempts={}, "
+                        + "reason={}, exceptionClass={}, mustVisitPlaceIdsCount={}, excludedPlaceIdsCount={}, "
+                        + "preferredCategoriesCount={}, selectedCandidatePlacesCount={}, llmSuccess={}",
+                trip.getTripId(),
+                operation,
+                maxAttemptCount,
+                maxAttemptCount,
+                exception.getMessage(),
+                exception.getClass().getSimpleName(),
+                mustVisitPlaceIdsCount(request),
+                excludedPlaceIdsCount(request),
+                preferredCategoriesCount(request),
+                selectedCandidatePlaces.size(),
+                false
+        );
+    }
+
+    private void logLlmFailure(
+            Trip trip,
+            String operation,
+            int attempt,
+            int maxAttemptCount,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> selectedCandidatePlaces,
+            LlmException exception
+    ) {
+        log.warn(
+                "LLM itinerary draft generation failed. tripId={}, operation={}, attempt={}, maxAttempts={}, "
+                        + "reason={}, exceptionClass={}, llmFailureType={}, providerErrorType={}, providerErrorCode={}, "
+                        + "mustVisitPlaceIdsCount={}, excludedPlaceIdsCount={}, preferredCategoriesCount={}, "
+                        + "selectedCandidatePlacesCount={}, llmSuccess={}",
+                trip.getTripId(),
+                operation,
+                attempt,
+                maxAttemptCount,
+                exception.getMessage(),
+                exception.getClass().getSimpleName(),
+                exception.getFailureType(),
+                exception.getProviderErrorType(),
+                exception.getProviderErrorCode(),
+                mustVisitPlaceIdsCount(request),
+                excludedPlaceIdsCount(request),
+                preferredCategoriesCount(request),
+                selectedCandidatePlaces.size(),
+                false
+        );
+    }
+
+    private int mustVisitPlaceIdsCount(ItineraryGenerateRequest request) {
+        return request == null ? 0 : request.normalizedMustVisitPlaceIds().size();
+    }
+
+    private int excludedPlaceIdsCount(ItineraryGenerateRequest request) {
+        return request == null ? 0 : request.normalizedExcludedPlaceIds().size();
+    }
+
+    private int preferredCategoriesCount(ItineraryGenerateRequest request) {
+        return request == null ? 0 : request.normalizedPreferredCategories().size();
     }
 
     private void validateGeneratedPlaceControls(ItineraryGenerateRequest request, List<Long> selectedPlaceIds) {
