@@ -1,6 +1,7 @@
 package com.tripagent.ai.validator;
 
 import com.tripagent.place.dto.PlaceResponse;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -21,9 +22,15 @@ public class CandidatePlaceValidator {
                 .map(PlaceResponse::placeId)
                 .collect(Collectors.toSet());
 
+        Set<Long> selectedPlaceIds = new HashSet<>();
         for (Long placeId : placeIds) {
             if (placeId == null) {
                 throw new IllegalArgumentException("Place id must not be null.");
+            }
+            if (!selectedPlaceIds.add(placeId)) {
+                throw new IllegalArgumentException(
+                        "Place id must not be duplicated in generated itinerary. placeId=" + placeId
+                );
             }
             if (!candidatePlaceIds.contains(placeId)) {
                 throw new IllegalArgumentException("Place id is not included in candidate places. placeId=" + placeId);

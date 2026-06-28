@@ -37,8 +37,13 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("You must select places only from the provided candidatePlaces.");
         assertThat(prompt).contains("Do not create new place names.");
         assertThat(prompt).contains("Do not use any placeId that is not included in candidatePlaces.");
+        assertThat(prompt).contains("Do not use the same placeId more than once in one generated itinerary.");
+        assertThat(prompt).contains("For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.");
+        assertThat(prompt).contains("For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.");
+        assertThat(prompt).contains("Write every reason in Korean.");
         assertThat(prompt).contains("- concept: FOOD");
         assertThat(prompt).contains("- days: 3");
+        assertThat(prompt).contains("- dailyStartTime: 09:00");
         assertThat(prompt).contains("placeId: 10");
         assertThat(prompt).contains("name: Food Place");
         assertThat(prompt).contains("category: FOOD");
@@ -52,6 +57,7 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("\"endTime\"");
         assertThat(prompt).contains("\"travelMinutesFromPrevious\"");
         assertThat(prompt).contains("\"reason\"");
+        assertThat(prompt).contains("한국어 이유");
     }
 
     @Test

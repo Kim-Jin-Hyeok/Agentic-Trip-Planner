@@ -23,14 +23,15 @@ class CandidatePlaceValidatorTest {
     }
 
     @Test
-    void validatePlaceIdsAllowsDuplicatedIdsWhenIncludedInCandidatePlaces() {
+    void validatePlaceIdsRejectsDuplicatedIdsEvenWhenIncludedInCandidatePlaces() {
         List<PlaceResponse> candidatePlaces = List.of(
                 place(1L),
                 place(2L)
         );
 
-        assertThatCode(() -> validator.validatePlaceIds(candidatePlaces, List.of(1L, 1L, 2L)))
-                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> validator.validatePlaceIds(candidatePlaces, List.of(1L, 1L, 2L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Place id must not be duplicated in generated itinerary. placeId=1");
     }
 
     @Test

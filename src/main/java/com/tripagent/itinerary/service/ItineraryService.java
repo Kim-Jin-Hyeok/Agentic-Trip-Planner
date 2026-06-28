@@ -101,6 +101,9 @@ public class ItineraryService {
         if (request.travelMinutesFromPrevious() == null || request.travelMinutesFromPrevious() < 0) {
             throw new IllegalArgumentException("Itinerary travelMinutesFromPrevious must be greater than or equal to 0.");
         }
+        if (Integer.valueOf(1).equals(request.orderNo()) && request.travelMinutesFromPrevious() != 0) {
+            throw new IllegalArgumentException("First itinerary item of each day must have travelMinutesFromPrevious 0.");
+        }
     }
 
     private void validateDayNoInTripPeriod(Trip trip, Integer dayNo) {

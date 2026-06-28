@@ -25,6 +25,10 @@ public class ItineraryPromptGenerator {
         prompt.append("- Do not create new place names.\n");
         prompt.append("- Do not use any placeId that is not included in candidatePlaces.\n");
         prompt.append("- Every itinerary item must reference an existing placeId from candidatePlaces.\n");
+        prompt.append("- Do not use the same placeId more than once in one generated itinerary.\n");
+        prompt.append("- For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.\n");
+        prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");
+        prompt.append("- Write every reason in Korean.\n");
         prompt.append("- Return JSON only. Do not include markdown or explanation outside JSON.\n\n");
         prompt.append("Trip:\n");
         prompt.append("- destination: ").append(trip.getDestination()).append("\n");
@@ -54,7 +58,7 @@ public class ItineraryPromptGenerator {
         prompt.append("    \"startTime\": \"09:00:00\",\n");
         prompt.append("    \"endTime\": \"10:30:00\",\n");
         prompt.append("    \"travelMinutesFromPrevious\": 0,\n");
-        prompt.append("    \"reason\": \"Reason for selecting this candidate place.\"\n");
+        prompt.append("    \"reason\": \"이 후보 장소를 선택한 한국어 이유입니다.\"\n");
         prompt.append("  }\n");
         prompt.append("]\n");
 

@@ -157,6 +157,25 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void createItineraryRejectsFirstOrderWithTravelMinutes() {
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                10L,
+                1,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 30),
+                15,
+                "First order must not have previous travel minutes."
+        );
+
+        assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("First itinerary item of each day must have travelMinutesFromPrevious 0.");
+        verify(tripRepository, never()).findById(1L);
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
     void createItineraryAllowsAdjacentTimeInSameTripDay() {
         Trip trip = trip(1L);
         Place place = place(10L);
