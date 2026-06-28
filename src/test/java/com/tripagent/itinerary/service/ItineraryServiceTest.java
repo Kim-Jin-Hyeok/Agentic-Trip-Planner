@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
@@ -101,10 +102,8 @@ class ItineraryServiceTest {
     @Test
     void createItineraryRejectsDayNoOutsideTripPeriod() {
         Trip trip = trip(1L);
-        Place place = place(10L);
         ItineraryCreateRequest request = request(10L, 4, 1);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
-        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
 
         assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -115,10 +114,8 @@ class ItineraryServiceTest {
     @Test
     void createItineraryRejectsDuplicatedDayNoAndOrderNoInTrip() {
         Trip trip = trip(1L);
-        Place place = place(10L);
         ItineraryCreateRequest request = request(10L, 1, 1);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
-        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
         when(itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(1L, 1, 1)).thenReturn(true);
 
         assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
@@ -151,7 +148,6 @@ class ItineraryServiceTest {
                 "Existing itinerary"
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
-        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
         when(itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(1L, 1, 2)).thenReturn(false);
         when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(existingItinerary));
 
@@ -242,6 +238,238 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void updateItineraryUpdatesPartialFields() {
+        Trip trip = trip(1L);
+        Place oldPlace = place(10L, "Old Place");
+        Place newPlace = place(20L, "New Place");
+        Itinerary itinerary = itinerary(100L, trip, oldPlace, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(
+                20L,
+                null,
+                null,
+                LocalTime.of(9, 30),
+                LocalTime.of(10, 30),
+                null,
+                "Updated reason"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+        when(placeRepository.findById(20L)).thenReturn(Optional.of(newPlace));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(itinerary));
+
+        ItineraryResponse response = itineraryService.updateItinerary(1L, 100L, request);
+
+        assertThat(response.itineraryId()).isEqualTo(100L);
+        assertThat(response.placeId()).isEqualTo(20L);
+        assertThat(response.place().placeId()).isEqualTo(20L);
+        assertThat(response.place().name()).isEqualTo("New Place");
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(9, 30));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(10, 30));
+        assertThat(response.reason()).isEqualTo("Updated reason");
+    }
+
+    @Test
+    void updateItineraryRejectsUnknownTrip() {
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(null, null, null, null, null, null, null);
+        when(tripRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 100L, request))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Trip not found. tripId=1");
+        verify(itineraryRepository, never()).findById(100L);
+    }
+
+    @Test
+    void updateItineraryRejectsUnknownItinerary() {
+        Trip trip = trip(1L);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(null, null, null, null, null, null, null);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 100L, request))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Itinerary not found. itineraryId=100");
+    }
+
+    @Test
+    void updateItineraryRejectsItineraryInOtherTrip() {
+        Trip trip = trip(1L);
+        Trip otherTrip = trip(2L);
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, otherTrip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(null, null, null, null, null, null, null);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary does not belong to trip. itineraryId=100");
+    }
+
+    @Test
+    void updateItineraryRejectsDuplicatedDayNoAndOrderNo() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary target = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary existing = itinerary(200L, trip, place, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(null, 1, 2, null, null, null, null);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(target));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(target, existing));
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary dayNo and orderNo already exist in this trip.");
+    }
+
+    @Test
+    void updateItineraryRejectsTimeOverlap() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary target = itinerary(100L, trip, place, 1, 2, LocalTime.of(11, 30), LocalTime.of(12, 30), 30);
+        Itinerary existing = itinerary(200L, trip, place, 1, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(
+                null,
+                null,
+                null,
+                LocalTime.of(10, 30),
+                LocalTime.of(11, 30),
+                null,
+                null
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(target));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(target, existing));
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary time overlaps with existing itinerary.");
+    }
+
+    @Test
+    void updateItineraryAllowsAdjacentTime() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary target = itinerary(100L, trip, place, 1, 2, LocalTime.of(11, 30), LocalTime.of(12, 30), 30);
+        Itinerary existing = itinerary(200L, trip, place, 1, 1, LocalTime.of(9, 30), LocalTime.of(10, 30), 0);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(
+                null,
+                null,
+                null,
+                LocalTime.of(10, 30),
+                LocalTime.of(11, 30),
+                null,
+                null
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(target));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(target, existing));
+
+        ItineraryResponse response = itineraryService.updateItinerary(1L, 100L, request);
+
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(10, 30));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(11, 30));
+    }
+
+    @Test
+    void updateItineraryRejectsFirstOrderWithTravelMinutes() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, trip, place, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(null, null, 1, null, null, 15, null);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("First itinerary item of each day must have travelMinutesFromPrevious 0.");
+    }
+
+    @Test
+    void updateItineraryRejectsFirstStartTimeBeforeDailyStartTime() {
+        Trip trip = trip(1L, LocalTime.of(10, 30));
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, trip, place, 1, 2, LocalTime.of(11, 0), LocalTime.of(12, 0), 30);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(
+                null,
+                null,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0),
+                0,
+                null
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("First itinerary item of each day must start at or after trip dailyStartTime.");
+    }
+
+    @Test
+    void deleteItineraryDeletesExistingItinerary() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+
+        itineraryService.deleteItinerary(1L, 100L);
+
+        verify(itineraryRepository).delete(itinerary);
+    }
+
+    @Test
+    void deleteItineraryRejectsUnknownTrip() {
+        when(tripRepository.existsById(1L)).thenReturn(false);
+
+        assertThatThrownBy(() -> itineraryService.deleteItinerary(1L, 100L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Trip not found. tripId=1");
+        verify(itineraryRepository, never()).findById(100L);
+    }
+
+    @Test
+    void deleteItineraryRejectsUnknownItinerary() {
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itineraryService.deleteItinerary(1L, 100L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Itinerary not found. itineraryId=100");
+    }
+
+    @Test
+    void deleteItineraryRejectsItineraryInOtherTrip() {
+        Trip otherTrip = trip(2L);
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, otherTrip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+
+        assertThatThrownBy(() -> itineraryService.deleteItinerary(1L, 100L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary does not belong to trip. itineraryId=100");
+        verify(itineraryRepository, never()).delete(itinerary);
+    }
+
+    @Test
+    void deletedItineraryIsExcludedFromLookupResult() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary itinerary = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(itinerary));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
+
+        itineraryService.deleteItinerary(1L, 100L);
+        List<ItineraryResponse> responses = itineraryService.getItineraries(1L);
+
+        assertThat(responses).isEmpty();
+    }
+
+    @Test
     void getItinerariesReturnsTripItineraries() {
         Trip trip = trip(1L);
         Place place = place(10L);
@@ -310,8 +538,12 @@ class ItineraryServiceTest {
     }
 
     private Place place(Long placeId) {
+        return place(placeId, "Test Place");
+    }
+
+    private Place place(Long placeId, String name) {
         Place place = Place.create(
-                "Test Place",
+                name,
                 "NATURE",
                 "EAST",
                 "Test Address",
@@ -332,6 +564,30 @@ class ItineraryServiceTest {
         );
         setId(place, "placeId", placeId);
         return place;
+    }
+
+    private Itinerary itinerary(
+            Long itineraryId,
+            Trip trip,
+            Place place,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
+        Itinerary itinerary = Itinerary.create(
+                trip,
+                place,
+                dayNo,
+                orderNo,
+                startTime,
+                endTime,
+                travelMinutesFromPrevious,
+                "Test reason"
+        );
+        setId(itinerary, "itineraryId", itineraryId);
+        return itinerary;
     }
 
     private void setId(Object target, String fieldName, Long id) {

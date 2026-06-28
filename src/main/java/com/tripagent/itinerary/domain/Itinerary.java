@@ -92,6 +92,24 @@ public class Itinerary {
         );
     }
 
+    public void update(
+            Place place,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious,
+            String reason
+    ) {
+        this.place = place;
+        this.dayNo = dayNo;
+        this.orderNo = orderNo;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.travelMinutesFromPrevious = travelMinutesFromPrevious;
+        this.reason = reason;
+    }
+
     public Long getItineraryId() {
         return itineraryId;
     }

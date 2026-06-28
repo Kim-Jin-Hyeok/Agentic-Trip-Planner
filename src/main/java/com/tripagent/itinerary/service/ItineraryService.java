@@ -3,11 +3,13 @@ package com.tripagent.itinerary.service;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.repository.TripRepository;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -38,20 +40,18 @@ public class ItineraryService {
 
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
-        validateFirstStartTime(trip, request);
+
+        validateItineraryValues(
+                trip,
+                null,
+                request.dayNo(),
+                request.orderNo(),
+                request.startTime(),
+                request.endTime(),
+                request.travelMinutesFromPrevious()
+        );
         Place place = placeRepository.findById(request.placeId())
                 .orElseThrow(() -> new NoSuchElementException("Place not found. placeId=" + request.placeId()));
-
-        validateDayNoInTripPeriod(trip, request.dayNo());
-
-        if (itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(
-                tripId,
-                request.dayNo(),
-                request.orderNo()
-        )) {
-            throw new IllegalArgumentException("Itinerary dayNo and orderNo already exist in this trip.");
-        }
-        validateNoTimeOverlap(tripId, request);
 
         Itinerary itinerary = Itinerary.create(
                 trip,
@@ -65,6 +65,70 @@ public class ItineraryService {
         );
 
         return ItineraryResponse.from(itineraryRepository.save(itinerary));
+    }
+
+    @Transactional
+    public ItineraryResponse updateItinerary(Long tripId, Long itineraryId, ItineraryUpdateRequest request) {
+        validateUpdateRequest(tripId, itineraryId, request);
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new NoSuchElementException("Itinerary not found. itineraryId=" + itineraryId));
+        validateItineraryBelongsToTrip(itinerary, tripId);
+
+        Long updatedPlaceId = request.placeId() == null ? itinerary.getPlace().getPlaceId() : request.placeId();
+        Place updatedPlace = request.placeId() == null
+                ? itinerary.getPlace()
+                : placeRepository.findById(updatedPlaceId)
+                .orElseThrow(() -> new NoSuchElementException("Place not found. placeId=" + updatedPlaceId));
+        Integer updatedDayNo = request.dayNo() == null ? itinerary.getDayNo() : request.dayNo();
+        Integer updatedOrderNo = request.orderNo() == null ? itinerary.getOrderNo() : request.orderNo();
+        LocalTime updatedStartTime = request.startTime() == null
+                ? itinerary.getStartTime()
+                : request.startTime();
+        LocalTime updatedEndTime = request.endTime() == null ? itinerary.getEndTime() : request.endTime();
+        Integer updatedTravelMinutesFromPrevious = request.travelMinutesFromPrevious() == null
+                ? itinerary.getTravelMinutesFromPrevious()
+                : request.travelMinutesFromPrevious();
+        String updatedReason = request.reason() == null ? itinerary.getReason() : request.reason();
+
+        validateItineraryValues(
+                trip,
+                itineraryId,
+                updatedDayNo,
+                updatedOrderNo,
+                updatedStartTime,
+                updatedEndTime,
+                updatedTravelMinutesFromPrevious
+        );
+
+        itinerary.update(
+                updatedPlace,
+                updatedDayNo,
+                updatedOrderNo,
+                updatedStartTime,
+                updatedEndTime,
+                updatedTravelMinutesFromPrevious,
+                updatedReason
+        );
+
+        return ItineraryResponse.from(itinerary);
+    }
+
+    @Transactional
+    public void deleteItinerary(Long tripId, Long itineraryId) {
+        validateTripAndItineraryIds(tripId, itineraryId);
+
+        if (!tripRepository.existsById(tripId)) {
+            throw new NoSuchElementException("Trip not found. tripId=" + tripId);
+        }
+
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new NoSuchElementException("Itinerary not found. itineraryId=" + itineraryId));
+        validateItineraryBelongsToTrip(itinerary, tripId);
+
+        itineraryRepository.delete(itinerary);
     }
 
     public List<ItineraryResponse> getItineraries(Long tripId) {
@@ -107,8 +171,37 @@ public class ItineraryService {
         }
     }
 
-    private void validateFirstStartTime(Trip trip, ItineraryCreateRequest request) {
-        if (Integer.valueOf(1).equals(request.orderNo()) && request.startTime().isBefore(trip.getDailyStartTime())) {
+    private void validateItineraryValues(
+            Trip trip,
+            Long excludedItineraryId,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
+        validateTimeRange(startTime, endTime);
+        validateDayNoInTripPeriod(trip, dayNo);
+        validateFirstTravelMinutes(orderNo, travelMinutesFromPrevious);
+        validateFirstStartTime(trip, orderNo, startTime);
+        validateNoDuplicatedOrder(trip.getTripId(), excludedItineraryId, dayNo, orderNo);
+        validateNoTimeOverlap(trip.getTripId(), excludedItineraryId, dayNo, startTime, endTime);
+    }
+
+    private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
+        if (!startTime.isBefore(endTime)) {
+            throw new IllegalArgumentException("Itinerary startTime must be before endTime.");
+        }
+    }
+
+    private void validateFirstTravelMinutes(Integer orderNo, Integer travelMinutesFromPrevious) {
+        if (Integer.valueOf(1).equals(orderNo) && travelMinutesFromPrevious != 0) {
+            throw new IllegalArgumentException("First itinerary item of each day must have travelMinutesFromPrevious 0.");
+        }
+    }
+
+    private void validateFirstStartTime(Trip trip, Integer orderNo, LocalTime startTime) {
+        if (Integer.valueOf(1).equals(orderNo) && startTime.isBefore(trip.getDailyStartTime())) {
             throw new IllegalArgumentException(
                     "First itinerary item of each day must start at or after trip dailyStartTime."
             );
@@ -124,18 +217,88 @@ public class ItineraryService {
         }
     }
 
-    private void validateNoTimeOverlap(Long tripId, ItineraryCreateRequest request) {
+    private void validateNoDuplicatedOrder(
+            Long tripId,
+            Long excludedItineraryId,
+            Integer dayNo,
+            Integer orderNo
+    ) {
+        if (excludedItineraryId == null && itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(
+                tripId,
+                dayNo,
+                orderNo
+        )) {
+            throw new IllegalArgumentException("Itinerary dayNo and orderNo already exist in this trip.");
+        }
+
+        List<Itinerary> sameDayItineraries = itineraryRepository.findByTrip_TripIdAndDayNo(tripId, dayNo);
+
+        for (Itinerary itinerary : sameDayItineraries) {
+            if (isExcludedItinerary(itinerary, excludedItineraryId)) {
+                continue;
+            }
+            if (itinerary.getOrderNo().equals(orderNo)) {
+                throw new IllegalArgumentException("Itinerary dayNo and orderNo already exist in this trip.");
+            }
+        }
+    }
+
+    private void validateNoTimeOverlap(
+            Long tripId,
+            Long excludedItineraryId,
+            Integer dayNo,
+            LocalTime startTime,
+            LocalTime endTime
+    ) {
         List<Itinerary> sameDayItineraries = itineraryRepository.findByTrip_TripIdAndDayNo(
                 tripId,
-                request.dayNo()
+                dayNo
         );
 
         for (Itinerary itinerary : sameDayItineraries) {
-            boolean overlaps = request.startTime().isBefore(itinerary.getEndTime())
-                    && itinerary.getStartTime().isBefore(request.endTime());
+            if (isExcludedItinerary(itinerary, excludedItineraryId)) {
+                continue;
+            }
+            boolean overlaps = startTime.isBefore(itinerary.getEndTime())
+                    && itinerary.getStartTime().isBefore(endTime);
             if (overlaps) {
                 throw new IllegalArgumentException("Itinerary time overlaps with existing itinerary.");
             }
+        }
+    }
+
+    private boolean isExcludedItinerary(Itinerary itinerary, Long excludedItineraryId) {
+        return excludedItineraryId != null && excludedItineraryId.equals(itinerary.getItineraryId());
+    }
+
+    private void validateUpdateRequest(Long tripId, Long itineraryId, ItineraryUpdateRequest request) {
+        validateTripAndItineraryIds(tripId, itineraryId);
+        if (request == null) {
+            throw new IllegalArgumentException("Itinerary update request is required.");
+        }
+        if (request.dayNo() != null && request.dayNo() < 1) {
+            throw new IllegalArgumentException("Itinerary dayNo must be greater than or equal to 1.");
+        }
+        if (request.orderNo() != null && request.orderNo() < 1) {
+            throw new IllegalArgumentException("Itinerary orderNo must be greater than or equal to 1.");
+        }
+        if (request.travelMinutesFromPrevious() != null && request.travelMinutesFromPrevious() < 0) {
+            throw new IllegalArgumentException("Itinerary travelMinutesFromPrevious must be greater than or equal to 0.");
+        }
+    }
+
+    private void validateTripAndItineraryIds(Long tripId, Long itineraryId) {
+        if (tripId == null) {
+            throw new IllegalArgumentException("Trip id is required.");
+        }
+        if (itineraryId == null) {
+            throw new IllegalArgumentException("Itinerary id is required.");
+        }
+    }
+
+    private void validateItineraryBelongsToTrip(Itinerary itinerary, Long tripId) {
+        if (!itinerary.getTrip().getTripId().equals(tripId)) {
+            throw new IllegalArgumentException("Itinerary does not belong to trip. itineraryId=" + itinerary.getItineraryId());
         }
     }
 }
