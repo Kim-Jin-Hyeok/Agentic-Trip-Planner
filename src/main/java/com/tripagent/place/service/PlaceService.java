@@ -6,9 +6,11 @@ import com.tripagent.place.dto.PlaceRecommendConcept;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.trip.domain.TripConcept;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,14 +50,34 @@ public class PlaceService {
             String keyword,
             Boolean useYn
     ) {
+        return searchPlaces(concept, category, null, null, keyword, useYn, null, null, null, null);
+    }
+
+    public List<PlaceResponse> searchPlaces(
+            PlaceRecommendConcept concept,
+            PlaceCategory category,
+            List<PlaceCategory> categories,
+            String region,
+            String keyword,
+            Boolean useYn,
+            Double minLat,
+            Double maxLat,
+            Double minLng,
+            Double maxLng
+    ) {
         boolean effectiveUseYn = useYn == null || useYn;
         List<Place> places = placeRepository.findAll(sortByConceptOrPlaceId(concept));
+        Set<String> categoryNames = mergeCategoryNames(category, categories);
         String normalizedKeyword = normalizeKeyword(keyword);
+        validateBounds(minLat, maxLat, minLng, maxLng);
+        boolean applyBounds = hasAllBounds(minLat, maxLat, minLng, maxLng);
 
         return places.stream()
                 .filter(place -> place.getUseYn().equals(effectiveUseYn))
-                .filter(place -> category == null || place.getCategory().equals(category.name()))
+                .filter(place -> region == null || place.getRegion().equals(region))
+                .filter(place -> categoryNames.isEmpty() || categoryNames.contains(place.getCategory()))
                 .filter(place -> normalizedKeyword == null || containsKeyword(place, normalizedKeyword))
+                .filter(place -> !applyBounds || isInBounds(place, minLat, maxLat, minLng, maxLng))
                 .map(PlaceResponse::from)
                 .toList();
     }
@@ -111,5 +133,54 @@ public class PlaceService {
 
     private boolean containsIgnoreCase(String value, String keyword) {
         return value != null && value.toLowerCase(Locale.ROOT).contains(keyword);
+    }
+
+    private Set<String> mergeCategoryNames(PlaceCategory category, List<PlaceCategory> categories) {
+        Set<String> categoryNames = new HashSet<>();
+        if (category != null) {
+            categoryNames.add(category.name());
+        }
+        if (categories != null) {
+            for (PlaceCategory selectedCategory : categories) {
+                if (selectedCategory != null) {
+                    categoryNames.add(selectedCategory.name());
+                }
+            }
+        }
+
+        return categoryNames;
+    }
+
+    private void validateBounds(Double minLat, Double maxLat, Double minLng, Double maxLng) {
+        boolean hasAnyBounds = minLat != null || maxLat != null || minLng != null || maxLng != null;
+        if (!hasAnyBounds) {
+            return;
+        }
+        if (!hasAllBounds(minLat, maxLat, minLng, maxLng)) {
+            throw new IllegalArgumentException("All bounds parameters are required together.");
+        }
+        if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90) {
+            throw new IllegalArgumentException("Latitude bounds must be between -90 and 90.");
+        }
+        if (minLng < -180 || minLng > 180 || maxLng < -180 || maxLng > 180) {
+            throw new IllegalArgumentException("Longitude bounds must be between -180 and 180.");
+        }
+        if (minLat > maxLat) {
+            throw new IllegalArgumentException("minLat must be less than or equal to maxLat.");
+        }
+        if (minLng > maxLng) {
+            throw new IllegalArgumentException("minLng must be less than or equal to maxLng.");
+        }
+    }
+
+    private boolean hasAllBounds(Double minLat, Double maxLat, Double minLng, Double maxLng) {
+        return minLat != null && maxLat != null && minLng != null && maxLng != null;
+    }
+
+    private boolean isInBounds(Place place, Double minLat, Double maxLat, Double minLng, Double maxLng) {
+        return place.getLatitude() >= minLat
+                && place.getLatitude() <= maxLat
+                && place.getLongitude() >= minLng
+                && place.getLongitude() <= maxLng;
     }
 }

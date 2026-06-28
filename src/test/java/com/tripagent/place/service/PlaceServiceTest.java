@@ -215,6 +215,106 @@ class PlaceServiceTest {
     }
 
     @Test
+    void searchPlacesFiltersByRegion() {
+        Place eastPlace = place("East Place", "NATURE", "EAST", "JEJU", "description", true, 33.0, 126.0);
+        Place westPlace = place("West Place", "NATURE", "WEST", "JEJU", "description", true, 33.0, 126.0);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(eastPlace, westPlace));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(null, null, null, "WEST", null, null, null, null, null, null);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("West Place");
+    }
+
+    @Test
+    void searchPlacesFiltersByMultipleCategories() {
+        Place naturePlace = place("Nature Place", "NATURE", "JEJU", "description", true);
+        Place foodPlace = place("Food Place", "FOOD", "JEJU", "description", true);
+        Place cafePlace = place("Cafe Place", "CAFE", "JEJU", "description", true);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(naturePlace, foodPlace, cafePlace));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(
+                null,
+                null,
+                List.of(PlaceCategory.FOOD, PlaceCategory.CAFE),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Food Place", "Cafe Place");
+    }
+
+    @Test
+    void searchPlacesMergesCategoryAndCategories() {
+        Place naturePlace = place("Nature Place", "NATURE", "JEJU", "description", true);
+        Place foodPlace = place("Food Place", "FOOD", "JEJU", "description", true);
+        Place cafePlace = place("Cafe Place", "CAFE", "JEJU", "description", true);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(naturePlace, foodPlace, cafePlace));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(
+                null,
+                PlaceCategory.FOOD,
+                List.of(PlaceCategory.CAFE),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Food Place", "Cafe Place");
+    }
+
+    @Test
+    void searchPlacesFiltersByBounds() {
+        Place inBounds = place("In Bounds", "NATURE", "EAST", "JEJU", "description", true, 33.5, 126.5);
+        Place outOfBounds = place("Out Of Bounds", "NATURE", "EAST", "JEJU", "description", true, 35.0, 128.0);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(inBounds, outOfBounds));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                33.0,
+                34.0,
+                126.0,
+                127.0
+        );
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("In Bounds");
+    }
+
+    @Test
+    void searchPlacesRejectsPartialBounds() {
+        assertThatThrownBy(() -> placeService.searchPlaces(null, null, null, null, null, null, 33.0, null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("All bounds parameters are required together.");
+    }
+
+    @Test
+    void searchPlacesRejectsInvalidBoundsOrder() {
+        assertThatThrownBy(() -> placeService.searchPlaces(null, null, null, null, null, null, 34.0, 33.0, 126.0, 127.0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("minLat must be less than or equal to maxLat.");
+    }
+
+    @Test
+    void searchPlacesRejectsOutOfRangeBounds() {
+        assertThatThrownBy(() -> placeService.searchPlaces(null, null, null, null, null, null, -91.0, 33.0, 126.0, 127.0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Latitude bounds must be between -90 and 90.");
+    }
+
+    @Test
     void searchPlacesFiltersByKeyword() {
         Place nameMatch = place("Ocean Cafe", "CAFE", "JEJU", "description", true);
         Place addressMatch = place("Other Place", "NATURE", "Seogwipo Ocean Road", "description", true);
@@ -254,13 +354,26 @@ class PlaceServiceTest {
     }
 
     private Place place(String name, String category, String address, String description, Boolean useYn) {
+        return place(name, category, "EAST", address, description, useYn, 33.0, 126.0);
+    }
+
+    private Place place(
+            String name,
+            String category,
+            String region,
+            String address,
+            String description,
+            Boolean useYn,
+            Double latitude,
+            Double longitude
+    ) {
         return Place.create(
                 name,
                 category,
-                "EAST",
+                region,
                 address,
-                33.0,
-                126.0,
+                latitude,
+                longitude,
                 60,
                 false,
                 true,

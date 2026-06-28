@@ -31,10 +31,27 @@ public class PlaceController {
     public ApiResponse<List<PlaceResponse>> searchPlaces(
             @RequestParam(required = false) PlaceRecommendConcept concept,
             @RequestParam(required = false) PlaceCategory category,
+            @RequestParam(required = false) List<PlaceCategory> categories,
+            @RequestParam(required = false) String region,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Boolean useYn
+            @RequestParam(required = false) Boolean useYn,
+            @RequestParam(required = false) Double minLat,
+            @RequestParam(required = false) Double maxLat,
+            @RequestParam(required = false) Double minLng,
+            @RequestParam(required = false) Double maxLng
     ) {
-        return ApiResponse.success(placeService.searchPlaces(concept, category, keyword, useYn));
+        return ApiResponse.success(placeService.searchPlaces(
+                concept,
+                category,
+                categories,
+                region,
+                keyword,
+                useYn,
+                minLat,
+                maxLat,
+                minLng,
+                maxLng
+        ));
     }
 
     @GetMapping("/{placeId}")

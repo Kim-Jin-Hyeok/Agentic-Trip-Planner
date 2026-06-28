@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tripagent.common.exception.GlobalExceptionHandler;
+import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceRecommendConcept;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
@@ -32,7 +33,18 @@ class PlaceControllerTest {
 
     @Test
     void searchPlacesReturnsCommonSuccessResponse() throws Exception {
-        when(placeService.searchPlaces(PlaceRecommendConcept.FOOD, null, "ocean", null))
+        when(placeService.searchPlaces(
+                PlaceRecommendConcept.FOOD,
+                null,
+                null,
+                null,
+                "ocean",
+                null,
+                null,
+                null,
+                null,
+                null
+        ))
                 .thenReturn(List.of(place(10L, "Ocean Food")));
 
         mockMvc.perform(get("/api/places")
@@ -42,6 +54,49 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].placeId").value(10L))
                 .andExpect(jsonPath("$.data[0].name").value("Ocean Food"));
+    }
+
+    @Test
+    void searchPlacesPassesMapFiltersAndReturnsCommonSuccessResponse() throws Exception {
+        when(placeService.searchPlaces(
+                null,
+                PlaceCategory.FOOD,
+                List.of(PlaceCategory.CAFE),
+                "EAST",
+                null,
+                true,
+                33.0,
+                34.0,
+                126.0,
+                127.0
+        ))
+                .thenReturn(List.of(place(20L, "Map Place")));
+
+        mockMvc.perform(get("/api/places")
+                        .param("category", "FOOD")
+                        .param("categories", "CAFE")
+                        .param("region", "EAST")
+                        .param("useYn", "true")
+                        .param("minLat", "33.0")
+                        .param("maxLat", "34.0")
+                        .param("minLng", "126.0")
+                        .param("maxLng", "127.0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].placeId").value(20L));
+    }
+
+    @Test
+    void searchPlacesReturnsInvalidRequestWhenBoundsArePartial() throws Exception {
+        when(placeService.searchPlaces(null, null, null, null, null, null, 33.0, null, null, null))
+                .thenThrow(new IllegalArgumentException("All bounds parameters are required together."));
+
+        mockMvc.perform(get("/api/places")
+                        .param("minLat", "33.0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("All bounds parameters are required together."));
     }
 
     @Test
