@@ -14,6 +14,7 @@ import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.trip.domain.Trip;
+import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ItineraryGenerateService {
 
     private static final int MAX_LLM_VALIDATION_RETRY_COUNT = 2;
+    private static final int MAX_LLM_CANDIDATE_PLACE_COUNT = 30;
 
     private final TripRepository tripRepository;
     private final PlaceService placeService;
@@ -108,12 +110,12 @@ public class ItineraryGenerateService {
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         List<PlaceResponse> candidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
         validateGenerateRequest(candidatePlaces, request);
-        List<PlaceResponse> filteredCandidatePlaces = filterExcludedCandidatePlaces(candidatePlaces, request);
+        List<PlaceResponse> selectedCandidatePlaces = selectLlmCandidatePlaces(trip, candidatePlaces, request);
         String prompt = request == null
-                ? itineraryPromptGenerator.generate(trip, filteredCandidatePlaces)
-                : itineraryPromptGenerator.generate(trip, filteredCandidatePlaces, request);
+                ? itineraryPromptGenerator.generate(trip, selectedCandidatePlaces)
+                : itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request);
 
-        return generateValidatedDraftItineraries(trip, filteredCandidatePlaces, request, prompt);
+        return generateValidatedDraftItineraries(trip, selectedCandidatePlaces, request, prompt);
     }
 
     private List<ItineraryCreateRequest> generateValidatedDraftItineraries(
@@ -309,18 +311,74 @@ public class ItineraryGenerateService {
         }
     }
 
+    private List<PlaceResponse> selectLlmCandidatePlaces(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            ItineraryGenerateRequest request
+    ) {
+        List<PlaceResponse> filteredCandidatePlaces = filterExcludedCandidatePlaces(candidatePlaces, request);
+        Set<Long> mustVisitPlaceIds = request == null
+                ? Set.of()
+                : new HashSet<>(request.normalizedMustVisitPlaceIds());
+
+        List<PlaceResponse> mustVisitPlaces = filteredCandidatePlaces.stream()
+                .filter(candidatePlace -> mustVisitPlaceIds.contains(candidatePlace.placeId()))
+                .sorted(candidatePlaceComparator(trip.getConcept(), request))
+                .toList();
+        List<PlaceResponse> ordinaryPlaces = filteredCandidatePlaces.stream()
+                .filter(candidatePlace -> !mustVisitPlaceIds.contains(candidatePlace.placeId()))
+                .sorted(candidatePlaceComparator(trip.getConcept(), request))
+                .toList();
+
+        int ordinaryPlaceLimit = Math.max(0, MAX_LLM_CANDIDATE_PLACE_COUNT - mustVisitPlaces.size());
+
+        return java.util.stream.Stream.concat(
+                        mustVisitPlaces.stream(),
+                        ordinaryPlaces.stream().limit(ordinaryPlaceLimit)
+                )
+                .toList();
+    }
+
     private List<PlaceResponse> filterExcludedCandidatePlaces(
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request
     ) {
-        if (request == null || request.normalizedExcludedPlaceIds().isEmpty()) {
-            return candidatePlaces;
-        }
+        Set<Long> excludedPlaceIds = request == null
+                ? Set.of()
+                : new HashSet<>(request.normalizedExcludedPlaceIds());
 
-        Set<Long> excludedPlaceIds = new HashSet<>(request.normalizedExcludedPlaceIds());
         return candidatePlaces.stream()
                 .filter(candidatePlace -> !excludedPlaceIds.contains(candidatePlace.placeId()))
                 .toList();
+    }
+
+    private Comparator<PlaceResponse> candidatePlaceComparator(TripConcept concept, ItineraryGenerateRequest request) {
+        return Comparator
+                .comparing((PlaceResponse place) -> isPreferredCategory(place, request))
+                .reversed()
+                .thenComparing(Comparator.comparing((PlaceResponse place) -> conceptScore(place, concept)).reversed())
+                .thenComparing(PlaceResponse::placeId);
+    }
+
+    private boolean isPreferredCategory(PlaceResponse place, ItineraryGenerateRequest request) {
+        if (request == null || request.normalizedPreferredCategories().isEmpty()) {
+            return false;
+        }
+
+        return request.normalizedPreferredCategories().stream()
+                .map(PlaceCategory::name)
+                .anyMatch(preferredCategory -> preferredCategory.equals(place.category()));
+    }
+
+    private Integer conceptScore(PlaceResponse place, TripConcept concept) {
+        return switch (concept) {
+            case HEALING -> place.healingScore();
+            case FOOD -> place.foodScore();
+            case CAFE -> place.cafeScore();
+            case PHOTO -> place.photoScore();
+            case COUPLE -> place.coupleScore();
+            case FAMILY -> place.familyScore();
+        };
     }
 
     private void validateGeneratedPlaceControls(ItineraryGenerateRequest request, List<Long> selectedPlaceIds) {
