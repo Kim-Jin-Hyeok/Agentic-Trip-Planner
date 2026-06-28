@@ -13,14 +13,20 @@ import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.repository.TripRepository;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.HashSet;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
 public class ItineraryGenerateService {
+
+    private static final int MAX_LLM_VALIDATION_RETRY_COUNT = 2;
 
     private final TripRepository tripRepository;
     private final PlaceService placeService;
@@ -85,6 +91,33 @@ public class ItineraryGenerateService {
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         List<PlaceResponse> candidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
         String prompt = itineraryPromptGenerator.generate(trip, candidatePlaces);
+
+        return generateValidatedDraftItineraries(trip, candidatePlaces, prompt);
+    }
+
+    private List<ItineraryCreateRequest> generateValidatedDraftItineraries(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            String prompt
+    ) {
+        IllegalArgumentException lastValidationException = null;
+
+        for (int attempt = 0; attempt <= MAX_LLM_VALIDATION_RETRY_COUNT; attempt++) {
+            try {
+                return generateValidatedDraftItinerary(trip, candidatePlaces, prompt);
+            } catch (IllegalArgumentException exception) {
+                lastValidationException = exception;
+            }
+        }
+
+        throw lastValidationException;
+    }
+
+    private List<ItineraryCreateRequest> generateValidatedDraftItinerary(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            String prompt
+    ) {
         String rawResponse = llmClient.generate(prompt);
         List<LlmItineraryItemResponse> parsedItems = llmItineraryJsonParser.parse(rawResponse);
         List<ItineraryCreateRequest> createRequests = llmItineraryResponseConverter.toCreateRequests(parsedItems);
@@ -93,10 +126,42 @@ public class ItineraryGenerateService {
                 .toList();
 
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
-        validateFirstTravelMinutes(createRequests);
-        validateFirstStartTimes(trip, createRequests);
+        validateDraftItineraries(trip, createRequests);
 
         return createRequests;
+    }
+
+    private void validateDraftItineraries(Trip trip, List<ItineraryCreateRequest> createRequests) {
+        validateDayAndOrderPolicies(trip, createRequests);
+        validateFirstTravelMinutes(createRequests);
+        validateFirstStartTimes(trip, createRequests);
+        validateNoDraftTimeOverlap(createRequests);
+    }
+
+    private void validateDayAndOrderPolicies(Trip trip, List<ItineraryCreateRequest> createRequests) {
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        Set<String> dayOrderKeys = new HashSet<>();
+
+        for (ItineraryCreateRequest request : createRequests) {
+            if (request.dayNo() == null || request.dayNo() < 1 || request.dayNo() > tripDays) {
+                throw new IllegalArgumentException(
+                        "Itinerary dayNo must be within trip period. maxDayNo=" + tripDays
+                );
+            }
+            if (request.orderNo() == null || request.orderNo() < 1) {
+                throw new IllegalArgumentException("Itinerary orderNo must be greater than or equal to 1.");
+            }
+
+            String dayOrderKey = request.dayNo() + ":" + request.orderNo();
+            if (!dayOrderKeys.add(dayOrderKey)) {
+                throw new IllegalArgumentException(
+                        "Itinerary dayNo and orderNo must not be duplicated in generated itinerary. dayNo="
+                                + request.dayNo()
+                                + ", orderNo="
+                                + request.orderNo()
+                );
+            }
+        }
     }
 
     private void validateFirstTravelMinutes(List<ItineraryCreateRequest> createRequests) {
@@ -118,6 +183,24 @@ public class ItineraryGenerateService {
                 throw new IllegalArgumentException(
                         "First itinerary item of each day must start at or after trip dailyStartTime. dayNo="
                                 + request.dayNo()
+                );
+            }
+        }
+    }
+
+    private void validateNoDraftTimeOverlap(List<ItineraryCreateRequest> createRequests) {
+        List<ItineraryCreateRequest> sortedRequests = createRequests.stream()
+                .sorted(Comparator.comparing(ItineraryCreateRequest::dayNo)
+                        .thenComparing(ItineraryCreateRequest::startTime))
+                .toList();
+
+        for (int index = 1; index < sortedRequests.size(); index++) {
+            ItineraryCreateRequest previous = sortedRequests.get(index - 1);
+            ItineraryCreateRequest current = sortedRequests.get(index);
+
+            if (previous.dayNo().equals(current.dayNo()) && current.startTime().isBefore(previous.endTime())) {
+                throw new IllegalArgumentException(
+                        "Itinerary time overlaps in generated itinerary. dayNo=" + current.dayNo()
                 );
             }
         }
