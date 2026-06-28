@@ -13,13 +13,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleIllegalArgumentException(IllegalArgumentException exception) {
-        return new ErrorResponse(exception.getMessage());
+        return new ErrorResponse("INVALID_REQUEST", exception.getMessage());
     }
 
     @ExceptionHandler(NoSuchElementException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ErrorResponse handleNoSuchElementException(NoSuchElementException exception) {
-        return new ErrorResponse(exception.getMessage());
+        return new ErrorResponse("NOT_FOUND", exception.getMessage());
     }
 
     @ExceptionHandler(LlmException.class)

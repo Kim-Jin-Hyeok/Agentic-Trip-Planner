@@ -1,5 +1,6 @@
 package com.tripagent.place.controller;
 
+import com.tripagent.common.response.ApiResponse;
 import com.tripagent.place.dto.PlaceRecommendConcept;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
@@ -20,7 +21,7 @@ public class PlaceController {
     }
 
     @GetMapping("/recommend")
-    public List<PlaceResponse> recommendPlaces(@RequestParam PlaceRecommendConcept concept) {
-        return placeService.recommendPlaces(concept);
+    public ApiResponse<List<PlaceResponse>> recommendPlaces(@RequestParam PlaceRecommendConcept concept) {
+        return ApiResponse.success(placeService.recommendPlaces(concept));
     }
 }

@@ -1,5 +1,6 @@
 package com.tripagent.itinerary.controller;
 
+import com.tripagent.common.response.ApiResponse;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
@@ -28,25 +29,25 @@ public class ItineraryController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ItineraryResponse createItinerary(
+    public ApiResponse<ItineraryResponse> createItinerary(
             @PathVariable Long tripId,
             @RequestBody ItineraryCreateRequest request
     ) {
-        return itineraryService.createItinerary(tripId, request);
+        return ApiResponse.success(itineraryService.createItinerary(tripId, request));
     }
 
     @GetMapping
-    public List<ItineraryResponse> getItineraries(@PathVariable Long tripId) {
-        return itineraryService.getItineraries(tripId);
+    public ApiResponse<List<ItineraryResponse>> getItineraries(@PathVariable Long tripId) {
+        return ApiResponse.success(itineraryService.getItineraries(tripId));
     }
 
     @PatchMapping("/{itineraryId}")
-    public ItineraryResponse updateItinerary(
+    public ApiResponse<ItineraryResponse> updateItinerary(
             @PathVariable Long tripId,
             @PathVariable Long itineraryId,
             @RequestBody ItineraryUpdateRequest request
     ) {
-        return itineraryService.updateItinerary(tripId, itineraryId, request);
+        return ApiResponse.success(itineraryService.updateItinerary(tripId, itineraryId, request));
     }
 
     @DeleteMapping("/{itineraryId}")

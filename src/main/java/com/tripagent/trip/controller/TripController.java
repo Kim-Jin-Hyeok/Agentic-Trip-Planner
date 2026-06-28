@@ -1,5 +1,6 @@
 package com.tripagent.trip.controller;
 
+import com.tripagent.common.response.ApiResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
@@ -34,28 +35,28 @@ public class TripController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public TripResponse createTrip(@RequestBody TripCreateRequest request) {
-        return tripService.createTrip(request);
+    public ApiResponse<TripResponse> createTrip(@RequestBody TripCreateRequest request) {
+        return ApiResponse.success(tripService.createTrip(request));
     }
 
     @GetMapping("/{tripId}")
-    public TripDetailResponse getTrip(@PathVariable Long tripId) {
-        return tripService.getTrip(tripId);
+    public ApiResponse<TripDetailResponse> getTrip(@PathVariable Long tripId) {
+        return ApiResponse.success(tripService.getTrip(tripId));
     }
 
     @PostMapping("/{tripId}/generate")
-    public List<ItineraryResponse> generateItineraries(
+    public ApiResponse<List<ItineraryResponse>> generateItineraries(
             @PathVariable Long tripId,
             @RequestBody(required = false) ItineraryGenerateRequest request
     ) {
-        return itineraryGenerateService.generateItineraries(tripId, request);
+        return ApiResponse.success(itineraryGenerateService.generateItineraries(tripId, request));
     }
 
     @PostMapping("/{tripId}/regenerate")
-    public List<ItineraryResponse> regenerateItineraries(
+    public ApiResponse<List<ItineraryResponse>> regenerateItineraries(
             @PathVariable Long tripId,
             @RequestBody(required = false) ItineraryGenerateRequest request
     ) {
-        return itineraryGenerateService.regenerateItineraries(tripId, request);
+        return ApiResponse.success(itineraryGenerateService.regenerateItineraries(tripId, request));
     }
 }
