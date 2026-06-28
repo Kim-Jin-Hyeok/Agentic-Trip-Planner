@@ -5,6 +5,7 @@ import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.service.ItineraryService;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,7 +32,7 @@ public class ItineraryController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ItineraryResponse> createItinerary(
             @PathVariable Long tripId,
-            @RequestBody ItineraryCreateRequest request
+            @Valid @RequestBody ItineraryCreateRequest request
     ) {
         return ApiResponse.success(itineraryService.createItinerary(tripId, request));
     }
@@ -45,7 +46,7 @@ public class ItineraryController {
     public ApiResponse<ItineraryResponse> updateItinerary(
             @PathVariable Long tripId,
             @PathVariable Long itineraryId,
-            @RequestBody ItineraryUpdateRequest request
+            @Valid @RequestBody ItineraryUpdateRequest request
     ) {
         return ApiResponse.success(itineraryService.updateItinerary(tripId, itineraryId, request));
     }

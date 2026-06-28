@@ -8,6 +8,7 @@ import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,7 +36,7 @@ public class TripController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<TripResponse> createTrip(@RequestBody TripCreateRequest request) {
+    public ApiResponse<TripResponse> createTrip(@Valid @RequestBody TripCreateRequest request) {
         return ApiResponse.success(tripService.createTrip(request));
     }
 
@@ -47,7 +48,7 @@ public class TripController {
     @PostMapping("/{tripId}/generate")
     public ApiResponse<List<ItineraryResponse>> generateItineraries(
             @PathVariable Long tripId,
-            @RequestBody(required = false) ItineraryGenerateRequest request
+            @Valid @RequestBody(required = false) ItineraryGenerateRequest request
     ) {
         return ApiResponse.success(itineraryGenerateService.generateItineraries(tripId, request));
     }
@@ -55,7 +56,7 @@ public class TripController {
     @PostMapping("/{tripId}/regenerate")
     public ApiResponse<List<ItineraryResponse>> regenerateItineraries(
             @PathVariable Long tripId,
-            @RequestBody(required = false) ItineraryGenerateRequest request
+            @Valid @RequestBody(required = false) ItineraryGenerateRequest request
     ) {
         return ApiResponse.success(itineraryGenerateService.regenerateItineraries(tripId, request));
     }
