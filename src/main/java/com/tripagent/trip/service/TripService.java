@@ -4,13 +4,17 @@ import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
+import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripRepository;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.NoSuchElementException;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +54,32 @@ public class TripService {
         return TripResponse.from(tripRepository.save(trip));
     }
 
+    public List<TripResponse> searchTrips(
+            String destination,
+            TripConcept concept,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
+            LocalDate endDateFrom,
+            LocalDate endDateTo
+    ) {
+        validateDateRange("startDate", startDateFrom, startDateTo);
+        validateDateRange("endDate", endDateFrom, endDateTo);
+
+        String normalizedDestination = normalizeKeyword(destination);
+
+        return tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId"))
+                .stream()
+                .filter(trip -> normalizedDestination == null
+                        || trip.getDestination().toLowerCase(Locale.ROOT).contains(normalizedDestination))
+                .filter(trip -> concept == null || trip.getConcept() == concept)
+                .filter(trip -> startDateFrom == null || !trip.getStartDate().isBefore(startDateFrom))
+                .filter(trip -> startDateTo == null || !trip.getStartDate().isAfter(startDateTo))
+                .filter(trip -> endDateFrom == null || !trip.getEndDate().isBefore(endDateFrom))
+                .filter(trip -> endDateTo == null || !trip.getEndDate().isAfter(endDateTo))
+                .map(TripResponse::from)
+                .toList();
+    }
+
     public TripDetailResponse getTrip(Long tripId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
@@ -60,6 +90,15 @@ public class TripService {
                 .toList();
 
         return TripDetailResponse.from(trip, itineraries);
+    }
+
+    @Transactional
+    public void deleteTrip(Long tripId) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+
+        itineraryRepository.deleteByTrip_TripId(tripId);
+        tripRepository.delete(trip);
     }
 
     private void validateCreateRequest(TripCreateRequest request) {
@@ -91,6 +130,20 @@ public class TripService {
         if (request.transportation() != Transportation.RENT_CAR) {
             throw new IllegalArgumentException("Only RENT_CAR transportation is supported in MVP.");
         }
+    }
+
+    private void validateDateRange(String fieldName, LocalDate from, LocalDate to) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new IllegalArgumentException(fieldName + "From must be less than or equal to " + fieldName + "To.");
+        }
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+
+        return keyword.trim().toLowerCase(Locale.ROOT);
     }
 
     private boolean isJejuDestination(String destination) {
