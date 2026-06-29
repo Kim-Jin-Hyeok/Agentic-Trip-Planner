@@ -29,6 +29,8 @@ import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceSummaryResponse;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
+import com.tripagent.route.RouteCalculationAdapter;
+import com.tripagent.route.SimpleRouteCalculationAdapter;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
@@ -45,6 +47,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,6 +79,9 @@ class ItineraryGenerateServiceTest {
 
     @Mock
     private ItineraryRepository itineraryRepository;
+
+    @Spy
+    private RouteCalculationAdapter routeCalculationAdapter = new SimpleRouteCalculationAdapter();
 
     @InjectMocks
     private ItineraryGenerateService itineraryGenerateService;
@@ -833,7 +839,7 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesRejectsInvalidFirstTravelMinutesBeforeSaving() {
+    void generateItinerariesUsesCalculatedTravelMinutesBeforeSaving() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -843,11 +849,11 @@ class ItineraryGenerateServiceTest {
         String rawResponse = "raw response";
         List<LlmItineraryItemResponse> parsedItems = List.of(
                 llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 15),
-                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 99)
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 15),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 99)
         );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -856,16 +862,23 @@ class ItineraryGenerateServiceTest {
         when(llmClient.generate(prompt)).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+        when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
+                .thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+                .thenReturn(response(200L, 1L, 20L, 2));
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("First itinerary item of each day must have travelMinutesFromPrevious 0. dayNo=1");
-        verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
-        verify(itineraryService, never()).createItinerary(
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L, 20L);
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+        verify(routeCalculationAdapter).calculateTravelMinutes(null, candidatePlaces.get(0));
+        verify(routeCalculationAdapter).calculateTravelMinutes(candidatePlaces.get(0), candidatePlaces.get(1));
+        verify(itineraryService).createItinerary(
                 1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 15)
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
         );
-        verify(itineraryService, never()).createItinerary(
+        verify(itineraryService).createItinerary(
                 1L,
                 request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
         );
@@ -1127,7 +1140,7 @@ class ItineraryGenerateServiceTest {
 
     @Test
     void regenerateItinerariesDoesNotDeleteExistingItineraryWhenDraftValidationFails() {
-        Trip trip = trip(1L, TripConcept.FOOD);
+        Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(10, 30));
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
                 place(20L, 90)
@@ -1135,11 +1148,11 @@ class ItineraryGenerateServiceTest {
         String prompt = "prompt";
         String rawResponse = "raw response";
         List<LlmItineraryItemResponse> parsedItems = List.of(
-                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 15),
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
                 llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
         );
         List<ItineraryCreateRequest> createRequests = List.of(
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 15),
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
                 request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -1151,12 +1164,12 @@ class ItineraryGenerateServiceTest {
 
         assertThatThrownBy(() -> itineraryGenerateService.regenerateItineraries(1L))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("First itinerary item of each day must have travelMinutesFromPrevious 0. dayNo=1");
+                .hasMessage("First itinerary item of each day must start at or after trip dailyStartTime. dayNo=1");
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
         verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
         verify(itineraryService, never()).createItinerary(
                 1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 15)
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
         );
     }
 

@@ -14,6 +14,7 @@ import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
+import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.repository.TripRepository;
@@ -22,8 +23,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +54,7 @@ public class ItineraryGenerateService {
     private final CandidatePlaceValidator candidatePlaceValidator;
     private final ItineraryService itineraryService;
     private final ItineraryRepository itineraryRepository;
+    private final RouteCalculationAdapter routeCalculationAdapter;
 
     public ItineraryGenerateService(
             TripRepository tripRepository,
@@ -61,7 +65,8 @@ public class ItineraryGenerateService {
             LlmItineraryResponseConverter llmItineraryResponseConverter,
             CandidatePlaceValidator candidatePlaceValidator,
             ItineraryService itineraryService,
-            ItineraryRepository itineraryRepository
+            ItineraryRepository itineraryRepository,
+            RouteCalculationAdapter routeCalculationAdapter
     ) {
         this.tripRepository = tripRepository;
         this.placeService = placeService;
@@ -72,6 +77,7 @@ public class ItineraryGenerateService {
         this.candidatePlaceValidator = candidatePlaceValidator;
         this.itineraryService = itineraryService;
         this.itineraryRepository = itineraryRepository;
+        this.routeCalculationAdapter = routeCalculationAdapter;
     }
 
     @Transactional
@@ -196,9 +202,52 @@ public class ItineraryGenerateService {
 
         validateGeneratedPlaceControls(request, selectedPlaceIds);
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
+        validateDayAndOrderPolicies(trip, createRequests);
+        createRequests = applyCalculatedTravelMinutes(candidatePlaces, createRequests);
         validateDraftItineraries(trip, createRequests);
 
         return createRequests;
+    }
+
+    private List<ItineraryCreateRequest> applyCalculatedTravelMinutes(
+            List<PlaceResponse> candidatePlaces,
+            List<ItineraryCreateRequest> createRequests
+    ) {
+        Map<Long, PlaceResponse> candidatePlaceById = candidatePlaces.stream()
+                .collect(Collectors.toMap(PlaceResponse::placeId, Function.identity()));
+        List<ItineraryCreateRequest> sortedRequests = createRequests.stream()
+                .sorted(Comparator.comparing(ItineraryCreateRequest::dayNo)
+                        .thenComparing(ItineraryCreateRequest::orderNo))
+                .toList();
+        List<ItineraryCreateRequest> correctedRequests = new ArrayList<>();
+        Integer previousDayNo = null;
+        PlaceResponse previousPlace = null;
+
+        for (ItineraryCreateRequest request : sortedRequests) {
+            if (!request.dayNo().equals(previousDayNo)) {
+                previousPlace = null;
+            }
+
+            PlaceResponse currentPlace = candidatePlaceById.get(request.placeId());
+            int travelMinutesFromPrevious = routeCalculationAdapter.calculateTravelMinutes(
+                    previousPlace,
+                    currentPlace
+            );
+            correctedRequests.add(new ItineraryCreateRequest(
+                    request.placeId(),
+                    request.dayNo(),
+                    request.orderNo(),
+                    request.startTime(),
+                    request.endTime(),
+                    travelMinutesFromPrevious,
+                    request.reason()
+            ));
+
+            previousDayNo = request.dayNo();
+            previousPlace = currentPlace;
+        }
+
+        return correctedRequests;
     }
 
     private void validateDraftItineraries(Trip trip, List<ItineraryCreateRequest> createRequests) {
