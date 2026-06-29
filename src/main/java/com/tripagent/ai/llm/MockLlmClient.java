@@ -2,7 +2,9 @@ package com.tripagent.ai.llm;
 
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.context.annotation.Profile;
@@ -16,6 +18,9 @@ public class MockLlmClient implements LlmClient {
     private static final Pattern DAYS_PATTERN = Pattern.compile("days:\\s*(\\d+)");
     private static final Pattern DAILY_START_TIME_PATTERN = Pattern.compile("dailyStartTime:\\s*(\\d{2}:\\d{2}(?::\\d{2})?)");
     private static final Pattern DAILY_END_TIME_PATTERN = Pattern.compile("dailyEndTime:\\s*(\\d{2}:\\d{2}(?::\\d{2})?)");
+    private static final Pattern DAY_TIME_WINDOW_PATTERN = Pattern.compile(
+            "dayNo:\\s*(\\d+),\\s*startTime:\\s*(\\d{2}:\\d{2}(?::\\d{2})?),\\s*endTime:\\s*(\\d{2}:\\d{2}(?::\\d{2})?)"
+    );
     private static final int MOCK_PLACE_LIMIT = 3;
     private static final int DEFAULT_STAY_MINUTES = 60;
     private static final int DEFAULT_TRAVEL_MINUTES = 30;
@@ -40,8 +45,9 @@ public class MockLlmClient implements LlmClient {
 
         LocalTime dailyStartTime = extractTime(prompt, DAILY_START_TIME_PATTERN, DEFAULT_DAILY_START_TIME);
         LocalTime dailyEndTime = extractTime(prompt, DAILY_END_TIME_PATTERN, DEFAULT_DAILY_END_TIME);
+        Map<Integer, TimeWindow> timeWindowsByDayNo = extractDayTimeWindows(prompt);
 
-        return createJsonResponse(placeIds, days, dailyStartTime, dailyEndTime);
+        return createJsonResponse(placeIds, days, dailyStartTime, dailyEndTime, timeWindowsByDayNo);
     }
 
     private List<Long> extractPlaceIds(String prompt, int days) {
@@ -74,17 +80,38 @@ public class MockLlmClient implements LlmClient {
         return LocalTime.parse(matcher.group(1));
     }
 
+    private Map<Integer, TimeWindow> extractDayTimeWindows(String prompt) {
+        Matcher matcher = DAY_TIME_WINDOW_PATTERN.matcher(prompt);
+        Map<Integer, TimeWindow> timeWindowsByDayNo = new HashMap<>();
+
+        while (matcher.find()) {
+            timeWindowsByDayNo.put(
+                    Integer.parseInt(matcher.group(1)),
+                    new TimeWindow(LocalTime.parse(matcher.group(2)), LocalTime.parse(matcher.group(3)))
+            );
+        }
+
+        return timeWindowsByDayNo;
+    }
+
     private String createJsonResponse(
             List<Long> placeIds,
             int days,
             LocalTime dailyStartTime,
-            LocalTime dailyEndTime
+            LocalTime dailyEndTime,
+            Map<Integer, TimeWindow> timeWindowsByDayNo
     ) {
         StringBuilder json = new StringBuilder();
         int[] orderNosByDay = new int[days + 1];
         LocalTime[] nextStartTimesByDay = new LocalTime[days + 1];
+        LocalTime[] endTimesByDay = new LocalTime[days + 1];
         for (int dayNo = 1; dayNo <= days; dayNo++) {
-            nextStartTimesByDay[dayNo] = dailyStartTime;
+            TimeWindow timeWindow = timeWindowsByDayNo.getOrDefault(
+                    dayNo,
+                    new TimeWindow(dailyStartTime, dailyEndTime)
+            );
+            nextStartTimesByDay[dayNo] = timeWindow.startTime();
+            endTimesByDay[dayNo] = timeWindow.endTime();
         }
 
         json.append("[");
@@ -99,7 +126,7 @@ public class MockLlmClient implements LlmClient {
             LocalTime startTime = orderNo == 1
                     ? nextStartTimesByDay[dayNo]
                     : nextStartTimesByDay[dayNo].plusMinutes(DEFAULT_TRAVEL_MINUTES);
-            LocalTime endTime = calculateEndTime(startTime, dailyEndTime);
+            LocalTime endTime = calculateEndTime(startTime, endTimesByDay[dayNo]);
 
             json.append("{")
                     .append("\"placeId\":").append(placeIds.get(index)).append(",")
@@ -125,5 +152,11 @@ public class MockLlmClient implements LlmClient {
         }
 
         return dailyEndTime;
+    }
+
+    private record TimeWindow(
+            LocalTime startTime,
+            LocalTime endTime
+    ) {
     }
 }

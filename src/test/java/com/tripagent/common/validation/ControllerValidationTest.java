@@ -186,4 +186,28 @@ class ControllerValidationTest {
 
         verify(itineraryGenerateService, never()).generateItineraries(any(), any(ItineraryGenerateRequest.class));
     }
+
+    @Test
+    void generateItinerariesReturnsInvalidRequestWhenDayTimeWindowFieldIsMissing() throws Exception {
+        String requestBody = """
+                {
+                  "dayTimeWindows": [
+                    {
+                      "startTime": "14:00:00",
+                      "endTime": "18:00:00"
+                    }
+                  ]
+                }
+                """;
+
+        tripMockMvc.perform(post("/api/trips/1/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").exists());
+
+        verify(itineraryGenerateService, never()).generateItineraries(any(), any(ItineraryGenerateRequest.class));
+    }
 }

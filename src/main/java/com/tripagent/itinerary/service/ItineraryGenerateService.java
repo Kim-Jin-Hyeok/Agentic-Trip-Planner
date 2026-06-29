@@ -8,6 +8,7 @@ import com.tripagent.ai.llm.parser.LlmItineraryJsonParser;
 import com.tripagent.ai.prompt.ItineraryPromptGenerator;
 import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.place.dto.PlaceCategory;
@@ -18,9 +19,11 @@ import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.repository.TripRepository;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -136,7 +139,7 @@ public class ItineraryGenerateService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         List<PlaceResponse> candidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
-        validateGenerateRequest(candidatePlaces, request);
+        validateGenerateRequest(trip, candidatePlaces, request);
         List<PlaceResponse> selectedCandidatePlaces = selectLlmCandidatePlaces(trip, candidatePlaces, request);
         validateCandidatePlacesEnoughForTripDays(trip, selectedCandidatePlaces);
         String prompt = request == null
@@ -205,7 +208,7 @@ public class ItineraryGenerateService {
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
         validateDayAndOrderPolicies(trip, createRequests);
         createRequests = applyCalculatedTravelMinutes(candidatePlaces, createRequests);
-        validateDraftItineraries(trip, createRequests);
+        validateDraftItineraries(trip, request, createRequests);
 
         return createRequests;
     }
@@ -251,12 +254,15 @@ public class ItineraryGenerateService {
         return correctedRequests;
     }
 
-    private void validateDraftItineraries(Trip trip, List<ItineraryCreateRequest> createRequests) {
+    private void validateDraftItineraries(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            List<ItineraryCreateRequest> createRequests
+    ) {
         validateDayAndOrderPolicies(trip, createRequests);
         validateAllTripDaysCovered(trip, createRequests);
         validateFirstTravelMinutes(createRequests);
-        validateFirstStartTimes(trip, createRequests);
-        validateDailyEndTimes(trip, createRequests);
+        validateDayTimeWindowBounds(trip, request, createRequests);
         validateNoDraftTimeOverlap(createRequests);
     }
 
@@ -319,27 +325,49 @@ public class ItineraryGenerateService {
         }
     }
 
-    private void validateFirstStartTimes(Trip trip, List<ItineraryCreateRequest> createRequests) {
-        for (ItineraryCreateRequest request : createRequests) {
-            if (Integer.valueOf(1).equals(request.orderNo())
-                    && request.startTime().isBefore(trip.getDailyStartTime())) {
+    private void validateDayTimeWindowBounds(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            List<ItineraryCreateRequest> createRequests
+    ) {
+        Map<Integer, DayTimeWindow> dayTimeWindowByDayNo = createDayTimeWindows(trip, request);
+
+        for (ItineraryCreateRequest createRequest : createRequests) {
+            DayTimeWindow dayTimeWindow = dayTimeWindowByDayNo.get(createRequest.dayNo());
+            if (createRequest.startTime().isBefore(dayTimeWindow.startTime())) {
+                if (hasDayTimeWindowOverride(createRequest.dayNo(), request)) {
+                    throw new IllegalArgumentException(
+                            "Itinerary startTime must be at or after day time window startTime. dayNo="
+                                    + createRequest.dayNo()
+                    );
+                }
                 throw new IllegalArgumentException(
                         "First itinerary item of each day must start at or after trip dailyStartTime. dayNo="
-                                + request.dayNo()
+                                + createRequest.dayNo()
+                );
+            }
+            if (createRequest.endTime().isAfter(dayTimeWindow.endTime())) {
+                if (hasDayTimeWindowOverride(createRequest.dayNo(), request)) {
+                    throw new IllegalArgumentException(
+                            "Itinerary endTime must be at or before day time window endTime. dayNo="
+                                    + createRequest.dayNo()
+                    );
+                }
+                throw new IllegalArgumentException(
+                        "Itinerary endTime must be at or before trip dailyEndTime. dayNo="
+                                + createRequest.dayNo()
                 );
             }
         }
     }
 
-    private void validateDailyEndTimes(Trip trip, List<ItineraryCreateRequest> createRequests) {
-        for (ItineraryCreateRequest request : createRequests) {
-            if (request.endTime().isAfter(trip.getDailyEndTime())) {
-                throw new IllegalArgumentException(
-                        "Itinerary endTime must be at or before trip dailyEndTime. dayNo="
-                                + request.dayNo()
-                );
-            }
+    private boolean hasDayTimeWindowOverride(Integer dayNo, ItineraryGenerateRequest request) {
+        if (request == null || dayNo == null) {
+            return false;
         }
+
+        return request.normalizedDayTimeWindows().stream()
+                .anyMatch(dayTimeWindow -> dayTimeWindow != null && dayNo.equals(dayTimeWindow.dayNo()));
     }
 
     private void validateNoDraftTimeOverlap(List<ItineraryCreateRequest> createRequests) {
@@ -366,10 +394,16 @@ public class ItineraryGenerateService {
         }
     }
 
-    private void validateGenerateRequest(List<PlaceResponse> candidatePlaces, ItineraryGenerateRequest request) {
+    private void validateGenerateRequest(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            ItineraryGenerateRequest request
+    ) {
         if (request == null) {
             return;
         }
+
+        validateDayTimeWindows(trip, request);
 
         Set<Long> candidatePlaceIds = candidatePlaces.stream()
                 .map(PlaceResponse::placeId)
@@ -390,6 +424,69 @@ public class ItineraryGenerateService {
                 );
             }
         }
+    }
+
+    private void validateDayTimeWindows(Trip trip, ItineraryGenerateRequest request) {
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        Set<Integer> seenDayNos = new HashSet<>();
+
+        for (ItineraryDayTimeWindowRequest dayTimeWindow : request.normalizedDayTimeWindows()) {
+            if (dayTimeWindow == null) {
+                throw new IllegalArgumentException("dayTimeWindows must not contain null.");
+            }
+            if (dayTimeWindow.dayNo() == null) {
+                throw new IllegalArgumentException("dayTimeWindows.dayNo is required.");
+            }
+            if (dayTimeWindow.dayNo() < 1 || dayTimeWindow.dayNo() > tripDays) {
+                throw new IllegalArgumentException(
+                        "dayTimeWindows.dayNo must be within trip period. dayNo="
+                                + dayTimeWindow.dayNo()
+                                + ", maxDayNo="
+                                + tripDays
+                );
+            }
+            if (!seenDayNos.add(dayTimeWindow.dayNo())) {
+                throw new IllegalArgumentException(
+                        "dayTimeWindows must not contain duplicated dayNo. dayNo=" + dayTimeWindow.dayNo()
+                );
+            }
+            if (dayTimeWindow.startTime() == null) {
+                throw new IllegalArgumentException("dayTimeWindows.startTime is required. dayNo=" + dayTimeWindow.dayNo());
+            }
+            if (dayTimeWindow.endTime() == null) {
+                throw new IllegalArgumentException("dayTimeWindows.endTime is required. dayNo=" + dayTimeWindow.dayNo());
+            }
+            if (!dayTimeWindow.startTime().isBefore(dayTimeWindow.endTime())) {
+                throw new IllegalArgumentException(
+                        "dayTimeWindows.startTime must be before endTime. dayNo=" + dayTimeWindow.dayNo()
+                );
+            }
+        }
+    }
+
+    private Map<Integer, DayTimeWindow> createDayTimeWindows(Trip trip, ItineraryGenerateRequest request) {
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        Map<Integer, DayTimeWindow> dayTimeWindowByDayNo = new HashMap<>();
+
+        for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+            dayTimeWindowByDayNo.put(dayNo, new DayTimeWindow(
+                    dayNo,
+                    trip.getDailyStartTime(),
+                    trip.getDailyEndTime()
+            ));
+        }
+        if (request == null) {
+            return dayTimeWindowByDayNo;
+        }
+
+        for (ItineraryDayTimeWindowRequest override : request.normalizedDayTimeWindows()) {
+            dayTimeWindowByDayNo.put(override.dayNo(), new DayTimeWindow(
+                    override.dayNo(),
+                    override.startTime(),
+                    override.endTime()
+            ));
+        }
+        return dayTimeWindowByDayNo;
     }
 
     private void validatePreferredCategories(List<PlaceCategory> preferredCategories) {
@@ -661,5 +758,12 @@ public class ItineraryGenerateService {
         return request != null
                 && (!request.normalizedMustVisitPlaceIds().isEmpty()
                 || !request.normalizedExcludedPlaceIds().isEmpty());
+    }
+
+    private record DayTimeWindow(
+            Integer dayNo,
+            LocalTime startTime,
+            LocalTime endTime
+    ) {
     }
 }

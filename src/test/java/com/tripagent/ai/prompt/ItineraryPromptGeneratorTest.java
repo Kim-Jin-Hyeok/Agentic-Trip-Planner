@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
+import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceResponse;
@@ -124,6 +125,28 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("If preferredCategories is not empty, prioritize places in those categories when building the itinerary.");
         assertThat(prompt).contains("mustVisitPlaceIds must be included even if their categories are not in preferredCategories.");
         assertThat(prompt).contains("excludedPlaceIds must never be included regardless of preferredCategories.");
+    }
+
+    @Test
+    void generateIncludesDayTimeWindowsWithDefaultsAndOverrides() {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                ItineraryPace.NORMAL,
+                null,
+                List.of(
+                        new ItineraryDayTimeWindowRequest(1, LocalTime.of(14, 0), LocalTime.of(18, 0)),
+                        new ItineraryDayTimeWindowRequest(3, LocalTime.of(9, 0), LocalTime.of(17, 0))
+                )
+        );
+
+        String prompt = generator.generate(trip(), candidatePlaces(), request);
+
+        assertThat(prompt).contains("Day time windows:");
+        assertThat(prompt).contains("Every itinerary item's startTime and endTime must be inside that dayNo's available time window.");
+        assertThat(prompt).contains("- dayNo: 1, startTime: 14:00, endTime: 18:00");
+        assertThat(prompt).contains("- dayNo: 2, startTime: 09:00, endTime: 18:00");
+        assertThat(prompt).contains("- dayNo: 3, startTime: 09:00, endTime: 17:00");
     }
 
     @Test

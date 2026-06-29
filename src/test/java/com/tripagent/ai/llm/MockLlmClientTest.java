@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.tripagent.ai.llm.dto.LlmItineraryItemResponse;
 import com.tripagent.ai.llm.parser.LlmItineraryJsonParser;
+import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -119,6 +120,43 @@ class MockLlmClientTest {
                 .containsExactly(10L, 20L, 30L, 40L);
         assertThat(parsedResponses).extracting(LlmItineraryItemResponse::dayNo)
                 .containsExactly(1, 2, 3, 4);
+    }
+
+    @Test
+    void generateUsesDayTimeWindowsWhenPromptIncludesOverrides() {
+        String prompt = """
+                Trip:
+                - days: 3
+                - dailyStartTime: 09:00
+                - dailyEndTime: 18:00
+
+                Day time windows:
+                - dayNo: 1, startTime: 14:00, endTime: 18:00
+                - dayNo: 2, startTime: 11:00, endTime: 18:00
+                - dayNo: 3, startTime: 09:00, endTime: 17:00
+
+                candidatePlaces:
+                - placeId: 10
+                - placeId: 20
+                - placeId: 30
+                """;
+
+        List<LlmItineraryItemResponse> parsedResponses = parser.parse(mockLlmClient.generate(prompt));
+
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::dayNo)
+                .containsExactly(1, 2, 3);
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::startTime)
+                .containsExactly(
+                        LocalTime.of(14, 0),
+                        LocalTime.of(11, 0),
+                        LocalTime.of(9, 0)
+                );
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::endTime)
+                .containsExactly(
+                        LocalTime.of(15, 0),
+                        LocalTime.of(12, 0),
+                        LocalTime.of(10, 0)
+                );
     }
 
     @Test

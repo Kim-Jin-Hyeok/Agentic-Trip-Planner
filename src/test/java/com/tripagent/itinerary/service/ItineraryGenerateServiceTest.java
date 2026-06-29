@@ -2,6 +2,7 @@ package com.tripagent.itinerary.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,6 +23,7 @@ import com.tripagent.ai.llm.parser.LlmItineraryJsonParser;
 import com.tripagent.ai.prompt.ItineraryPromptGenerator;
 import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
@@ -285,6 +287,90 @@ class ItineraryGenerateServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("preferredCategories must not contain duplicated category. category=FOOD");
         verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsDayTimeWindowOutsideTripPeriodBeforeCallingLlm() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60), place(20L, 60), place(30L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                List.of(new ItineraryDayTimeWindowRequest(4, LocalTime.of(9, 0), LocalTime.of(18, 0)))
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("dayTimeWindows.dayNo must be within trip period. dayNo=4, maxDayNo=3");
+        verify(llmClient, never()).generate(anyString());
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsDuplicatedDayTimeWindowBeforeCallingLlm() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60), place(20L, 60), place(30L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                List.of(
+                        new ItineraryDayTimeWindowRequest(2, LocalTime.of(10, 0), LocalTime.of(18, 0)),
+                        new ItineraryDayTimeWindowRequest(2, LocalTime.of(11, 0), LocalTime.of(18, 0))
+                )
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("dayTimeWindows must not contain duplicated dayNo. dayNo=2");
+        verify(llmClient, never()).generate(anyString());
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsInvalidDayTimeWindowTimeRangeBeforeCallingLlm() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60), place(20L, 60), place(30L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                List.of(new ItineraryDayTimeWindowRequest(1, LocalTime.of(18, 0), LocalTime.of(18, 0)))
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("dayTimeWindows.startTime must be before endTime. dayNo=1");
+        verify(llmClient, never()).generate(anyString());
     }
 
     @Test
@@ -1028,6 +1114,48 @@ class ItineraryGenerateServiceTest {
                 1L,
                 request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
         );
+    }
+
+    @Test
+    void generateItinerariesRejectsStartTimeBeforeDayTimeWindowBeforeSaving() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90),
+                place(30L, 60)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                List.of(new ItineraryDayTimeWindowRequest(1, LocalTime.of(14, 0), LocalTime.of(18, 0)))
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(13, 0), LocalTime.of(14, 0), 0),
+                llmItem(20L, 2, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(30L, 3, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(13, 0), LocalTime.of(14, 0), 0),
+                request(20L, 2, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(30L, 3, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary startTime must be at or after day time window startTime. dayNo=1");
+        verify(llmClient, times(3)).generate(prompt);
+        verify(itineraryService, never()).createItinerary(eq(1L), any());
     }
 
     @Test

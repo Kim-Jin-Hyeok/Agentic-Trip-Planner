@@ -1,12 +1,16 @@
 package com.tripagent.ai.prompt;
 
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
+import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Trip;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -42,6 +46,7 @@ public class ItineraryPromptGenerator {
         prompt.append("- For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.\n");
         prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");
         prompt.append("- For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.\n");
+        prompt.append("- Every itinerary item's startTime and endTime must be inside that dayNo's available time window.\n");
         prompt.append("- Write every reason in Korean.\n");
         prompt.append("- Return JSON only. Do not include markdown or explanation outside JSON.\n\n");
         prompt.append("Trip:\n");
@@ -54,6 +59,15 @@ public class ItineraryPromptGenerator {
         prompt.append("- concept: ").append(trip.getConcept()).append("\n");
         prompt.append("- transportation: ").append(trip.getTransportation()).append("\n");
         prompt.append("- lastAccommodationArea: ").append(trip.getLastAccommodationArea()).append("\n\n");
+        prompt.append("Day time windows:\n");
+        prompt.append("- Use these final available time windows for each dayNo.\n");
+        for (DayTimeWindow dayTimeWindow : dayTimeWindows(trip, request)) {
+            prompt.append("- dayNo: ").append(dayTimeWindow.dayNo())
+                    .append(", startTime: ").append(dayTimeWindow.startTime())
+                    .append(", endTime: ").append(dayTimeWindow.endTime())
+                    .append("\n");
+        }
+        prompt.append("\n");
         prompt.append("Place controls:\n");
         prompt.append("- mustVisitPlaceIds: ").append(mustVisitPlaceIds(request)).append("\n");
         prompt.append("- excludedPlaceIds: ").append(excludedPlaceIds(request)).append("\n\n");
@@ -94,6 +108,27 @@ public class ItineraryPromptGenerator {
         return ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
     }
 
+    private List<DayTimeWindow> dayTimeWindows(Trip trip, ItineraryGenerateRequest request) {
+        long tripDays = calculateTripDays(trip);
+        Map<Integer, ItineraryDayTimeWindowRequest> overrideByDayNo = new HashMap<>();
+        if (request != null) {
+            for (ItineraryDayTimeWindowRequest dayTimeWindow : request.normalizedDayTimeWindows()) {
+                if (dayTimeWindow != null && dayTimeWindow.dayNo() != null) {
+                    overrideByDayNo.put(dayTimeWindow.dayNo(), dayTimeWindow);
+                }
+            }
+        }
+
+        List<DayTimeWindow> dayTimeWindows = new java.util.ArrayList<>();
+        for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+            ItineraryDayTimeWindowRequest override = overrideByDayNo.get(dayNo);
+            LocalTime startTime = override == null ? trip.getDailyStartTime() : override.startTime();
+            LocalTime endTime = override == null ? trip.getDailyEndTime() : override.endTime();
+            dayTimeWindows.add(new DayTimeWindow(dayNo, startTime, endTime));
+        }
+        return dayTimeWindows;
+    }
+
     private List<Long> mustVisitPlaceIds(ItineraryGenerateRequest request) {
         if (request == null) {
             return List.of();
@@ -120,5 +155,12 @@ public class ItineraryPromptGenerator {
             return ItineraryPace.NORMAL;
         }
         return request.normalizedPace();
+    }
+
+    private record DayTimeWindow(
+            Integer dayNo,
+            LocalTime startTime,
+            LocalTime endTime
+    ) {
     }
 }

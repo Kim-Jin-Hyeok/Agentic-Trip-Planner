@@ -1,20 +1,23 @@
 package com.tripagent.itinerary.dto;
 
 import com.tripagent.place.dto.PlaceCategory;
+import jakarta.validation.Valid;
 import java.util.List;
 
 public record ItineraryGenerateRequest(
         List<Long> mustVisitPlaceIds,
         List<Long> excludedPlaceIds,
         ItineraryPace pace,
-        List<PlaceCategory> preferredCategories
+        List<PlaceCategory> preferredCategories,
+        @Valid
+        List<ItineraryDayTimeWindowRequest> dayTimeWindows
 ) {
 
     public ItineraryGenerateRequest(
             List<Long> mustVisitPlaceIds,
             List<Long> excludedPlaceIds
     ) {
-        this(mustVisitPlaceIds, excludedPlaceIds, null, null);
+        this(mustVisitPlaceIds, excludedPlaceIds, null, null, null);
     }
 
     public ItineraryGenerateRequest(
@@ -22,7 +25,16 @@ public record ItineraryGenerateRequest(
             List<Long> excludedPlaceIds,
             ItineraryPace pace
     ) {
-        this(mustVisitPlaceIds, excludedPlaceIds, pace, null);
+        this(mustVisitPlaceIds, excludedPlaceIds, pace, null, null);
+    }
+
+    public ItineraryGenerateRequest(
+            List<Long> mustVisitPlaceIds,
+            List<Long> excludedPlaceIds,
+            ItineraryPace pace,
+            List<PlaceCategory> preferredCategories
+    ) {
+        this(mustVisitPlaceIds, excludedPlaceIds, pace, preferredCategories, null);
     }
 
     public List<Long> normalizedMustVisitPlaceIds() {
@@ -51,5 +63,12 @@ public record ItineraryGenerateRequest(
             return List.of();
         }
         return preferredCategories;
+    }
+
+    public List<ItineraryDayTimeWindowRequest> normalizedDayTimeWindows() {
+        if (dayTimeWindows == null) {
+            return List.of();
+        }
+        return dayTimeWindows;
     }
 }
