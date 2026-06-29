@@ -215,6 +215,17 @@ class PlaceServiceTest {
     }
 
     @Test
+    void searchPlacesFiltersByExtendedSeedCategory() {
+        Place naturePlace = place("Nature Place", "NATURE", "JEJU", "description", true);
+        Place gardenPlace = place("Garden Place", "GARDEN", "JEJU", "description", true);
+        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(naturePlace, gardenPlace));
+
+        List<PlaceResponse> responses = placeService.searchPlaces(null, PlaceCategory.GARDEN, null, null);
+
+        assertThat(responses).extracting(PlaceResponse::name).containsExactly("Garden Place");
+    }
+
+    @Test
     void searchPlacesFiltersByRegion() {
         Place eastPlace = place("East Place", "NATURE", "EAST", "JEJU", "description", true, 33.0, 126.0);
         Place westPlace = place("West Place", "NATURE", "WEST", "JEJU", "description", true, 33.0, 126.0);

@@ -87,6 +87,29 @@ class PlaceControllerTest {
     }
 
     @Test
+    void searchPlacesAcceptsExtendedSeedCategory() throws Exception {
+        when(placeService.searchPlaces(
+                null,
+                PlaceCategory.MUSEUM,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        ))
+                .thenReturn(List.of(place(30L, "Museum Place")));
+
+        mockMvc.perform(get("/api/places")
+                        .param("category", "MUSEUM"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].placeId").value(30L));
+    }
+
+    @Test
     void searchPlacesReturnsInvalidRequestWhenBoundsArePartial() throws Exception {
         when(placeService.searchPlaces(null, null, null, null, null, null, 33.0, null, null, null))
                 .thenThrow(new IllegalArgumentException("All bounds parameters are required together."));
