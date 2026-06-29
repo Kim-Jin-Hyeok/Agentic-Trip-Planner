@@ -226,6 +226,21 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void regenerateItinerariesRejectsOverlappedMustVisitAndExcludedPlaceIdsBeforeDeletingExistingItinerary() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(10L), List.of(10L));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.regenerateItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("mustVisitPlaceIds and excludedPlaceIds must not contain the same placeId. placeId=10");
+        verify(llmClient, never()).generate(anyString());
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+    }
+
+    @Test
     void generateDraftItinerariesRejectsDuplicatedMustVisitPlaceIds() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(place(10L, 60));

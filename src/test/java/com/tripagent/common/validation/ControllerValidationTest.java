@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryReorderRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
@@ -165,5 +166,24 @@ class ControllerValidationTest {
                 .andExpect(jsonPath("$.data").isArray());
 
         verify(itineraryGenerateService).generateItineraries(1L, null);
+    }
+
+    @Test
+    void generateItinerariesReturnsInvalidRequestWhenPreferredCategoryIsUnknown() throws Exception {
+        String requestBody = """
+                {
+                  "preferredCategories": ["UNKNOWN"]
+                }
+                """;
+
+        tripMockMvc.perform(post("/api/trips/1/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("Request body is invalid."));
+
+        verify(itineraryGenerateService, never()).generateItineraries(any(), any(ItineraryGenerateRequest.class));
     }
 }
