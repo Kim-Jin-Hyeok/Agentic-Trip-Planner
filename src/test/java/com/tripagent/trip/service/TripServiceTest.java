@@ -3,6 +3,8 @@ package com.tripagent.trip.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -129,8 +131,7 @@ class TripServiceTest {
     void searchTripsReturnsAllTripsByTripIdDescendingOrder() {
         Trip firstTrip = trip(3L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 10), LocalDate.of(2026, 7, 12));
         Trip secondTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
-        when(tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId")))
-                .thenReturn(List.of(firstTrip, secondTrip));
+        stubSearchTrips(List.of(firstTrip, secondTrip));
 
         List<TripResponse> responses = tripService.searchTrips(null, null, null, null, null, null);
 
@@ -138,41 +139,61 @@ class TripServiceTest {
                 .containsExactly(3L, 2L);
         assertThat(responses).extracting(TripResponse::destination)
                 .containsExactly("JEJU", "JEJU");
+        verify(tripRepository).searchTrips(
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        );
     }
 
     @Test
     void searchTripsFiltersByDestinationKeyword() {
         Trip jejuTrip = trip(1L, "JEJU EAST", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
-        Trip busanTrip = trip(2L, "BUSAN", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
-        when(tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId")))
-                .thenReturn(List.of(jejuTrip, busanTrip));
+        stubSearchTrips(List.of(jejuTrip));
 
-        List<TripResponse> responses = tripService.searchTrips("jeju", null, null, null, null, null);
+        List<TripResponse> responses = tripService.searchTrips(" JeJu ", null, null, null, null, null);
 
         assertThat(responses).extracting(TripResponse::tripId)
                 .containsExactly(1L);
+        verify(tripRepository).searchTrips(
+                eq("jeju"),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        );
     }
 
     @Test
     void searchTripsFiltersByConcept() {
-        Trip foodTrip = trip(1L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
         Trip healingTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
-        when(tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId")))
-                .thenReturn(List.of(foodTrip, healingTrip));
+        stubSearchTrips(List.of(healingTrip));
 
         List<TripResponse> responses = tripService.searchTrips(null, TripConcept.HEALING, null, null, null, null);
 
         assertThat(responses).extracting(TripResponse::tripId)
                 .containsExactly(2L);
+        verify(tripRepository).searchTrips(
+                isNull(),
+                eq(TripConcept.HEALING),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        );
     }
 
     @Test
     void searchTripsFiltersByStartDateRange() {
         Trip inRangeTrip = trip(1L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 5), LocalDate.of(2026, 7, 7));
-        Trip beforeRangeTrip = trip(2L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
-        Trip afterRangeTrip = trip(3L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 10), LocalDate.of(2026, 7, 12));
-        when(tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId")))
-                .thenReturn(List.of(inRangeTrip, beforeRangeTrip, afterRangeTrip));
+        stubSearchTrips(List.of(inRangeTrip));
 
         List<TripResponse> responses = tripService.searchTrips(
                 null,
@@ -185,15 +206,21 @@ class TripServiceTest {
 
         assertThat(responses).extracting(TripResponse::tripId)
                 .containsExactly(1L);
+        verify(tripRepository).searchTrips(
+                isNull(),
+                isNull(),
+                eq(LocalDate.of(2026, 7, 4)),
+                eq(LocalDate.of(2026, 7, 8)),
+                isNull(),
+                isNull(),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        );
     }
 
     @Test
     void searchTripsFiltersByEndDateRange() {
         Trip inRangeTrip = trip(1L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 5));
-        Trip beforeRangeTrip = trip(2L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
-        Trip afterRangeTrip = trip(3L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 10));
-        when(tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId")))
-                .thenReturn(List.of(inRangeTrip, beforeRangeTrip, afterRangeTrip));
+        stubSearchTrips(List.of(inRangeTrip));
 
         List<TripResponse> responses = tripService.searchTrips(
                 null,
@@ -206,14 +233,21 @@ class TripServiceTest {
 
         assertThat(responses).extracting(TripResponse::tripId)
                 .containsExactly(1L);
+        verify(tripRepository).searchTrips(
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(LocalDate.of(2026, 7, 4)),
+                eq(LocalDate.of(2026, 7, 8)),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        );
     }
 
     @Test
     void searchTripsFiltersByStartDateFromOnly() {
         Trip inRangeTrip = trip(1L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 5), LocalDate.of(2026, 7, 7));
-        Trip beforeRangeTrip = trip(2L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
-        when(tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId")))
-                .thenReturn(List.of(inRangeTrip, beforeRangeTrip));
+        stubSearchTrips(List.of(inRangeTrip));
 
         List<TripResponse> responses = tripService.searchTrips(
                 null,
@@ -226,14 +260,21 @@ class TripServiceTest {
 
         assertThat(responses).extracting(TripResponse::tripId)
                 .containsExactly(1L);
+        verify(tripRepository).searchTrips(
+                isNull(),
+                isNull(),
+                eq(LocalDate.of(2026, 7, 4)),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        );
     }
 
     @Test
     void searchTripsFiltersByEndDateToOnly() {
         Trip inRangeTrip = trip(1L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 5));
-        Trip afterRangeTrip = trip(2L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 10));
-        when(tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId")))
-                .thenReturn(List.of(inRangeTrip, afterRangeTrip));
+        stubSearchTrips(List.of(inRangeTrip));
 
         List<TripResponse> responses = tripService.searchTrips(
                 null,
@@ -246,6 +287,15 @@ class TripServiceTest {
 
         assertThat(responses).extracting(TripResponse::tripId)
                 .containsExactly(1L);
+        verify(tripRepository).searchTrips(
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(LocalDate.of(2026, 7, 6)),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        );
     }
 
     @Test
@@ -260,7 +310,7 @@ class TripServiceTest {
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("startDateFrom must be less than or equal to startDateTo.");
-        verify(tripRepository, never()).findAll(any(Sort.class));
+        verify(tripRepository, never()).searchTrips(any(), any(), any(), any(), any(), any(), any(Sort.class));
     }
 
     @Test
@@ -275,7 +325,7 @@ class TripServiceTest {
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("endDateFrom must be less than or equal to endDateTo.");
-        verify(tripRepository, never()).findAll(any(Sort.class));
+        verify(tripRepository, never()).searchTrips(any(), any(), any(), any(), any(), any(), any(Sort.class));
     }
 
     @Test
@@ -388,14 +438,25 @@ class TripServiceTest {
         Trip deletedTrip = trip(1L);
         Trip remainingTrip = trip(2L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 5), LocalDate.of(2026, 7, 7));
         when(tripRepository.findById(1L)).thenReturn(Optional.of(deletedTrip));
-        when(tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId")))
-                .thenReturn(List.of(remainingTrip));
+        stubSearchTrips(List.of(remainingTrip));
 
         tripService.deleteTrip(1L);
         List<TripResponse> responses = tripService.searchTrips(null, null, null, null, null, null);
 
         assertThat(responses).extracting(TripResponse::tripId)
                 .containsExactly(2L);
+    }
+
+    private void stubSearchTrips(List<Trip> trips) {
+        when(tripRepository.searchTrips(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(Sort.class)
+        )).thenReturn(trips);
     }
 
     private Trip trip(Long tripId) {

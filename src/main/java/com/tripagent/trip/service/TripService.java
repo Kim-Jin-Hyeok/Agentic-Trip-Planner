@@ -67,15 +67,16 @@ public class TripService {
 
         String normalizedDestination = normalizeKeyword(destination);
 
-        return tripRepository.findAll(Sort.by(Sort.Direction.DESC, "tripId"))
+        return tripRepository.searchTrips(
+                        normalizedDestination,
+                        concept,
+                        startDateFrom,
+                        startDateTo,
+                        endDateFrom,
+                        endDateTo,
+                        Sort.by(Sort.Direction.DESC, "tripId")
+                )
                 .stream()
-                .filter(trip -> normalizedDestination == null
-                        || trip.getDestination().toLowerCase(Locale.ROOT).contains(normalizedDestination))
-                .filter(trip -> concept == null || trip.getConcept() == concept)
-                .filter(trip -> startDateFrom == null || !trip.getStartDate().isBefore(startDateFrom))
-                .filter(trip -> startDateTo == null || !trip.getStartDate().isAfter(startDateTo))
-                .filter(trip -> endDateFrom == null || !trip.getEndDate().isBefore(endDateFrom))
-                .filter(trip -> endDateTo == null || !trip.getEndDate().isAfter(endDateTo))
                 .map(TripResponse::from)
                 .toList();
     }
