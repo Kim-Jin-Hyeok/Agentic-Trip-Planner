@@ -138,6 +138,7 @@ public class ItineraryGenerateService {
         List<PlaceResponse> candidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
         validateGenerateRequest(candidatePlaces, request);
         List<PlaceResponse> selectedCandidatePlaces = selectLlmCandidatePlaces(trip, candidatePlaces, request);
+        validateCandidatePlacesEnoughForTripDays(trip, selectedCandidatePlaces);
         String prompt = request == null
                 ? itineraryPromptGenerator.generate(trip, selectedCandidatePlaces)
                 : itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request);
@@ -465,6 +466,23 @@ public class ItineraryGenerateService {
         return candidatePlaces.stream()
                 .filter(candidatePlace -> !excludedPlaceIds.contains(candidatePlace.placeId()))
                 .toList();
+    }
+
+    private void validateCandidatePlacesEnoughForTripDays(
+            Trip trip,
+            List<PlaceResponse> selectedCandidatePlaces
+    ) {
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        int candidateCount = selectedCandidatePlaces.size();
+
+        if (candidateCount < tripDays) {
+            throw new IllegalArgumentException(
+                    "Candidate places are not enough to cover every trip day. requiredDays="
+                            + tripDays
+                            + ", candidateCount="
+                            + candidateCount
+            );
+        }
     }
 
     private Comparator<PlaceResponse> candidatePlaceComparator(TripConcept concept, ItineraryGenerateRequest request) {

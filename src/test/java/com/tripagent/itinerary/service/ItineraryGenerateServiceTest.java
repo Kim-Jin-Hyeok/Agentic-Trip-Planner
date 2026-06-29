@@ -3,6 +3,7 @@ package com.tripagent.itinerary.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -269,6 +270,57 @@ class ItineraryGenerateServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("preferredCategories must not contain duplicated category. category=FOOD");
         verify(llmClient, never()).generate("prompt");
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsTooFewCandidatePlacesBeforeLlmCall() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Candidate places are not enough to cover every trip day. requiredDays=3, candidateCount=2");
+        verify(itineraryPromptGenerator, never()).generate(eq(trip), anyList());
+        verify(llmClient, never()).generate(anyString());
+    }
+
+    @Test
+    void regenerateItinerariesRejectsTooFewCandidatePlacesAfterExcludedBeforeDeletingExistingItinerary() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90),
+                place(30L, 120)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, List.of(30L));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.regenerateItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Candidate places are not enough to cover every trip day. requiredDays=3, candidateCount=2");
+        verify(itineraryPromptGenerator, never()).generate(eq(trip), anyList(), eq(request));
+        verify(llmClient, never()).generate(anyString());
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
     }
 
     @Test
@@ -975,7 +1027,8 @@ class ItineraryGenerateServiceTest {
         );
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
-                place(20L, 90)
+                place(20L, 90),
+                place(30L, 120)
         );
         String prompt = "prompt";
         String rawResponse = "raw response";
