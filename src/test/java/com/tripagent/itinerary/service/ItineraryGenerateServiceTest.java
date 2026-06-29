@@ -951,6 +951,95 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesRejectsMissingTripDayBeforeSaving() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 3, 1, LocalTime.of(9, 0), LocalTime.of(10, 30), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 3, 1, LocalTime.of(9, 0), LocalTime.of(10, 30), 0)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(
+                        "Generated itinerary must include at least one item for every trip day. missingDayNos=[2]"
+                );
+        verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+        verify(itineraryService, never()).createItinerary(
+                1L,
+                request(10L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        verify(itineraryService, never()).createItinerary(
+                1L,
+                request(20L, 3, 1, LocalTime.of(9, 0), LocalTime.of(10, 30), 0)
+        );
+    }
+
+    @Test
+    void generateDraftItinerariesAllowsEveryTripDayCovered() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90),
+                place(30L, 120)
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, 1, LocalTime.of(9, 0), LocalTime.of(10, 30), 0),
+                llmItem(30L, 3, 1, LocalTime.of(9, 0), LocalTime.of(11, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, 1, LocalTime.of(9, 0), LocalTime.of(10, 30), 0),
+                request(30L, 3, 1, LocalTime.of(9, 0), LocalTime.of(11, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        List<ItineraryCreateRequest> drafts = itineraryGenerateService.generateDraftItineraries(1L);
+
+        assertThat(drafts).extracting(ItineraryCreateRequest::dayNo)
+                .containsExactly(1, 2, 3);
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L, 30L));
+    }
+
+    @Test
     void generateDraftItinerariesAllowsFirstStartTimeAtOrAfterDailyStartTime() {
         Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(10, 30));
         List<PlaceResponse> candidatePlaces = List.of(
@@ -1133,10 +1222,28 @@ class ItineraryGenerateServiceTest {
     }
 
     private Trip trip(Long tripId, TripConcept concept, LocalTime dailyStartTime, LocalTime dailyEndTime) {
+        return trip(
+                tripId,
+                concept,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 1),
+                dailyStartTime,
+                dailyEndTime
+        );
+    }
+
+    private Trip trip(
+            Long tripId,
+            TripConcept concept,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime
+    ) {
         Trip trip = Trip.create(
                 "JEJU",
-                LocalDate.of(2026, 7, 1),
-                LocalDate.of(2026, 7, 3),
+                startDate,
+                endDate,
                 dailyStartTime,
                 dailyEndTime,
                 concept,
@@ -1204,9 +1311,20 @@ class ItineraryGenerateServiceTest {
             LocalTime endTime,
             Integer travelMinutesFromPrevious
     ) {
+        return llmItem(placeId, 1, orderNo, startTime, endTime, travelMinutesFromPrevious);
+    }
+
+    private LlmItineraryItemResponse llmItem(
+            Long placeId,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
         return new LlmItineraryItemResponse(
                 placeId,
-                1,
+                dayNo,
                 orderNo,
                 startTime,
                 endTime,
@@ -1222,9 +1340,20 @@ class ItineraryGenerateServiceTest {
             LocalTime endTime,
             Integer travelMinutesFromPrevious
     ) {
+        return request(placeId, 1, orderNo, startTime, endTime, travelMinutesFromPrevious);
+    }
+
+    private ItineraryCreateRequest request(
+            Long placeId,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
         return new ItineraryCreateRequest(
                 placeId,
-                1,
+                dayNo,
                 orderNo,
                 startTime,
                 endTime,

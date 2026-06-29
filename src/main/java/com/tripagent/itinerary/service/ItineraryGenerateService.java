@@ -18,11 +18,12 @@ import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.HashSet;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -202,6 +203,7 @@ public class ItineraryGenerateService {
 
     private void validateDraftItineraries(Trip trip, List<ItineraryCreateRequest> createRequests) {
         validateDayAndOrderPolicies(trip, createRequests);
+        validateAllTripDaysCovered(trip, createRequests);
         validateFirstTravelMinutes(createRequests);
         validateFirstStartTimes(trip, createRequests);
         validateDailyEndTimes(trip, createRequests);
@@ -231,6 +233,27 @@ public class ItineraryGenerateService {
                                 + request.orderNo()
                 );
             }
+        }
+    }
+
+    private void validateAllTripDaysCovered(Trip trip, List<ItineraryCreateRequest> createRequests) {
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        Set<Integer> includedDayNos = createRequests.stream()
+                .map(ItineraryCreateRequest::dayNo)
+                .collect(Collectors.toSet());
+        List<Integer> missingDayNos = new ArrayList<>();
+
+        for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+            if (!includedDayNos.contains(dayNo)) {
+                missingDayNos.add(dayNo);
+            }
+        }
+
+        if (!missingDayNos.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Generated itinerary must include at least one item for every trip day. missingDayNos="
+                            + missingDayNos
+            );
         }
     }
 
