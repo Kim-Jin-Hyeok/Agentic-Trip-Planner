@@ -703,6 +703,79 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesSavesWithDayTimeWindowWhenOverrideStartsBeforeTripDailyStartTime() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(11, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 60),
+                place(30L, 60)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                List.of(new ItineraryDayTimeWindowRequest(2, LocalTime.of(10, 0), LocalTime.of(18, 0)))
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                llmItem(30L, 3, LocalTime.of(11, 0), LocalTime.of(12, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                request(20L, 2, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                request(30L, 3, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+        when(itineraryService.createGeneratedItinerary(
+                1L,
+                request(10L, 1, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                LocalTime.of(11, 0),
+                LocalTime.of(18, 0)
+        )).thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createGeneratedItinerary(
+                1L,
+                request(20L, 2, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                LocalTime.of(10, 0),
+                LocalTime.of(18, 0)
+        )).thenReturn(response(200L, 1L, 20L, 2));
+        when(itineraryService.createGeneratedItinerary(
+                1L,
+                request(30L, 3, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                LocalTime.of(11, 0),
+                LocalTime.of(18, 0)
+        )).thenReturn(response(300L, 1L, 30L, 3));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).extracting(ItineraryResponse::itineraryId)
+                .containsExactly(100L, 200L, 300L);
+        verify(itineraryService).createGeneratedItinerary(
+                1L,
+                request(20L, 2, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                LocalTime.of(10, 0),
+                LocalTime.of(18, 0)
+        );
+        verify(itineraryService, never()).createItinerary(eq(1L), any());
+    }
+
+    @Test
     void regenerateItinerariesAllowsExistingItineraryAndReplacesItWithNewItinerary() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
@@ -748,6 +821,80 @@ class ItineraryGenerateServiceTest {
                 1L,
                 request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
         );
+    }
+
+    @Test
+    void regenerateItinerariesSavesWithDayTimeWindowAfterValidationAndDelete() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(11, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 60),
+                place(30L, 60)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                List.of(new ItineraryDayTimeWindowRequest(2, LocalTime.of(10, 0), LocalTime.of(18, 0)))
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                llmItem(30L, 3, LocalTime.of(11, 0), LocalTime.of(12, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                request(20L, 2, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                request(30L, 3, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+        when(itineraryService.createGeneratedItinerary(
+                1L,
+                request(10L, 1, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                LocalTime.of(11, 0),
+                LocalTime.of(18, 0)
+        )).thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createGeneratedItinerary(
+                1L,
+                request(20L, 2, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                LocalTime.of(10, 0),
+                LocalTime.of(18, 0)
+        )).thenReturn(response(200L, 1L, 20L, 2));
+        when(itineraryService.createGeneratedItinerary(
+                1L,
+                request(30L, 3, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                LocalTime.of(11, 0),
+                LocalTime.of(18, 0)
+        )).thenReturn(response(300L, 1L, 30L, 3));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.regenerateItineraries(1L, request);
+
+        assertThat(responses).extracting(ItineraryResponse::itineraryId)
+                .containsExactly(100L, 200L, 300L);
+        InOrder inOrder = inOrder(itineraryRepository, itineraryService);
+        inOrder.verify(itineraryRepository).deleteByTrip_TripId(1L);
+        inOrder.verify(itineraryService).createGeneratedItinerary(
+                1L,
+                request(10L, 1, 1, LocalTime.of(11, 0), LocalTime.of(12, 0), 0),
+                LocalTime.of(11, 0),
+                LocalTime.of(18, 0)
+        );
+        verify(itineraryService, never()).createItinerary(eq(1L), any());
     }
 
     @Test

@@ -224,6 +224,67 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void createGeneratedItineraryAllowsStartBeforeTripDailyStartTimeWhenInsideDayTimeWindow() {
+        Trip trip = trip(1L, LocalTime.of(11, 0));
+        Place place = place(10L);
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                10L,
+                2,
+                1,
+                LocalTime.of(10, 0),
+                LocalTime.of(11, 0),
+                0,
+                "Generated itinerary with day time window."
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+        when(itineraryRepository.existsByTrip_TripIdAndDayNoAndOrderNo(1L, 2, 1)).thenReturn(false);
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 2)).thenReturn(List.of());
+        when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(invocation -> {
+            Itinerary itinerary = invocation.getArgument(0);
+            setId(itinerary, "itineraryId", 100L);
+            return itinerary;
+        });
+
+        ItineraryResponse response = itineraryService.createGeneratedItinerary(
+                1L,
+                request,
+                LocalTime.of(10, 0),
+                LocalTime.of(18, 0)
+        );
+
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(10, 0));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(11, 0));
+        verify(itineraryRepository).save(any(Itinerary.class));
+    }
+
+    @Test
+    void createGeneratedItineraryRejectsStartTimeBeforeDayTimeWindow() {
+        Trip trip = trip(1L, LocalTime.of(11, 0));
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                10L,
+                2,
+                1,
+                LocalTime.of(9, 30),
+                LocalTime.of(10, 30),
+                0,
+                "Generated itinerary before day time window."
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> itineraryService.createGeneratedItinerary(
+                1L,
+                request,
+                LocalTime.of(10, 0),
+                LocalTime.of(18, 0)
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("First itinerary item of each day must start at or after the day time window startTime.");
+        verify(placeRepository, never()).findById(10L);
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
     void createItineraryAllowsAdjacentTimeInSameTripDay() {
         Trip trip = trip(1L);
         Place place = place(10L);

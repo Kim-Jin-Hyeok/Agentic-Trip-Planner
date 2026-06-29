@@ -75,6 +75,47 @@ public class ItineraryService {
     }
 
     @Transactional
+    public ItineraryResponse createGeneratedItinerary(
+            Long tripId,
+            ItineraryCreateRequest request,
+            LocalTime dayTimeWindowStartTime,
+            LocalTime dayTimeWindowEndTime
+    ) {
+        validateRequest(tripId, request);
+        validateDayTimeWindow(dayTimeWindowStartTime, dayTimeWindowEndTime);
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+
+        validateGeneratedItineraryValues(
+                trip,
+                null,
+                request.dayNo(),
+                request.orderNo(),
+                request.startTime(),
+                request.endTime(),
+                request.travelMinutesFromPrevious(),
+                dayTimeWindowStartTime,
+                dayTimeWindowEndTime
+        );
+        Place place = placeRepository.findById(request.placeId())
+                .orElseThrow(() -> new NoSuchElementException("Place not found. placeId=" + request.placeId()));
+
+        Itinerary itinerary = Itinerary.create(
+                trip,
+                place,
+                request.dayNo(),
+                request.orderNo(),
+                request.startTime(),
+                request.endTime(),
+                request.travelMinutesFromPrevious(),
+                request.reason()
+        );
+
+        return ItineraryResponse.from(itineraryRepository.save(itinerary));
+    }
+
+    @Transactional
     public ItineraryResponse updateItinerary(Long tripId, Long itineraryId, ItineraryUpdateRequest request) {
         validateUpdateRequest(tripId, itineraryId, request);
 
@@ -230,6 +271,35 @@ public class ItineraryService {
         validateNoTimeOverlap(trip.getTripId(), excludedItineraryId, dayNo, startTime, endTime);
     }
 
+    private void validateGeneratedItineraryValues(
+            Trip trip,
+            Long excludedItineraryId,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious,
+            LocalTime dayTimeWindowStartTime,
+            LocalTime dayTimeWindowEndTime
+    ) {
+        validateTimeRange(startTime, endTime);
+        validateDayNoInTripPeriod(trip, dayNo);
+        validateFirstTravelMinutes(orderNo, travelMinutesFromPrevious);
+        validateDayTimeWindowStartTime(startTime, dayTimeWindowStartTime);
+        validateDayTimeWindowEndTime(endTime, dayTimeWindowEndTime);
+        validateNoDuplicatedOrder(trip.getTripId(), excludedItineraryId, dayNo, orderNo);
+        validateNoTimeOverlap(trip.getTripId(), excludedItineraryId, dayNo, startTime, endTime);
+    }
+
+    private void validateDayTimeWindow(LocalTime startTime, LocalTime endTime) {
+        if (startTime == null || endTime == null) {
+            throw new IllegalArgumentException("Day time window startTime and endTime are required.");
+        }
+        if (!startTime.isBefore(endTime)) {
+            throw new IllegalArgumentException("Day time window startTime must be before endTime.");
+        }
+    }
+
     private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
         if (!startTime.isBefore(endTime)) {
             throw new IllegalArgumentException("Itinerary startTime must be before endTime.");
@@ -253,6 +323,22 @@ public class ItineraryService {
     private void validateDailyEndTime(Trip trip, LocalTime endTime) {
         if (endTime.isAfter(trip.getDailyEndTime())) {
             throw new IllegalArgumentException("Itinerary endTime must be at or before trip dailyEndTime.");
+        }
+    }
+
+    private void validateDayTimeWindowStartTime(LocalTime startTime, LocalTime dayTimeWindowStartTime) {
+        if (startTime.isBefore(dayTimeWindowStartTime)) {
+            throw new IllegalArgumentException(
+                    "First itinerary item of each day must start at or after the day time window startTime."
+            );
+        }
+    }
+
+    private void validateDayTimeWindowEndTime(LocalTime endTime, LocalTime dayTimeWindowEndTime) {
+        if (endTime.isAfter(dayTimeWindowEndTime)) {
+            throw new IllegalArgumentException(
+                    "Itinerary endTime must be at or before the day time window endTime."
+            );
         }
     }
 

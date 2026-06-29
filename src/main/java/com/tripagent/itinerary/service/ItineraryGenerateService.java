@@ -95,9 +95,8 @@ public class ItineraryGenerateService {
             throw new IllegalArgumentException("Itinerary already exists for this trip.");
         }
 
-        return generateDraftItineraries(tripId, request, OPERATION_GENERATE).stream()
-                .map(createRequest -> itineraryService.createItinerary(tripId, createRequest))
-                .toList();
+        List<ItineraryCreateRequest> createRequests = generateDraftItineraries(tripId, request, OPERATION_GENERATE);
+        return saveGeneratedItineraries(tripId, request, createRequests);
     }
 
     @Transactional
@@ -116,9 +115,39 @@ public class ItineraryGenerateService {
         );
         itineraryRepository.deleteByTrip_TripId(tripId);
 
+        return saveGeneratedItineraries(tripId, request, createRequests);
+    }
+
+    private List<ItineraryResponse> saveGeneratedItineraries(
+            Long tripId,
+            ItineraryGenerateRequest request,
+            List<ItineraryCreateRequest> createRequests
+    ) {
+        if (!hasDayTimeWindowOverrides(request)) {
+            return createRequests.stream()
+                    .map(createRequest -> itineraryService.createItinerary(tripId, createRequest))
+                    .toList();
+        }
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        Map<Integer, DayTimeWindow> dayTimeWindowByDayNo = createDayTimeWindows(trip, request);
+
         return createRequests.stream()
-                .map(createRequest -> itineraryService.createItinerary(tripId, createRequest))
+                .map(createRequest -> {
+                    DayTimeWindow dayTimeWindow = dayTimeWindowByDayNo.get(createRequest.dayNo());
+                    return itineraryService.createGeneratedItinerary(
+                            tripId,
+                            createRequest,
+                            dayTimeWindow.startTime(),
+                            dayTimeWindow.endTime()
+                    );
+                })
                 .toList();
+    }
+
+    private boolean hasDayTimeWindowOverrides(ItineraryGenerateRequest request) {
+        return request != null && !request.normalizedDayTimeWindows().isEmpty();
     }
 
     public List<ItineraryCreateRequest> generateDraftItineraries(Long tripId) {
