@@ -58,6 +58,70 @@ class MockLlmClientTest {
     }
 
     @Test
+    void generateDistributesPlacesAcrossTripDays() {
+        String prompt = """
+                Trip:
+                - days: 3
+                - dailyStartTime: 10:00
+                - dailyEndTime: 17:00
+
+                candidatePlaces:
+                - placeId: 10
+                - placeId: 20
+                - placeId: 30
+                """;
+
+        List<LlmItineraryItemResponse> parsedResponses = parser.parse(mockLlmClient.generate(prompt));
+
+        assertThat(parsedResponses).hasSize(3);
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::placeId)
+                .containsExactly(10L, 20L, 30L);
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::dayNo)
+                .containsExactly(1, 2, 3);
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::orderNo)
+                .containsExactly(1, 1, 1);
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::travelMinutesFromPrevious)
+                .containsExactly(0, 0, 0);
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::startTime)
+                .containsExactly(
+                        java.time.LocalTime.of(10, 0),
+                        java.time.LocalTime.of(10, 0),
+                        java.time.LocalTime.of(10, 0)
+                );
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::endTime)
+                .containsExactly(
+                        java.time.LocalTime.of(11, 0),
+                        java.time.LocalTime.of(11, 0),
+                        java.time.LocalTime.of(11, 0)
+                );
+    }
+
+    @Test
+    void generateUsesEnoughPlacesToCoverTripDays() {
+        String prompt = """
+                Trip:
+                - days: 4
+                - dailyStartTime: 09:00
+                - dailyEndTime: 18:00
+
+                candidatePlaces:
+                - placeId: 10
+                - placeId: 20
+                - placeId: 30
+                - placeId: 40
+                - placeId: 50
+                """;
+
+        List<LlmItineraryItemResponse> parsedResponses = parser.parse(mockLlmClient.generate(prompt));
+
+        assertThat(parsedResponses).hasSize(4);
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::placeId)
+                .containsExactly(10L, 20L, 30L, 40L);
+        assertThat(parsedResponses).extracting(LlmItineraryItemResponse::dayNo)
+                .containsExactly(1, 2, 3, 4);
+    }
+
+    @Test
     void generateRejectsBlankPrompt() {
         assertThatThrownBy(() -> mockLlmClient.generate(" "))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -69,5 +133,21 @@ class MockLlmClientTest {
         assertThatThrownBy(() -> mockLlmClient.generate("candidatePlaces:"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Mock LLM prompt must include candidate placeIds.");
+    }
+
+    @Test
+    void generateRejectsPromptWithoutEnoughPlacesForTripDays() {
+        String prompt = """
+                Trip:
+                - days: 3
+
+                candidatePlaces:
+                - placeId: 10
+                - placeId: 20
+                """;
+
+        assertThatThrownBy(() -> mockLlmClient.generate(prompt))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Mock LLM prompt must include at least one candidate placeId for every trip day.");
     }
 }
