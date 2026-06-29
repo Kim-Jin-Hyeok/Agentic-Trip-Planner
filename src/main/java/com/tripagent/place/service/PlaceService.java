@@ -7,6 +7,7 @@ import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.trip.domain.TripConcept;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
@@ -66,18 +67,28 @@ public class PlaceService {
             Double maxLng
     ) {
         boolean effectiveUseYn = useYn == null || useYn;
-        List<Place> places = placeRepository.findAll(sortByConceptOrPlaceId(concept));
         Set<String> categoryNames = mergeCategoryNames(category, categories);
+        List<String> categoryNameFilters = categoryNames.isEmpty()
+                ? List.of("__NO_CATEGORY_FILTER__")
+                : new ArrayList<>(categoryNames);
         String normalizedKeyword = normalizeKeyword(keyword);
         validateBounds(minLat, maxLat, minLng, maxLng);
         boolean applyBounds = hasAllBounds(minLat, maxLat, minLng, maxLng);
+        List<Place> places = placeRepository.searchPlaces(
+                effectiveUseYn,
+                region,
+                categoryNameFilters,
+                categoryNames.isEmpty(),
+                normalizedKeyword,
+                applyBounds,
+                minLat,
+                maxLat,
+                minLng,
+                maxLng,
+                sortByConceptOrPlaceId(concept)
+        );
 
         return places.stream()
-                .filter(place -> place.getUseYn().equals(effectiveUseYn))
-                .filter(place -> region == null || place.getRegion().equals(region))
-                .filter(place -> categoryNames.isEmpty() || categoryNames.contains(place.getCategory()))
-                .filter(place -> normalizedKeyword == null || containsKeyword(place, normalizedKeyword))
-                .filter(place -> !applyBounds || isInBounds(place, minLat, maxLat, minLng, maxLng))
                 .map(PlaceResponse::from)
                 .toList();
     }
@@ -125,16 +136,6 @@ public class PlaceService {
         return keyword.trim().toLowerCase(Locale.ROOT);
     }
 
-    private boolean containsKeyword(Place place, String keyword) {
-        return containsIgnoreCase(place.getName(), keyword)
-                || containsIgnoreCase(place.getAddress(), keyword)
-                || containsIgnoreCase(place.getDescription(), keyword);
-    }
-
-    private boolean containsIgnoreCase(String value, String keyword) {
-        return value != null && value.toLowerCase(Locale.ROOT).contains(keyword);
-    }
-
     private Set<String> mergeCategoryNames(PlaceCategory category, List<PlaceCategory> categories) {
         Set<String> categoryNames = new HashSet<>();
         if (category != null) {
@@ -175,12 +176,5 @@ public class PlaceService {
 
     private boolean hasAllBounds(Double minLat, Double maxLat, Double minLng, Double maxLng) {
         return minLat != null && maxLat != null && minLng != null && maxLng != null;
-    }
-
-    private boolean isInBounds(Place place, Double minLat, Double maxLat, Double minLng, Double maxLng) {
-        return place.getLatitude() >= minLat
-                && place.getLatitude() <= maxLat
-                && place.getLongitude() >= minLng
-                && place.getLongitude() <= maxLng;
     }
 }

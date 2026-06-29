@@ -3,6 +3,7 @@ package com.tripagent.place.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -168,22 +169,34 @@ class PlaceServiceTest {
     @Test
     void searchPlacesReturnsOnlyActivePlacesByDefault() {
         Place activePlace = place("Active Place", "NATURE", "JEJU", "description", true);
-        Place inactivePlace = place("Inactive Place", "NATURE", "JEJU", "description", false);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(activePlace, inactivePlace));
+        stubSearchPlaces(List.of(activePlace));
 
         List<PlaceResponse> responses = placeService.searchPlaces(null, null, null, null);
 
         assertThat(responses).extracting(PlaceResponse::name).containsExactly("Active Place");
+        ArgumentCaptor<Boolean> useYnCaptor = ArgumentCaptor.forClass(Boolean.class);
         ArgumentCaptor<Sort> sortCaptor = ArgumentCaptor.forClass(Sort.class);
-        verify(placeRepository).findAll(sortCaptor.capture());
+        verify(placeRepository).searchPlaces(
+                useYnCaptor.capture(),
+                any(),
+                any(),
+                anyBoolean(),
+                any(),
+                anyBoolean(),
+                any(),
+                any(),
+                any(),
+                any(),
+                sortCaptor.capture()
+        );
+        assertThat(useYnCaptor.getValue()).isTrue();
         assertThat(sortCaptor.getValue().getOrderFor("placeId").getDirection()).isEqualTo(Sort.Direction.ASC);
     }
 
     @Test
     void searchPlacesReturnsInactivePlacesWhenUseYnFalse() {
-        Place activePlace = place("Active Place", "NATURE", "JEJU", "description", true);
         Place inactivePlace = place("Inactive Place", "NATURE", "JEJU", "description", false);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(activePlace, inactivePlace));
+        stubSearchPlaces(List.of(inactivePlace));
 
         List<PlaceResponse> responses = placeService.searchPlaces(null, null, null, false);
 
@@ -193,32 +206,57 @@ class PlaceServiceTest {
     @Test
     void searchPlacesUsesConceptScoreSort() {
         Place place = place("Food Place", "FOOD", "JEJU", "description", true);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(place));
+        stubSearchPlaces(List.of(place));
 
         List<PlaceResponse> responses = placeService.searchPlaces(PlaceRecommendConcept.FOOD, null, null, null);
 
         assertThat(responses).extracting(PlaceResponse::name).containsExactly("Food Place");
         ArgumentCaptor<Sort> sortCaptor = ArgumentCaptor.forClass(Sort.class);
-        verify(placeRepository).findAll(sortCaptor.capture());
+        verify(placeRepository).searchPlaces(
+                any(),
+                any(),
+                any(),
+                anyBoolean(),
+                any(),
+                anyBoolean(),
+                any(),
+                any(),
+                any(),
+                any(),
+                sortCaptor.capture()
+        );
         assertThat(sortCaptor.getValue().getOrderFor("foodScore").getDirection()).isEqualTo(Sort.Direction.DESC);
     }
 
     @Test
     void searchPlacesFiltersByCategory() {
-        Place naturePlace = place("Nature Place", "NATURE", "JEJU", "description", true);
         Place foodPlace = place("Food Place", "FOOD", "JEJU", "description", true);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(naturePlace, foodPlace));
+        stubSearchPlaces(List.of(foodPlace));
 
         List<PlaceResponse> responses = placeService.searchPlaces(null, PlaceCategory.FOOD, null, null);
 
         assertThat(responses).extracting(PlaceResponse::name).containsExactly("Food Place");
+        ArgumentCaptor<List<String>> categoryNamesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(placeRepository).searchPlaces(
+                any(),
+                any(),
+                categoryNamesCaptor.capture(),
+                anyBoolean(),
+                any(),
+                anyBoolean(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(Sort.class)
+        );
+        assertThat(categoryNamesCaptor.getValue()).containsExactly("FOOD");
     }
 
     @Test
     void searchPlacesFiltersByExtendedSeedCategory() {
-        Place naturePlace = place("Nature Place", "NATURE", "JEJU", "description", true);
         Place gardenPlace = place("Garden Place", "GARDEN", "JEJU", "description", true);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(naturePlace, gardenPlace));
+        stubSearchPlaces(List.of(gardenPlace));
 
         List<PlaceResponse> responses = placeService.searchPlaces(null, PlaceCategory.GARDEN, null, null);
 
@@ -227,9 +265,8 @@ class PlaceServiceTest {
 
     @Test
     void searchPlacesFiltersByRegion() {
-        Place eastPlace = place("East Place", "NATURE", "EAST", "JEJU", "description", true, 33.0, 126.0);
         Place westPlace = place("West Place", "NATURE", "WEST", "JEJU", "description", true, 33.0, 126.0);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(eastPlace, westPlace));
+        stubSearchPlaces(List.of(westPlace));
 
         List<PlaceResponse> responses = placeService.searchPlaces(null, null, null, "WEST", null, null, null, null, null, null);
 
@@ -238,10 +275,9 @@ class PlaceServiceTest {
 
     @Test
     void searchPlacesFiltersByMultipleCategories() {
-        Place naturePlace = place("Nature Place", "NATURE", "JEJU", "description", true);
         Place foodPlace = place("Food Place", "FOOD", "JEJU", "description", true);
         Place cafePlace = place("Cafe Place", "CAFE", "JEJU", "description", true);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(naturePlace, foodPlace, cafePlace));
+        stubSearchPlaces(List.of(foodPlace, cafePlace));
 
         List<PlaceResponse> responses = placeService.searchPlaces(
                 null,
@@ -261,10 +297,9 @@ class PlaceServiceTest {
 
     @Test
     void searchPlacesMergesCategoryAndCategories() {
-        Place naturePlace = place("Nature Place", "NATURE", "JEJU", "description", true);
         Place foodPlace = place("Food Place", "FOOD", "JEJU", "description", true);
         Place cafePlace = place("Cafe Place", "CAFE", "JEJU", "description", true);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(naturePlace, foodPlace, cafePlace));
+        stubSearchPlaces(List.of(foodPlace, cafePlace));
 
         List<PlaceResponse> responses = placeService.searchPlaces(
                 null,
@@ -285,8 +320,7 @@ class PlaceServiceTest {
     @Test
     void searchPlacesFiltersByBounds() {
         Place inBounds = place("In Bounds", "NATURE", "EAST", "JEJU", "description", true, 33.5, 126.5);
-        Place outOfBounds = place("Out Of Bounds", "NATURE", "EAST", "JEJU", "description", true, 35.0, 128.0);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(inBounds, outOfBounds));
+        stubSearchPlaces(List.of(inBounds));
 
         List<PlaceResponse> responses = placeService.searchPlaces(
                 null,
@@ -330,13 +364,27 @@ class PlaceServiceTest {
         Place nameMatch = place("Ocean Cafe", "CAFE", "JEJU", "description", true);
         Place addressMatch = place("Other Place", "NATURE", "Seogwipo Ocean Road", "description", true);
         Place descriptionMatch = place("Third Place", "NATURE", "JEJU", "quiet ocean view", true);
-        Place noMatch = place("Mountain Place", "NATURE", "JEJU", "description", true);
-        when(placeRepository.findAll(any(Sort.class))).thenReturn(List.of(nameMatch, addressMatch, descriptionMatch, noMatch));
+        stubSearchPlaces(List.of(nameMatch, addressMatch, descriptionMatch));
 
         List<PlaceResponse> responses = placeService.searchPlaces(null, null, "ocean", null);
 
         assertThat(responses).extracting(PlaceResponse::name)
                 .containsExactly("Ocean Cafe", "Other Place", "Third Place");
+        ArgumentCaptor<String> keywordCaptor = ArgumentCaptor.forClass(String.class);
+        verify(placeRepository).searchPlaces(
+                any(),
+                any(),
+                any(),
+                anyBoolean(),
+                keywordCaptor.capture(),
+                anyBoolean(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(Sort.class)
+        );
+        assertThat(keywordCaptor.getValue()).isEqualTo("ocean");
     }
 
     @Test
@@ -362,6 +410,22 @@ class PlaceServiceTest {
 
     private Place place(String name) {
         return place(name, "NATURE", "JEJU", "description", true);
+    }
+
+    private void stubSearchPlaces(List<Place> places) {
+        when(placeRepository.searchPlaces(
+                any(),
+                any(),
+                any(),
+                anyBoolean(),
+                any(),
+                anyBoolean(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(Sort.class)
+        )).thenReturn(places);
     }
 
     private Place place(String name, String category, String address, String description, Boolean useYn) {
