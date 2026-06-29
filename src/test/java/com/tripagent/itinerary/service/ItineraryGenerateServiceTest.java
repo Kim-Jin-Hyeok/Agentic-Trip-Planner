@@ -493,6 +493,43 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateDraftItinerariesIncludesMealAndRestCandidatesWhenTopThirtyWouldExcludeThem() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = new java.util.ArrayList<>(
+                java.util.stream.IntStream.rangeClosed(1, 30)
+                        .mapToObj(placeId -> placeWithFoodScore((long) placeId, "NATURE", 1000 - placeId))
+                        .toList()
+        );
+        candidatePlaces.add(placeWithFoodScore(31L, "FOOD", 1));
+        candidatePlaces.add(placeWithFoodScore(32L, "CAFE", 1));
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(1L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(1L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList())).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        itineraryGenerateService.generateDraftItineraries(1L);
+
+        ArgumentCaptor<List<PlaceResponse>> candidateCaptor = ArgumentCaptor.forClass(List.class);
+        verify(itineraryPromptGenerator).generate(eq(trip), candidateCaptor.capture());
+        assertThat(candidateCaptor.getValue()).hasSize(30);
+        assertThat(candidateCaptor.getValue()).extracting(PlaceResponse::category)
+                .contains("FOOD", "CAFE", "NATURE");
+        assertThat(candidateCaptor.getValue()).extracting(PlaceResponse::placeId)
+                .contains(31L, 32L)
+                .doesNotContain(29L, 30L);
+    }
+
+    @Test
     void generateDraftItinerariesIncludesMustVisitPlaceOutsideTopThirty() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = java.util.stream.IntStream.rangeClosed(1, 31)

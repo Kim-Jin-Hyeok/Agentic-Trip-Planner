@@ -42,6 +42,12 @@ public class ItineraryPromptGenerator {
         prompt.append("- If preferredCategories is not empty, prioritize places in those categories when building the itinerary.\n");
         prompt.append("- mustVisitPlaceIds must be included even if their categories are not in preferredCategories.\n");
         prompt.append("- excludedPlaceIds must never be included regardless of preferredCategories.\n");
+        prompt.append("- Use concept as the overall trip mood and priority, not as the only category to schedule.\n");
+        prompt.append("- Do not fill every itinerary item with only one concept category.\n");
+        prompt.append("- When possible, include at least one FOOD place per day.\n");
+        prompt.append("- On days with 3 or more itinerary items, mix tour places such as NATURE, BEACH, GARDEN, or MUSEUM with rest or meal places such as FOOD or CAFE when possible.\n");
+        prompt.append("- Even for a CAFE concept, do not schedule only cafes back-to-back; include meals and tour places when possible.\n");
+        prompt.append("- Even for a NATURE concept, do not schedule only nature places back-to-back; include FOOD or CAFE places when possible.\n");
         prompt.append("- Follow the selected pace when choosing how many places to schedule each day.\n");
         prompt.append("- For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.\n");
         prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");

@@ -48,6 +48,12 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("If preferredCategories is not empty, prioritize places in those categories when building the itinerary.");
         assertThat(prompt).contains("mustVisitPlaceIds must be included even if their categories are not in preferredCategories.");
         assertThat(prompt).contains("excludedPlaceIds must never be included regardless of preferredCategories.");
+        assertThat(prompt).contains("Use concept as the overall trip mood and priority, not as the only category to schedule.");
+        assertThat(prompt).contains("Do not fill every itinerary item with only one concept category.");
+        assertThat(prompt).contains("When possible, include at least one FOOD place per day.");
+        assertThat(prompt).contains("On days with 3 or more itinerary items, mix tour places such as NATURE, BEACH, GARDEN, or MUSEUM with rest or meal places such as FOOD or CAFE when possible.");
+        assertThat(prompt).contains("Even for a CAFE concept, do not schedule only cafes back-to-back; include meals and tour places when possible.");
+        assertThat(prompt).contains("Even for a NATURE concept, do not schedule only nature places back-to-back; include FOOD or CAFE places when possible.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.");
         assertThat(prompt).contains("For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.");

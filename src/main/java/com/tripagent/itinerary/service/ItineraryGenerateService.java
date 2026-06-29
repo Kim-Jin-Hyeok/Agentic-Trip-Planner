@@ -44,6 +44,8 @@ public class ItineraryGenerateService {
 
     private static final int MAX_LLM_VALIDATION_RETRY_COUNT = 2;
     private static final int MAX_LLM_CANDIDATE_PLACE_COUNT = 30;
+    private static final Set<String> MEAL_AND_REST_CATEGORY_NAMES = Set.of("FOOD", "CAFE");
+    private static final Set<String> TOUR_CATEGORY_NAMES = Set.of("NATURE", "BEACH", "GARDEN", "MUSEUM");
     private static final String OPERATION_GENERATE = "generate";
     private static final String OPERATION_REGENERATE = "regenerate";
     private static final String OPERATION_GENERATE_DRAFT = "generateDraft";
@@ -574,11 +576,17 @@ public class ItineraryGenerateService {
 
         int ordinaryPlaceLimit = Math.max(0, MAX_LLM_CANDIDATE_PLACE_COUNT - mustVisitPlaces.size());
 
-        return java.util.stream.Stream.concat(
+        List<PlaceResponse> selectedCandidatePlaces = java.util.stream.Stream.concat(
                         mustVisitPlaces.stream(),
                         ordinaryPlaces.stream().limit(ordinaryPlaceLimit)
                 )
                 .toList();
+        return includeCategoryBalanceCandidates(
+                selectedCandidatePlaces,
+                filteredCandidatePlaces,
+                mustVisitPlaceIds,
+                candidatePlaceComparator(trip.getConcept(), request)
+        );
     }
 
     private List<PlaceResponse> filterExcludedCandidatePlaces(
@@ -592,6 +600,121 @@ public class ItineraryGenerateService {
         return candidatePlaces.stream()
                 .filter(candidatePlace -> !excludedPlaceIds.contains(candidatePlace.placeId()))
                 .toList();
+    }
+
+    private List<PlaceResponse> includeCategoryBalanceCandidates(
+            List<PlaceResponse> selectedCandidatePlaces,
+            List<PlaceResponse> candidatePlaces,
+            Set<Long> mustVisitPlaceIds,
+            Comparator<PlaceResponse> comparator
+    ) {
+        if (selectedCandidatePlaces.size() >= candidatePlaces.size()) {
+            return selectedCandidatePlaces;
+        }
+
+        List<PlaceResponse> balancedCandidatePlaces = new ArrayList<>(selectedCandidatePlaces);
+        includeCategoryGroupCandidate(
+                balancedCandidatePlaces,
+                candidatePlaces,
+                mustVisitPlaceIds,
+                comparator,
+                Set.of("FOOD")
+        );
+        includeCategoryGroupCandidate(
+                balancedCandidatePlaces,
+                candidatePlaces,
+                mustVisitPlaceIds,
+                comparator,
+                Set.of("CAFE")
+        );
+        includeCategoryGroupCandidate(
+                balancedCandidatePlaces,
+                candidatePlaces,
+                mustVisitPlaceIds,
+                comparator,
+                TOUR_CATEGORY_NAMES
+        );
+        return balancedCandidatePlaces;
+    }
+
+    private void includeCategoryGroupCandidate(
+            List<PlaceResponse> selectedCandidatePlaces,
+            List<PlaceResponse> candidatePlaces,
+            Set<Long> mustVisitPlaceIds,
+            Comparator<PlaceResponse> comparator,
+            Set<String> categoryNames
+    ) {
+        if (containsCategory(selectedCandidatePlaces, categoryNames)) {
+            return;
+        }
+
+        Set<Long> selectedPlaceIds = selectedCandidatePlaces.stream()
+                .map(PlaceResponse::placeId)
+                .collect(Collectors.toSet());
+
+        PlaceResponse categoryCandidate = candidatePlaces.stream()
+                .filter(candidatePlace -> !selectedPlaceIds.contains(candidatePlace.placeId()))
+                .filter(candidatePlace -> categoryNames.contains(candidatePlace.category()))
+                .min(comparator)
+                .orElse(null);
+        if (categoryCandidate == null) {
+            return;
+        }
+
+        int replacementIndex = lastReplaceableCandidateIndex(selectedCandidatePlaces, mustVisitPlaceIds);
+        if (replacementIndex < 0) {
+            return;
+        }
+
+        selectedCandidatePlaces.set(replacementIndex, categoryCandidate);
+    }
+
+    private boolean containsCategory(List<PlaceResponse> places, Set<String> categoryNames) {
+        return places.stream()
+                .anyMatch(place -> categoryNames.contains(place.category()));
+    }
+
+    private int lastReplaceableCandidateIndex(List<PlaceResponse> selectedCandidatePlaces, Set<Long> mustVisitPlaceIds) {
+        for (int index = selectedCandidatePlaces.size() - 1; index >= 0; index--) {
+            PlaceResponse candidatePlace = selectedCandidatePlaces.get(index);
+            if (!mustVisitPlaceIds.contains(candidatePlace.placeId())
+                    && !MEAL_AND_REST_CATEGORY_NAMES.contains(candidatePlace.category())
+                    && !TOUR_CATEGORY_NAMES.contains(candidatePlace.category())) {
+                return index;
+            }
+        }
+
+        for (int index = selectedCandidatePlaces.size() - 1; index >= 0; index--) {
+            PlaceResponse candidatePlace = selectedCandidatePlaces.get(index);
+            if (!mustVisitPlaceIds.contains(candidatePlace.placeId())
+                    && keepsExistingBalanceCategory(selectedCandidatePlaces, candidatePlace)) {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private boolean keepsExistingBalanceCategory(
+            List<PlaceResponse> selectedCandidatePlaces,
+            PlaceResponse candidatePlace
+    ) {
+        if ("FOOD".equals(candidatePlace.category())) {
+            return countCategory(selectedCandidatePlaces, Set.of("FOOD")) > 1;
+        }
+        if ("CAFE".equals(candidatePlace.category())) {
+            return countCategory(selectedCandidatePlaces, Set.of("CAFE")) > 1;
+        }
+        if (TOUR_CATEGORY_NAMES.contains(candidatePlace.category())) {
+            return countCategory(selectedCandidatePlaces, TOUR_CATEGORY_NAMES) > 1;
+        }
+        return true;
+    }
+
+    private long countCategory(List<PlaceResponse> places, Set<String> categoryNames) {
+        return places.stream()
+                .filter(place -> categoryNames.contains(place.category()))
+                .count();
     }
 
     private void validateCandidatePlacesEnoughForTripDays(
