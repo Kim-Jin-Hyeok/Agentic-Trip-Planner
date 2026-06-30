@@ -17,6 +17,7 @@ public record TripResponse(
         TripConcept concept,
         Transportation transportation,
         String lastAccommodationArea,
+        Long likeCount,
         TripVisibility visibility
 ) {
 
@@ -31,6 +32,7 @@ public record TripResponse(
                 trip.getConcept(),
                 trip.getTransportation(),
                 trip.getLastAccommodationArea(),
+                trip.getLikeCount(),
                 trip.getVisibility()
         );
     }

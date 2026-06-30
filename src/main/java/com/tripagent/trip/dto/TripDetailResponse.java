@@ -19,6 +19,7 @@ public record TripDetailResponse(
         TripConcept concept,
         Transportation transportation,
         String lastAccommodationArea,
+        Long likeCount,
         TripVisibility visibility,
         List<ItineraryResponse> itineraries
 ) {
@@ -34,6 +35,7 @@ public record TripDetailResponse(
                 trip.getConcept(),
                 trip.getTransportation(),
                 trip.getLastAccommodationArea(),
+                trip.getLikeCount(),
                 trip.getVisibility(),
                 itineraries
         );

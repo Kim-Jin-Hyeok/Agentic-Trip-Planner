@@ -3,13 +3,16 @@ package com.tripagent.trip.controller;
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.dto.TripDetailResponse;
+import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,5 +49,21 @@ public class PublicTripController {
     @GetMapping("/{tripId}")
     public ApiResponse<TripDetailResponse> getPublicTrip(@PathVariable Long tripId) {
         return ApiResponse.success(tripService.getPublicTrip(tripId));
+    }
+
+    @PostMapping("/{tripId}/likes")
+    public ApiResponse<TripLikeResponse> likePublicTrip(
+            @PathVariable Long tripId,
+            @RequestParam Long userId
+    ) {
+        return ApiResponse.success(tripService.likePublicTrip(tripId, userId));
+    }
+
+    @DeleteMapping("/{tripId}/likes")
+    public ApiResponse<TripLikeResponse> unlikePublicTrip(
+            @PathVariable Long tripId,
+            @RequestParam Long userId
+    ) {
+        return ApiResponse.success(tripService.unlikePublicTrip(tripId, userId));
     }
 }

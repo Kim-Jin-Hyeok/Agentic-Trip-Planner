@@ -117,6 +117,7 @@ class TripControllerTest {
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
+                0L,
                 TripVisibility.PRIVATE,
                 List.of()
         ));
@@ -141,6 +142,7 @@ class TripControllerTest {
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
+                0L,
                 TripVisibility.PUBLIC
         ));
 
@@ -191,6 +193,7 @@ class TripControllerTest {
                 concept,
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
+                0L,
                 TripVisibility.PRIVATE
         );
     }

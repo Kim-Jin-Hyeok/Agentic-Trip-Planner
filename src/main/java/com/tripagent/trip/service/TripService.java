@@ -5,10 +5,13 @@ import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
+import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
+import com.tripagent.trip.repository.TripLikeRepository;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -28,13 +31,16 @@ public class TripService {
 
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
+    private final TripLikeRepository tripLikeRepository;
 
     public TripService(
             TripRepository tripRepository,
-            ItineraryRepository itineraryRepository
+            ItineraryRepository itineraryRepository,
+            TripLikeRepository tripLikeRepository
     ) {
         this.tripRepository = tripRepository;
         this.itineraryRepository = itineraryRepository;
+        this.tripLikeRepository = tripLikeRepository;
     }
 
     @Transactional
@@ -147,6 +153,34 @@ public class TripService {
     }
 
     @Transactional
+    public TripLikeResponse likePublicTrip(Long tripId, Long userId) {
+        validateLikeUserId(userId);
+        Trip trip = findPublicTrip(tripId);
+
+        if (tripLikeRepository.existsByTrip_TripIdAndUserId(tripId, userId)) {
+            throw new IllegalArgumentException("Trip like already exists. tripId=" + tripId + ", userId=" + userId);
+        }
+
+        tripLikeRepository.save(TripLike.create(trip, userId));
+        trip.increaseLikeCount();
+        return new TripLikeResponse(trip.getTripId(), userId, trip.getLikeCount(), true);
+    }
+
+    @Transactional
+    public TripLikeResponse unlikePublicTrip(Long tripId, Long userId) {
+        validateLikeUserId(userId);
+        Trip trip = findPublicTrip(tripId);
+        TripLike tripLike = tripLikeRepository.findByTrip_TripIdAndUserId(tripId, userId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Trip like not found. tripId=" + tripId + ", userId=" + userId
+                ));
+
+        tripLikeRepository.delete(tripLike);
+        trip.decreaseLikeCount();
+        return new TripLikeResponse(trip.getTripId(), userId, trip.getLikeCount(), false);
+    }
+
+    @Transactional
     public TripResponse updateTripVisibility(Long tripId, TripVisibility visibility) {
         return updateTripVisibility(tripId, null, visibility);
     }
@@ -210,6 +244,17 @@ public class TripService {
         }
         if (!ownerId.equals(trip.getOwnerId())) {
             throw new IllegalArgumentException("Trip owner does not match. tripId=" + trip.getTripId());
+        }
+    }
+
+    private Trip findPublicTrip(Long tripId) {
+        return tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
+                .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
+    }
+
+    private void validateLikeUserId(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("Trip like userId is required.");
         }
     }
 

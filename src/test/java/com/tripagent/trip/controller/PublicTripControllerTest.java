@@ -1,7 +1,10 @@
 package com.tripagent.trip.controller;
 
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -10,6 +13,7 @@ import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.TripDetailResponse;
+import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
@@ -76,6 +80,7 @@ class PublicTripControllerTest {
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
+                3L,
                 TripVisibility.PUBLIC,
                 List.of()
         ));
@@ -86,6 +91,40 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.tripId").value(1L))
                 .andExpect(jsonPath("$.data.visibility").value("PUBLIC"))
                 .andExpect(jsonPath("$.data.itineraries").isArray());
+    }
+
+    @Test
+    void likePublicTripReturnsCommonSuccessResponse() throws Exception {
+        when(tripService.likePublicTrip(1L, 100L))
+                .thenReturn(new TripLikeResponse(1L, 100L, 1L, true));
+
+        mockMvc.perform(post("/api/public/trips/1/likes")
+                        .param("userId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.tripId").value(1L))
+                .andExpect(jsonPath("$.data.userId").value(100L))
+                .andExpect(jsonPath("$.data.likeCount").value(1L))
+                .andExpect(jsonPath("$.data.liked").value(true));
+
+        verify(tripService).likePublicTrip(1L, 100L);
+    }
+
+    @Test
+    void unlikePublicTripReturnsCommonSuccessResponse() throws Exception {
+        when(tripService.unlikePublicTrip(1L, 100L))
+                .thenReturn(new TripLikeResponse(1L, 100L, 0L, false));
+
+        mockMvc.perform(delete("/api/public/trips/1/likes")
+                        .param("userId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.tripId").value(1L))
+                .andExpect(jsonPath("$.data.userId").value(100L))
+                .andExpect(jsonPath("$.data.likeCount").value(0L))
+                .andExpect(jsonPath("$.data.liked").value(false));
+
+        verify(tripService).unlikePublicTrip(1L, 100L);
     }
 
     @Test
@@ -115,6 +154,7 @@ class PublicTripControllerTest {
                 concept,
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
+                0L,
                 TripVisibility.PUBLIC
         );
     }

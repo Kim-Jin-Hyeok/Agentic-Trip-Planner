@@ -16,10 +16,13 @@ import com.tripagent.place.domain.Place;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
+import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
+import com.tripagent.trip.repository.TripLikeRepository;
 import com.tripagent.trip.repository.TripRepository;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
@@ -44,6 +47,9 @@ class TripServiceTest {
 
     @Mock
     private ItineraryRepository itineraryRepository;
+
+    @Mock
+    private TripLikeRepository tripLikeRepository;
 
     @InjectMocks
     private TripService tripService;
@@ -70,6 +76,7 @@ class TripServiceTest {
         assertThat(response.concept()).isEqualTo(TripConcept.HEALING);
         assertThat(response.transportation()).isEqualTo(Transportation.RENT_CAR);
         assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
+        assertThat(response.likeCount()).isZero();
         verify(tripRepository).save(any(Trip.class));
     }
 
@@ -544,6 +551,88 @@ class TripServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip visibility is required.");
         verify(tripRepository, never()).findById(1L);
+    }
+
+    @Test
+    void likePublicTripCreatesLikeAndIncreasesCount() {
+        Trip trip = trip(1L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(tripLikeRepository.existsByTrip_TripIdAndUserId(1L, 100L)).thenReturn(false);
+        when(tripLikeRepository.save(any(TripLike.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TripLikeResponse response = tripService.likePublicTrip(1L, 100L);
+
+        assertThat(response.tripId()).isEqualTo(1L);
+        assertThat(response.userId()).isEqualTo(100L);
+        assertThat(response.likeCount()).isEqualTo(1L);
+        assertThat(response.liked()).isTrue();
+        assertThat(trip.getLikeCount()).isEqualTo(1L);
+        verify(tripLikeRepository).save(any(TripLike.class));
+    }
+
+    @Test
+    void likePublicTripRejectsPrivateTrip() {
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tripService.likePublicTrip(1L, 100L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Public trip not found. tripId=1");
+        verify(tripLikeRepository, never()).save(any());
+    }
+
+    @Test
+    void likePublicTripRejectsDuplicatedLike() {
+        Trip trip = trip(1L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(tripLikeRepository.existsByTrip_TripIdAndUserId(1L, 100L)).thenReturn(true);
+
+        assertThatThrownBy(() -> tripService.likePublicTrip(1L, 100L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip like already exists. tripId=1, userId=100");
+        assertThat(trip.getLikeCount()).isZero();
+        verify(tripLikeRepository, never()).save(any());
+    }
+
+    @Test
+    void likePublicTripRejectsNullUserId() {
+        assertThatThrownBy(() -> tripService.likePublicTrip(1L, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip like userId is required.");
+        verify(tripRepository, never()).findByTripIdAndVisibility(any(), any());
+    }
+
+    @Test
+    void unlikePublicTripDeletesLikeAndDecreasesCount() {
+        Trip trip = trip(1L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        trip.increaseLikeCount();
+        TripLike tripLike = TripLike.create(trip, 100L);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(tripLikeRepository.findByTrip_TripIdAndUserId(1L, 100L)).thenReturn(Optional.of(tripLike));
+
+        TripLikeResponse response = tripService.unlikePublicTrip(1L, 100L);
+
+        assertThat(response.tripId()).isEqualTo(1L);
+        assertThat(response.userId()).isEqualTo(100L);
+        assertThat(response.likeCount()).isZero();
+        assertThat(response.liked()).isFalse();
+        assertThat(trip.getLikeCount()).isZero();
+        verify(tripLikeRepository).delete(tripLike);
+    }
+
+    @Test
+    void unlikePublicTripRejectsMissingLike() {
+        Trip trip = trip(1L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(tripLikeRepository.findByTrip_TripIdAndUserId(1L, 100L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tripService.unlikePublicTrip(1L, 100L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Trip like not found. tripId=1, userId=100");
+        verify(tripLikeRepository, never()).delete(any());
     }
 
     @Test
