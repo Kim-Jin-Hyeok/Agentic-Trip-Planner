@@ -45,6 +45,10 @@ public class Trip {
     @Column(length = 50)
     private String lastAccommodationArea;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TripVisibility visibility;
+
     protected Trip() {
     }
 
@@ -66,6 +70,7 @@ public class Trip {
         this.concept = concept;
         this.transportation = transportation;
         this.lastAccommodationArea = lastAccommodationArea;
+        this.visibility = TripVisibility.PRIVATE;
     }
 
     public static Trip create(
@@ -124,5 +129,16 @@ public class Trip {
 
     public String getLastAccommodationArea() {
         return lastAccommodationArea;
+    }
+
+    public TripVisibility getVisibility() {
+        return visibility;
+    }
+
+    public void changeVisibility(TripVisibility visibility) {
+        if (visibility == null) {
+            throw new IllegalArgumentException("Trip visibility is required.");
+        }
+        this.visibility = visibility;
     }
 }

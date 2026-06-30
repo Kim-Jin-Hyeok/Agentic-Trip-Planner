@@ -16,6 +16,7 @@ import com.tripagent.place.domain.Place;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
@@ -67,6 +68,7 @@ class TripServiceTest {
         assertThat(response.dailyEndTime()).isEqualTo(LocalTime.of(18, 0));
         assertThat(response.concept()).isEqualTo(TripConcept.HEALING);
         assertThat(response.transportation()).isEqualTo(Transportation.RENT_CAR);
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
         verify(tripRepository).save(any(Trip.class));
     }
 
@@ -395,6 +397,72 @@ class TripServiceTest {
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.orderNo())
                 .containsExactly(1, 2);
         verify(itineraryRepository).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
+    }
+
+    @Test
+    void searchPublicTripsReturnsOnlyPublicTripsByTripIdDescendingOrder() {
+        Trip publicTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        publicTrip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        )).thenReturn(List.of(publicTrip));
+
+        List<TripResponse> responses = tripService.searchPublicTrips(null, null, null, null, null, null);
+
+        assertThat(responses).extracting(TripResponse::tripId)
+                .containsExactly(2L);
+        assertThat(responses).extracting(TripResponse::visibility)
+                .containsExactly(TripVisibility.PUBLIC);
+    }
+
+    @Test
+    void getPublicTripReturnsPublicTripDetailWithItineraries() {
+        Trip trip = trip(1L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
+
+        TripDetailResponse response = tripService.getPublicTrip(1L);
+
+        assertThat(response.tripId()).isEqualTo(1L);
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
+        assertThat(response.itineraries()).isEmpty();
+    }
+
+    @Test
+    void getPublicTripRejectsPrivateTrip() {
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tripService.getPublicTrip(1L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Public trip not found. tripId=1");
+        verify(itineraryRepository, never()).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
+    }
+
+    @Test
+    void updateTripVisibilityChangesVisibility() {
+        Trip trip = trip(1L);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        TripResponse response = tripService.updateTripVisibility(1L, TripVisibility.PUBLIC);
+
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
+        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PUBLIC);
+    }
+
+    @Test
+    void updateTripVisibilityRejectsNullVisibility() {
+        assertThatThrownBy(() -> tripService.updateTripVisibility(1L, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip visibility is required.");
+        verify(tripRepository, never()).findById(1L);
     }
 
     @Test

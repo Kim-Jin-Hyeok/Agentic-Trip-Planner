@@ -2,8 +2,10 @@ package com.tripagent.trip.repository;
 
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.domain.TripVisibility;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -30,4 +32,28 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             @Param("endDateTo") LocalDate endDateTo,
             Sort sort
     );
+
+    @Query("""
+            select t
+            from Trip t
+            where t.visibility = :visibility
+              and (:destination is null or lower(t.destination) like concat('%', :destination, '%'))
+              and (:concept is null or t.concept = :concept)
+              and (:startDateFrom is null or t.startDate >= :startDateFrom)
+              and (:startDateTo is null or t.startDate <= :startDateTo)
+              and (:endDateFrom is null or t.endDate >= :endDateFrom)
+              and (:endDateTo is null or t.endDate <= :endDateTo)
+            """)
+    List<Trip> searchTripsByVisibility(
+            @Param("visibility") TripVisibility visibility,
+            @Param("destination") String destination,
+            @Param("concept") TripConcept concept,
+            @Param("startDateFrom") LocalDate startDateFrom,
+            @Param("startDateTo") LocalDate startDateTo,
+            @Param("endDateFrom") LocalDate endDateFrom,
+            @Param("endDateTo") LocalDate endDateTo,
+            Sort sort
+    );
+
+    Optional<Trip> findByTripIdAndVisibility(Long tripId, TripVisibility visibility);
 }

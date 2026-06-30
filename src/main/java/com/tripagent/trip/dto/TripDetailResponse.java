@@ -4,6 +4,7 @@ import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.domain.TripVisibility;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -18,6 +19,7 @@ public record TripDetailResponse(
         TripConcept concept,
         Transportation transportation,
         String lastAccommodationArea,
+        TripVisibility visibility,
         List<ItineraryResponse> itineraries
 ) {
 
@@ -32,6 +34,7 @@ public record TripDetailResponse(
                 trip.getConcept(),
                 trip.getTransportation(),
                 trip.getLastAccommodationArea(),
+                trip.getVisibility(),
                 itineraries
         );
     }

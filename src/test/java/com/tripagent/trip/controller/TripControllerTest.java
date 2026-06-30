@@ -6,6 +6,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,6 +14,7 @@ import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
@@ -115,6 +117,7 @@ class TripControllerTest {
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
+                TripVisibility.PRIVATE,
                 List.of()
         ));
 
@@ -122,7 +125,32 @@ class TripControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.tripId").value(1L))
+                .andExpect(jsonPath("$.data.visibility").value("PRIVATE"))
                 .andExpect(jsonPath("$.data.itineraries").isArray());
+    }
+
+    @Test
+    void updateTripVisibilityReturnsCommonSuccessResponse() throws Exception {
+        when(tripService.updateTripVisibility(1L, TripVisibility.PUBLIC)).thenReturn(new TripResponse(
+                1L,
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                TripVisibility.PUBLIC
+        ));
+
+        mockMvc.perform(patch("/api/trips/1/visibility")
+                        .contentType("application/json")
+                        .content("{\"visibility\":\"PUBLIC\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.tripId").value(1L))
+                .andExpect(jsonPath("$.data.visibility").value("PUBLIC"));
     }
 
     @Test
@@ -162,7 +190,8 @@ class TripControllerTest {
                 LocalTime.of(18, 0),
                 concept,
                 Transportation.RENT_CAR,
-                "SEOGWIPO"
+                "SEOGWIPO",
+                TripVisibility.PRIVATE
         );
     }
 }

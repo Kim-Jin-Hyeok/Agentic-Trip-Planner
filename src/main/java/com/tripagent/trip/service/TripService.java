@@ -5,6 +5,7 @@ import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
@@ -91,6 +92,58 @@ public class TripService {
                 .toList();
 
         return TripDetailResponse.from(trip, itineraries);
+    }
+
+    public List<TripResponse> searchPublicTrips(
+            String destination,
+            TripConcept concept,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
+            LocalDate endDateFrom,
+            LocalDate endDateTo
+    ) {
+        validateDateRange("startDate", startDateFrom, startDateTo);
+        validateDateRange("endDate", endDateFrom, endDateTo);
+
+        String normalizedDestination = normalizeKeyword(destination);
+
+        return tripRepository.searchTripsByVisibility(
+                        TripVisibility.PUBLIC,
+                        normalizedDestination,
+                        concept,
+                        startDateFrom,
+                        startDateTo,
+                        endDateFrom,
+                        endDateTo,
+                        Sort.by(Sort.Direction.DESC, "tripId")
+                )
+                .stream()
+                .map(TripResponse::from)
+                .toList();
+    }
+
+    public TripDetailResponse getPublicTrip(Long tripId) {
+        Trip trip = tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
+                .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
+        List<ItineraryResponse> itineraries = itineraryRepository
+                .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
+                .stream()
+                .map(ItineraryResponse::from)
+                .toList();
+
+        return TripDetailResponse.from(trip, itineraries);
+    }
+
+    @Transactional
+    public TripResponse updateTripVisibility(Long tripId, TripVisibility visibility) {
+        if (visibility == null) {
+            throw new IllegalArgumentException("Trip visibility is required.");
+        }
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        trip.changeVisibility(visibility);
+        return TripResponse.from(trip);
     }
 
     @Transactional
