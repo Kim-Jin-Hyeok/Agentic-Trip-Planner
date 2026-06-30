@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 
 @Entity
 @Table(name = "trips")
@@ -27,6 +28,9 @@ public class Trip {
 
     @Column(nullable = false)
     private LocalDate endDate;
+
+    @Column(nullable = false)
+    private Integer nights;
 
     @Column(nullable = false)
     private LocalTime dailyStartTime;
@@ -72,6 +76,7 @@ public class Trip {
         this.destination = destination;
         this.startDate = startDate;
         this.endDate = endDate;
+        this.nights = Math.toIntExact(ChronoUnit.DAYS.between(startDate, endDate));
         this.dailyStartTime = dailyStartTime;
         this.dailyEndTime = dailyEndTime;
         this.concept = concept;
@@ -143,6 +148,10 @@ public class Trip {
 
     public LocalDate getEndDate() {
         return endDate;
+    }
+
+    public Integer getNights() {
+        return nights;
     }
 
     public LocalTime getDailyStartTime() {

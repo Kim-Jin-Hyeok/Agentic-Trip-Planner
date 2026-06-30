@@ -42,7 +42,7 @@ class PublicTripControllerTest {
 
     @Test
     void searchPublicTripsReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.searchPublicTrips(null, null, null, null, null, null, PublicTripSort.LATEST))
+        when(tripService.searchPublicTrips(null, null, null, null, null, null, null, PublicTripSort.LATEST))
                 .thenReturn(List.of(trip(2L)));
 
         mockMvc.perform(get("/api/public/trips"))
@@ -63,6 +63,7 @@ class PublicTripControllerTest {
                 startDateTo,
                 null,
                 null,
+                2,
                 PublicTripSort.POPULAR
         ))
                 .thenReturn(List.of(trip(3L, TripConcept.FOOD)));
@@ -72,6 +73,7 @@ class PublicTripControllerTest {
                         .param("concept", "FOOD")
                         .param("startDateFrom", "2026-07-01")
                         .param("startDateTo", "2026-07-10")
+                        .param("nights", "2")
                         .param("sort", "POPULAR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].tripId").value(3L))
@@ -85,6 +87,7 @@ class PublicTripControllerTest {
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
+                2,
                 LocalTime.of(9, 0),
                 LocalTime.of(18, 0),
                 TripConcept.HEALING,
@@ -159,6 +162,7 @@ class PublicTripControllerTest {
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
+                2,
                 LocalTime.of(9, 0),
                 LocalTime.of(18, 0),
                 concept,

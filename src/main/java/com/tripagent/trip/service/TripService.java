@@ -128,6 +128,7 @@ public class TripService {
                 startDateTo,
                 endDateFrom,
                 endDateTo,
+                null,
                 PublicTripSort.LATEST
         );
     }
@@ -141,8 +142,31 @@ public class TripService {
             LocalDate endDateTo,
             PublicTripSort publicTripSort
     ) {
+        return searchPublicTrips(
+                destination,
+                concept,
+                startDateFrom,
+                startDateTo,
+                endDateFrom,
+                endDateTo,
+                null,
+                publicTripSort
+        );
+    }
+
+    public List<TripResponse> searchPublicTrips(
+            String destination,
+            TripConcept concept,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
+            LocalDate endDateFrom,
+            LocalDate endDateTo,
+            Integer nights,
+            PublicTripSort publicTripSort
+    ) {
         validateDateRange("startDate", startDateFrom, startDateTo);
         validateDateRange("endDate", endDateFrom, endDateTo);
+        validateNights(nights);
 
         String normalizedDestination = normalizeKeyword(destination);
         Sort sort = publicTripSort(publicTripSort);
@@ -155,6 +179,7 @@ public class TripService {
                         startDateTo,
                         endDateFrom,
                         endDateTo,
+                        nights,
                         sort
                 )
                 .stream()
@@ -283,6 +308,15 @@ public class TripService {
     private void validateDateRange(String fieldName, LocalDate from, LocalDate to) {
         if (from != null && to != null && from.isAfter(to)) {
             throw new IllegalArgumentException(fieldName + "From must be less than or equal to " + fieldName + "To.");
+        }
+    }
+
+    private void validateNights(Integer nights) {
+        if (nights == null) {
+            return;
+        }
+        if (nights < MIN_NIGHTS || nights > MAX_NIGHTS) {
+            throw new IllegalArgumentException("Trip nights must be between 1 and 3.");
         }
     }
 

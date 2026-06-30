@@ -45,6 +45,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
               and (:startDateTo is null or t.startDate <= :startDateTo)
               and (:endDateFrom is null or t.endDate >= :endDateFrom)
               and (:endDateTo is null or t.endDate <= :endDateTo)
+              and (:nights is null or t.nights = :nights)
             """)
     List<Trip> searchTripsByVisibility(
             @Param("visibility") TripVisibility visibility,
@@ -54,6 +55,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             @Param("startDateTo") LocalDate startDateTo,
             @Param("endDateFrom") LocalDate endDateFrom,
             @Param("endDateTo") LocalDate endDateTo,
+            @Param("nights") Integer nights,
             Sort sort
     );
 

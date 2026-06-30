@@ -36,6 +36,7 @@ public class PublicTripController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDateTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDateTo,
+            @RequestParam(required = false) Integer nights,
             @RequestParam(required = false, defaultValue = "LATEST") PublicTripSort sort
     ) {
         return ApiResponse.success(tripService.searchPublicTrips(
@@ -45,6 +46,7 @@ public class PublicTripController {
                 startDateTo,
                 endDateFrom,
                 endDateTo,
+                nights,
                 sort
         ));
     }

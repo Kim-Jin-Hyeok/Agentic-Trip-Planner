@@ -74,6 +74,7 @@ class TripServiceTest {
         assertThat(response.destination()).isEqualTo("JEJU");
         assertThat(response.dailyStartTime()).isEqualTo(LocalTime.of(9, 0));
         assertThat(response.dailyEndTime()).isEqualTo(LocalTime.of(18, 0));
+        assertThat(response.nights()).isEqualTo(2);
         assertThat(response.concept()).isEqualTo(TripConcept.HEALING);
         assertThat(response.transportation()).isEqualTo(Transportation.RENT_CAR);
         assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
@@ -443,6 +444,7 @@ class TripServiceTest {
                 isNull(),
                 isNull(),
                 isNull(),
+                isNull(),
                 eq(Sort.by(Sort.Direction.DESC, "tripId"))
         )).thenReturn(List.of(publicTrip));
 
@@ -468,6 +470,7 @@ class TripServiceTest {
                 isNull(),
                 isNull(),
                 isNull(),
+                isNull(),
                 eq(popularSort)
         )).thenReturn(List.of(popularTrip));
 
@@ -485,6 +488,54 @@ class TripServiceTest {
                 .containsExactly(3L);
         assertThat(responses).extracting(TripResponse::likeCount)
                 .containsExactly(1L);
+    }
+
+    @Test
+    void searchPublicTripsFiltersByNights() {
+        Trip twoNightTrip = trip(4L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        twoNightTrip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(2),
+                eq(Sort.by(Sort.Direction.DESC, "tripId"))
+        )).thenReturn(List.of(twoNightTrip));
+
+        List<TripResponse> responses = tripService.searchPublicTrips(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                2,
+                PublicTripSort.LATEST
+        );
+
+        assertThat(responses).extracting(TripResponse::nights)
+                .containsExactly(2);
+    }
+
+    @Test
+    void searchPublicTripsRejectsInvalidNights() {
+        assertThatThrownBy(() -> tripService.searchPublicTrips(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                4,
+                PublicTripSort.LATEST
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip nights must be between 1 and 3.");
+        verify(tripRepository, never()).searchTripsByVisibility(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
