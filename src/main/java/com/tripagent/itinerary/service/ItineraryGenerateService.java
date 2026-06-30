@@ -196,12 +196,13 @@ public class ItineraryGenerateService {
 
         for (int attempt = 0; attempt <= MAX_LLM_VALIDATION_RETRY_COUNT; attempt++) {
             int attemptNumber = attempt + 1;
+            String attemptPrompt = promptForValidationAttempt(prompt, lastValidationException);
             try {
                 List<ItineraryCreateRequest> createRequests = generateValidatedDraftItinerary(
                         trip,
                         candidatePlaces,
                         request,
-                        prompt
+                        attemptPrompt
                 );
                 logDraftGenerationSuccess(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces);
                 return createRequests;
@@ -224,6 +225,19 @@ public class ItineraryGenerateService {
 
         logFinalValidationFailure(trip, operation, maxAttemptCount, request, candidatePlaces, lastValidationException);
         throw lastValidationException;
+    }
+
+    private String promptForValidationAttempt(String prompt, IllegalArgumentException lastValidationException) {
+        if (lastValidationException == null) {
+            return prompt;
+        }
+
+        return prompt
+                + "\nPrevious validation failure:\n"
+                + "- "
+                + lastValidationException.getMessage()
+                + "\nCorrect the itinerary so this validation failure is not repeated.\n"
+                + "Return JSON only. Do not include markdown or explanation outside JSON.\n";
     }
 
     private List<ItineraryCreateRequest> generateValidatedDraftItinerary(

@@ -111,7 +111,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -168,7 +168,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -244,14 +244,14 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
         assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Generated itinerary must include at least one item for every trip day. missingDayNos=[2]");
-        verify(llmClient, times(3)).generate(prompt);
+        verify(llmClient, times(3)).generate(anyString());
         verify(itineraryService, never()).createItinerary(any(), any());
     }
 
@@ -271,7 +271,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmClient.generate(anyString())).thenReturn(firstRawResponse, secondRawResponse);
         when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
         when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
@@ -281,7 +281,15 @@ class ItineraryGenerateServiceTest {
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
 
         assertThat(responses).hasSize(4);
-        verify(llmClient, times(2)).generate(prompt);
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(llmClient, times(2)).generate(promptCaptor.capture());
+        assertThat(promptCaptor.getAllValues().get(0)).isEqualTo(prompt);
+        assertThat(promptCaptor.getAllValues().get(1))
+                .contains("Previous validation failure:")
+                .contains("Generated itinerary item count per day does not match pace policy. pace=NORMAL, "
+                        + "dayNo=1, itemCount=6, minItemsPerDay=4, maxItemsPerDay=5")
+                .contains("Correct the itinerary so this validation failure is not repeated.")
+                .contains("Return JSON only. Do not include markdown or explanation outside JSON.");
         verify(itineraryService, times(4)).createItinerary(eq(1L), any());
     }
 
@@ -624,7 +632,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -652,7 +660,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(eq(trip), anyList())).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -687,7 +695,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(eq(trip), anyList())).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -721,7 +729,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -753,7 +761,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -789,7 +797,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -819,7 +827,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(eq(trip), anyList())).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -855,7 +863,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, filteredCandidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -888,7 +896,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
@@ -951,7 +959,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createGeneratedItinerary(
@@ -1006,7 +1014,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
@@ -1071,7 +1079,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createGeneratedItinerary(
@@ -1134,7 +1142,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
@@ -1182,7 +1190,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmClient.generate(anyString())).thenReturn(firstRawResponse, secondRawResponse);
         when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
         when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
@@ -1196,7 +1204,7 @@ class ItineraryGenerateServiceTest {
 
         assertThat(responses).extracting(ItineraryResponse::placeId)
                 .containsExactly(10L, 20L);
-        verify(llmClient, times(2)).generate(prompt);
+        verify(llmClient, times(2)).generate(anyString());
         verify(candidatePlaceValidator).validatePlaceIds(selectedCandidatePlaces, List.of(10L, 20L));
     }
 
@@ -1230,7 +1238,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, filteredCandidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmClient.generate(anyString())).thenReturn(firstRawResponse, secondRawResponse);
         when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
         when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
@@ -1244,7 +1252,7 @@ class ItineraryGenerateServiceTest {
 
         assertThat(responses).extracting(ItineraryResponse::placeId)
                 .containsExactly(10L, 20L);
-        verify(llmClient, times(2)).generate(prompt);
+        verify(llmClient, times(2)).generate(anyString());
         verify(candidatePlaceValidator).validatePlaceIds(filteredCandidatePlaces, List.of(10L, 20L));
     }
 
@@ -1278,7 +1286,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmClient.generate(anyString())).thenReturn(firstRawResponse, secondRawResponse);
         when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
         when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
@@ -1297,7 +1305,7 @@ class ItineraryGenerateServiceTest {
 
         assertThat(responses).extracting(ItineraryResponse::placeId)
                 .containsExactly(10L, 20L);
-        verify(llmClient, times(2)).generate(prompt);
+        verify(llmClient, times(2)).generate(anyString());
         verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 10L));
         verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
         verify(itineraryService).createItinerary(
@@ -1331,7 +1339,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         doThrow(new IllegalArgumentException("Place id must not be duplicated in generated itinerary. placeId=10"))
@@ -1341,7 +1349,7 @@ class ItineraryGenerateServiceTest {
         assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Place id must not be duplicated in generated itinerary. placeId=10");
-        verify(llmClient, times(3)).generate(prompt);
+        verify(llmClient, times(3)).generate(anyString());
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 10L));
         verify(itineraryService, never()).createItinerary(
                 1L,
@@ -1370,7 +1378,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
@@ -1416,7 +1424,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         doReturn(0).when(routeCalculationAdapter).calculateTravelMinutes(null, candidatePlaces.get(0));
@@ -1457,7 +1465,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         doReturn(0).when(routeCalculationAdapter).calculateTravelMinutes(null, candidatePlaces.get(0));
@@ -1467,7 +1475,7 @@ class ItineraryGenerateServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Itinerary travelMinutesFromPrevious must be less than or equal to 90. "
                         + "dayNo=1, orderNo=2, travelMinutesFromPrevious=91");
-        verify(llmClient, times(3)).generate(prompt);
+        verify(llmClient, times(3)).generate(anyString());
         verify(itineraryService, never()).createItinerary(
                 1L,
                 request(20L, 2, LocalTime.of(11, 40), LocalTime.of(12, 40), 91)
@@ -1504,7 +1512,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmClient.generate(anyString())).thenReturn(firstRawResponse, secondRawResponse);
         when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
         when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
@@ -1518,7 +1526,7 @@ class ItineraryGenerateServiceTest {
 
         assertThat(responses).extracting(ItineraryResponse::placeId)
                 .containsExactly(10L, 30L);
-        verify(llmClient, times(2)).generate(prompt);
+        verify(llmClient, times(2)).generate(anyString());
         verify(itineraryService).createItinerary(
                 1L,
                 request(30L, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 5)
@@ -1546,7 +1554,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -1585,14 +1593,14 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
         assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Itinerary endTime must be at or before trip dailyEndTime. dayNo=1");
-        verify(llmClient, times(3)).generate(prompt);
+        verify(llmClient, times(3)).generate(anyString());
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
         verify(itineraryService, never()).createItinerary(
                 1L,
@@ -1635,14 +1643,14 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
         assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Itinerary startTime must be at or after day time window startTime. dayNo=1");
-        verify(llmClient, times(3)).generate(prompt);
+        verify(llmClient, times(3)).generate(anyString());
         verify(itineraryService, never()).createItinerary(eq(1L), any());
     }
 
@@ -1675,7 +1683,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -1725,7 +1733,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -1756,7 +1764,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -1779,7 +1787,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenThrow(
+        when(llmClient.generate(anyString())).thenThrow(
                 LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
         );
 
@@ -1807,7 +1815,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenThrow(
+        when(llmClient.generate(anyString())).thenThrow(
                 LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
         );
 
@@ -1842,7 +1850,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
@@ -1880,14 +1888,14 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
         assertThatThrownBy(() -> itineraryGenerateService.regenerateItineraries(1L, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Generated itinerary must include mustVisitPlaceId. placeId=20");
-        verify(llmClient, times(3)).generate(prompt);
+        verify(llmClient, times(3)).generate(anyString());
         verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
         verify(itineraryService, never()).createItinerary(
                 1L,
@@ -1931,7 +1939,7 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         stubSuccessfulItinerarySaves(itemCount);
@@ -1963,14 +1971,14 @@ class ItineraryGenerateServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
         when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
-        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
         assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage(expectedMessage);
-        verify(llmClient, times(3)).generate(prompt);
+        verify(llmClient, times(3)).generate(anyString());
         verify(itineraryService, never()).createItinerary(any(), any());
     }
 
