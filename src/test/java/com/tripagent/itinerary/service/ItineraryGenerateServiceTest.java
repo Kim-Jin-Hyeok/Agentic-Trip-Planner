@@ -105,7 +105,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
@@ -128,7 +128,7 @@ class ItineraryGenerateServiceTest {
         assertThat(drafts.get(1).startTime()).isEqualTo(LocalTime.of(10, 30));
         assertThat(drafts.get(1).endTime()).isEqualTo(LocalTime.of(12, 0));
         assertThat(drafts).extracting(ItineraryCreateRequest::travelMinutesFromPrevious)
-                .containsExactly(0, 30);
+                .containsExactly(0, 5);
         verify(placeService).findCandidatePlaces(TripConcept.FOOD);
         verify(itineraryPromptGenerator).generate(trip, candidatePlaces);
         verify(llmClient).generate(prompt);
@@ -153,7 +153,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
@@ -445,7 +445,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
@@ -708,7 +708,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -719,7 +719,7 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
-        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
                 .thenReturn(response(200L, 1L, 20L, 2));
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
@@ -735,7 +735,7 @@ class ItineraryGenerateServiceTest {
         );
         verify(itineraryService).createItinerary(
                 1L,
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
     }
 
@@ -827,7 +827,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
@@ -837,7 +837,7 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
-        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
                 .thenReturn(response(200L, 1L, 20L, 2));
 
         List<ItineraryResponse> responses = itineraryGenerateService.regenerateItineraries(1L);
@@ -856,7 +856,7 @@ class ItineraryGenerateServiceTest {
         );
         inOrder.verify(itineraryService).createItinerary(
                 1L,
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
     }
 
@@ -954,7 +954,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -965,7 +965,7 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
-        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
                 .thenReturn(response(200L, 1L, 20L, 2));
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
@@ -1002,7 +1002,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> secondCreateRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -1015,7 +1015,7 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryResponseConverter.toCreateRequests(secondParsedItems)).thenReturn(secondCreateRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
-        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
                 .thenReturn(response(200L, 1L, 20L, 2));
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
@@ -1050,7 +1050,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> secondCreateRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -1063,7 +1063,7 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryResponseConverter.toCreateRequests(secondParsedItems)).thenReturn(secondCreateRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
-        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
                 .thenReturn(response(200L, 1L, 20L, 2));
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
@@ -1098,7 +1098,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> secondCreateRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -1116,7 +1116,7 @@ class ItineraryGenerateServiceTest {
         doNothing().when(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
-        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
                 .thenReturn(response(200L, 1L, 20L, 2));
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
@@ -1132,7 +1132,7 @@ class ItineraryGenerateServiceTest {
         );
         verify(itineraryService).createItinerary(
                 1L,
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
     }
 
@@ -1201,7 +1201,7 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
-        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)))
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
                 .thenReturn(response(200L, 1L, 20L, 2));
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
@@ -1217,7 +1217,7 @@ class ItineraryGenerateServiceTest {
         );
         verify(itineraryService).createItinerary(
                 1L,
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
     }
 
@@ -1236,7 +1236,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -1256,7 +1256,7 @@ class ItineraryGenerateServiceTest {
         );
         verify(itineraryService, never()).createItinerary(
                 1L,
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
     }
 
@@ -1275,7 +1275,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
@@ -1296,7 +1296,7 @@ class ItineraryGenerateServiceTest {
         );
         verify(itineraryService, never()).createItinerary(
                 1L,
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
     }
 
@@ -1533,7 +1533,7 @@ class ItineraryGenerateServiceTest {
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);

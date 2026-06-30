@@ -22,19 +22,39 @@ class SimpleRouteCalculationAdapterTest {
     }
 
     @Test
-    void calculateTravelMinutesReturnsDefaultMinutesForDifferentPlaces() {
-        assertThat(adapter.calculateTravelMinutes(place(10L), place(20L))).isEqualTo(30);
+    void calculateTravelMinutesReturnsMinimumMinutesForVeryCloseDifferentPlaces() {
+        assertThat(adapter.calculateTravelMinutes(place(10L), place(20L))).isEqualTo(5);
+    }
+
+    @Test
+    void calculateTravelMinutesReturnsDistanceBasedMinutes() {
+        PlaceResponse previousPlace = place(10L, 33.458056, 126.942500);
+        PlaceResponse currentPlace = place(20L, 33.305833, 126.289444);
+
+        assertThat(adapter.calculateTravelMinutes(previousPlace, currentPlace)).isEqualTo(146);
+    }
+
+    @Test
+    void calculateTravelMinutesReturnsDefaultMinutesWhenCoordinatesAreMissing() {
+        PlaceResponse previousPlace = place(10L, null, 126.942500);
+        PlaceResponse currentPlace = place(20L, 33.305833, 126.289444);
+
+        assertThat(adapter.calculateTravelMinutes(previousPlace, currentPlace)).isEqualTo(30);
     }
 
     private PlaceResponse place(Long placeId) {
+        return place(placeId, 33.0, 126.0);
+    }
+
+    private PlaceResponse place(Long placeId, Double latitude, Double longitude) {
         return new PlaceResponse(
                 placeId,
                 "Place " + placeId,
                 "NATURE",
                 "EAST",
                 "JEJU",
-                33.0,
-                126.0,
+                latitude,
+                longitude,
                 60,
                 false,
                 true,
