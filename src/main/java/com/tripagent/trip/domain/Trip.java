@@ -45,6 +45,9 @@ public class Trip {
     @Column(length = 50)
     private String lastAccommodationArea;
 
+    @Column
+    private Long ownerId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private TripVisibility visibility;
@@ -60,7 +63,8 @@ public class Trip {
             LocalTime dailyEndTime,
             TripConcept concept,
             Transportation transportation,
-            String lastAccommodationArea
+            String lastAccommodationArea,
+            Long ownerId
     ) {
         this.destination = destination;
         this.startDate = startDate;
@@ -70,6 +74,7 @@ public class Trip {
         this.concept = concept;
         this.transportation = transportation;
         this.lastAccommodationArea = lastAccommodationArea;
+        this.ownerId = ownerId;
         this.visibility = TripVisibility.PRIVATE;
     }
 
@@ -83,6 +88,30 @@ public class Trip {
             Transportation transportation,
             String lastAccommodationArea
     ) {
+        return create(
+                destination,
+                startDate,
+                endDate,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                transportation,
+                lastAccommodationArea,
+                null
+        );
+    }
+
+    public static Trip create(
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long ownerId
+    ) {
         return new Trip(
                 destination,
                 startDate,
@@ -91,7 +120,8 @@ public class Trip {
                 dailyEndTime,
                 concept,
                 transportation,
-                lastAccommodationArea
+                lastAccommodationArea,
+                ownerId
         );
     }
 
@@ -129,6 +159,10 @@ public class Trip {
 
     public String getLastAccommodationArea() {
         return lastAccommodationArea;
+    }
+
+    public Long getOwnerId() {
+        return ownerId;
     }
 
     public TripVisibility getVisibility() {

@@ -22,6 +22,30 @@ public record TripCreateRequest(
         TripConcept concept,
         @NotNull
         Transportation transportation,
-        String lastAccommodationArea
+        String lastAccommodationArea,
+        Long ownerId
 ) {
+
+    public TripCreateRequest(
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea
+    ) {
+        this(
+                destination,
+                startDate,
+                endDate,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                transportation,
+                lastAccommodationArea,
+                null
+        );
+    }
 }

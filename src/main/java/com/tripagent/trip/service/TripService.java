@@ -49,10 +49,22 @@ public class TripService {
                 request.dailyEndTime(),
                 request.concept(),
                 request.transportation(),
-                request.lastAccommodationArea()
+                request.lastAccommodationArea(),
+                request.ownerId()
         );
 
         return TripResponse.from(tripRepository.save(trip));
+    }
+
+    public List<TripResponse> searchTripsByOwnerId(Long ownerId) {
+        if (ownerId == null) {
+            throw new IllegalArgumentException("Trip ownerId is required.");
+        }
+
+        return tripRepository.findByOwnerIdOrderByTripIdDesc(ownerId)
+                .stream()
+                .map(TripResponse::from)
+                .toList();
     }
 
     public List<TripResponse> searchTrips(
@@ -136,12 +148,18 @@ public class TripService {
 
     @Transactional
     public TripResponse updateTripVisibility(Long tripId, TripVisibility visibility) {
+        return updateTripVisibility(tripId, null, visibility);
+    }
+
+    @Transactional
+    public TripResponse updateTripVisibility(Long tripId, Long ownerId, TripVisibility visibility) {
         if (visibility == null) {
             throw new IllegalArgumentException("Trip visibility is required.");
         }
 
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        validateTripOwner(trip, ownerId);
         trip.changeVisibility(visibility);
         return TripResponse.from(trip);
     }
@@ -183,6 +201,15 @@ public class TripService {
         }
         if (request.transportation() != Transportation.RENT_CAR) {
             throw new IllegalArgumentException("Only RENT_CAR transportation is supported in MVP.");
+        }
+    }
+
+    private void validateTripOwner(Trip trip, Long ownerId) {
+        if (ownerId == null) {
+            return;
+        }
+        if (!ownerId.equals(trip.getOwnerId())) {
+            throw new IllegalArgumentException("Trip owner does not match. tripId=" + trip.getTripId());
         }
     }
 

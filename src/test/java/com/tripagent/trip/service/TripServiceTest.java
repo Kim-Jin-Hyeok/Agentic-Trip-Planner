@@ -30,6 +30,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.data.domain.Sort;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -70,6 +71,29 @@ class TripServiceTest {
         assertThat(response.transportation()).isEqualTo(Transportation.RENT_CAR);
         assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
         verify(tripRepository).save(any(Trip.class));
+    }
+
+    @Test
+    void createTripSavesOwnerIdWhenProvided() {
+        TripCreateRequest request = new TripCreateRequest(
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                100L
+        );
+        when(tripRepository.save(any(Trip.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        tripService.createTrip(request);
+
+        ArgumentCaptor<Trip> tripCaptor = ArgumentCaptor.forClass(Trip.class);
+        verify(tripRepository).save(tripCaptor.capture());
+        assertThat(tripCaptor.getValue().getOwnerId()).isEqualTo(100L);
+        assertThat(tripCaptor.getValue().getVisibility()).isEqualTo(TripVisibility.PRIVATE);
     }
 
     @Test
@@ -423,6 +447,27 @@ class TripServiceTest {
     }
 
     @Test
+    void searchTripsByOwnerIdReturnsOwnerTripsByTripIdDescendingOrder() {
+        Trip firstTrip = trip(3L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 10), LocalDate.of(2026, 7, 12), 100L);
+        Trip secondTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3), 100L);
+        when(tripRepository.findByOwnerIdOrderByTripIdDesc(100L)).thenReturn(List.of(firstTrip, secondTrip));
+
+        List<TripResponse> responses = tripService.searchTripsByOwnerId(100L);
+
+        assertThat(responses).extracting(TripResponse::tripId)
+                .containsExactly(3L, 2L);
+        verify(tripRepository).findByOwnerIdOrderByTripIdDesc(100L);
+    }
+
+    @Test
+    void searchTripsByOwnerIdRejectsNullOwnerId() {
+        assertThatThrownBy(() -> tripService.searchTripsByOwnerId(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip ownerId is required.");
+        verify(tripRepository, never()).findByOwnerIdOrderByTripIdDesc(any());
+    }
+
+    @Test
     void getPublicTripReturnsPublicTripDetailWithItineraries() {
         Trip trip = trip(1L);
         trip.changeVisibility(TripVisibility.PUBLIC);
@@ -455,6 +500,42 @@ class TripServiceTest {
 
         assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
         assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PUBLIC);
+    }
+
+    @Test
+    void updateTripVisibilityWithOwnerIdChangesVisibilityWhenOwnerMatches() {
+        Trip trip = trip(
+                1L,
+                "JEJU",
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                100L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        TripResponse response = tripService.updateTripVisibility(1L, 100L, TripVisibility.PUBLIC);
+
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
+        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PUBLIC);
+    }
+
+    @Test
+    void updateTripVisibilityWithOwnerIdRejectsDifferentOwner() {
+        Trip trip = trip(
+                1L,
+                "JEJU",
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                100L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> tripService.updateTripVisibility(1L, 200L, TripVisibility.PUBLIC))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip owner does not match. tripId=1");
+        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
     }
 
     @Test
@@ -538,6 +619,17 @@ class TripServiceTest {
             LocalDate startDate,
             LocalDate endDate
     ) {
+        return trip(tripId, destination, concept, startDate, endDate, null);
+    }
+
+    private Trip trip(
+            Long tripId,
+            String destination,
+            TripConcept concept,
+            LocalDate startDate,
+            LocalDate endDate,
+            Long ownerId
+    ) {
         Trip trip = Trip.create(
                 destination,
                 startDate,
@@ -546,7 +638,8 @@ class TripServiceTest {
                 LocalTime.of(18, 0),
                 concept,
                 Transportation.RENT_CAR,
-                "SEOGWIPO"
+                "SEOGWIPO",
+                ownerId
         );
         setId(trip, "tripId", tripId);
         return trip;

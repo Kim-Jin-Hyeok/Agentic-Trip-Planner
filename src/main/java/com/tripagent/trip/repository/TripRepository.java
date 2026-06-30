@@ -13,6 +13,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface TripRepository extends JpaRepository<Trip, Long> {
 
+    List<Trip> findByOwnerIdOrderByTripIdDesc(Long ownerId);
+
     @Query("""
             select t
             from Trip t
