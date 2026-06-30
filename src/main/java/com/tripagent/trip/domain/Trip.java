@@ -7,13 +7,22 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 
 @Entity
-@Table(name = "trips")
+@Table(
+        name = "trips",
+        indexes = {
+                @Index(name = "idx_trips_visibility_trip_id", columnList = "visibility, tripId"),
+                @Index(name = "idx_trips_visibility_like_count_trip_id", columnList = "visibility, likeCount, tripId"),
+                @Index(name = "idx_trips_visibility_concept_nights", columnList = "visibility, concept, nights"),
+                @Index(name = "idx_trips_visibility_destination", columnList = "visibility, destination")
+        }
+)
 public class Trip {
 
     @Id
