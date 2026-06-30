@@ -12,6 +12,7 @@ import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
+import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
@@ -41,7 +42,7 @@ class PublicTripControllerTest {
 
     @Test
     void searchPublicTripsReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.searchPublicTrips(null, null, null, null, null, null))
+        when(tripService.searchPublicTrips(null, null, null, null, null, null, PublicTripSort.LATEST))
                 .thenReturn(List.of(trip(2L)));
 
         mockMvc.perform(get("/api/public/trips"))
@@ -55,14 +56,23 @@ class PublicTripControllerTest {
     void searchPublicTripsPassesFilters() throws Exception {
         LocalDate startDateFrom = LocalDate.of(2026, 7, 1);
         LocalDate startDateTo = LocalDate.of(2026, 7, 10);
-        when(tripService.searchPublicTrips("JE", TripConcept.FOOD, startDateFrom, startDateTo, null, null))
+        when(tripService.searchPublicTrips(
+                "JE",
+                TripConcept.FOOD,
+                startDateFrom,
+                startDateTo,
+                null,
+                null,
+                PublicTripSort.POPULAR
+        ))
                 .thenReturn(List.of(trip(3L, TripConcept.FOOD)));
 
         mockMvc.perform(get("/api/public/trips")
                         .param("destination", "JE")
                         .param("concept", "FOOD")
                         .param("startDateFrom", "2026-07-01")
-                        .param("startDateTo", "2026-07-10"))
+                        .param("startDateTo", "2026-07-10")
+                        .param("sort", "POPULAR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].tripId").value(3L))
                 .andExpect(jsonPath("$.data[0].concept").value("FOOD"));

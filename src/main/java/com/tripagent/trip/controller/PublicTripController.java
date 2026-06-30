@@ -2,6 +2,7 @@ package com.tripagent.trip.controller;
 
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
@@ -34,7 +35,8 @@ public class PublicTripController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDateTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDateTo
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDateTo,
+            @RequestParam(required = false, defaultValue = "LATEST") PublicTripSort sort
     ) {
         return ApiResponse.success(tripService.searchPublicTrips(
                 destination,
@@ -42,7 +44,8 @@ public class PublicTripController {
                 startDateFrom,
                 startDateTo,
                 endDateFrom,
-                endDateTo
+                endDateTo,
+                sort
         ));
     }
 

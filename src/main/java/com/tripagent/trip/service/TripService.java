@@ -7,6 +7,7 @@ import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripVisibility;
+import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
@@ -120,10 +121,31 @@ public class TripService {
             LocalDate endDateFrom,
             LocalDate endDateTo
     ) {
+        return searchPublicTrips(
+                destination,
+                concept,
+                startDateFrom,
+                startDateTo,
+                endDateFrom,
+                endDateTo,
+                PublicTripSort.LATEST
+        );
+    }
+
+    public List<TripResponse> searchPublicTrips(
+            String destination,
+            TripConcept concept,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
+            LocalDate endDateFrom,
+            LocalDate endDateTo,
+            PublicTripSort publicTripSort
+    ) {
         validateDateRange("startDate", startDateFrom, startDateTo);
         validateDateRange("endDate", endDateFrom, endDateTo);
 
         String normalizedDestination = normalizeKeyword(destination);
+        Sort sort = publicTripSort(publicTripSort);
 
         return tripRepository.searchTripsByVisibility(
                         TripVisibility.PUBLIC,
@@ -133,7 +155,7 @@ public class TripService {
                         startDateTo,
                         endDateFrom,
                         endDateTo,
-                        Sort.by(Sort.Direction.DESC, "tripId")
+                        sort
                 )
                 .stream()
                 .map(TripResponse::from)
@@ -262,6 +284,14 @@ public class TripService {
         if (from != null && to != null && from.isAfter(to)) {
             throw new IllegalArgumentException(fieldName + "From must be less than or equal to " + fieldName + "To.");
         }
+    }
+
+    private Sort publicTripSort(PublicTripSort publicTripSort) {
+        PublicTripSort normalizedSort = publicTripSort == null ? PublicTripSort.LATEST : publicTripSort;
+        return switch (normalizedSort) {
+            case LATEST -> Sort.by(Sort.Direction.DESC, "tripId");
+            case POPULAR -> Sort.by(Sort.Order.desc("likeCount"), Sort.Order.desc("tripId"));
+        };
     }
 
     private String normalizeKeyword(String keyword) {

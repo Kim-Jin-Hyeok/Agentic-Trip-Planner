@@ -18,6 +18,7 @@ import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripVisibility;
+import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
@@ -451,6 +452,39 @@ class TripServiceTest {
                 .containsExactly(2L);
         assertThat(responses).extracting(TripResponse::visibility)
                 .containsExactly(TripVisibility.PUBLIC);
+    }
+
+    @Test
+    void searchPublicTripsSortsByLikeCountWhenPopularSortIsRequested() {
+        Trip popularTrip = trip(3L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        popularTrip.changeVisibility(TripVisibility.PUBLIC);
+        popularTrip.increaseLikeCount();
+        Sort popularSort = Sort.by(Sort.Order.desc("likeCount"), Sort.Order.desc("tripId"));
+        when(tripRepository.searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(popularSort)
+        )).thenReturn(List.of(popularTrip));
+
+        List<TripResponse> responses = tripService.searchPublicTrips(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.POPULAR
+        );
+
+        assertThat(responses).extracting(TripResponse::tripId)
+                .containsExactly(3L);
+        assertThat(responses).extracting(TripResponse::likeCount)
+                .containsExactly(1L);
     }
 
     @Test
