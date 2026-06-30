@@ -234,7 +234,7 @@ class ItineraryGenerateServiceTest {
                 LocalTime.of(9, 0),
                 LocalTime.of(18, 0)
         );
-        List<PlaceResponse> candidatePlaces = places(4);
+        List<PlaceResponse> candidatePlaces = places(8);
         ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.NORMAL);
         String prompt = "prompt";
         String rawResponse = "raw response";
@@ -538,6 +538,64 @@ class ItineraryGenerateServiceTest {
         verify(itineraryPromptGenerator, never()).generate(eq(trip), anyList(), eq(request));
         verify(llmClient, never()).generate(anyString());
         verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsTooFewCandidatePlacesForPaceBeforeLlmCall() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 2),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = places(9);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.BUSY);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(
+                        "Candidate places are not enough to satisfy pace policy. pace=BUSY, "
+                                + "tripDays=2, requiredMinItems=10, candidateCount=9. "
+                                + "Add more candidate places or choose a slower pace."
+                );
+        verify(itineraryPromptGenerator, never()).generate(eq(trip), anyList(), eq(request));
+        verify(llmClient, never()).generate(anyString());
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsTooManyMustVisitPlacesForPaceBeforeLlmCall() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 2),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = places(9);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                candidatePlaces.stream()
+                        .map(PlaceResponse::placeId)
+                        .toList(),
+                null,
+                ItineraryPace.RELAXED
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(
+                        "mustVisitPlaceIds are too many to satisfy pace policy. pace=RELAXED, "
+                                + "tripDays=2, allowedMaxItems=8, mustVisitPlaceCount=9. "
+                                + "Remove must-visit places or choose a busier pace."
+                );
+        verify(itineraryPromptGenerator, never()).generate(eq(trip), anyList(), eq(request));
+        verify(llmClient, never()).generate(anyString());
     }
 
     @Test
@@ -1858,7 +1916,12 @@ class ItineraryGenerateServiceTest {
 
     private void assertGenerateItinerariesSucceedsWithPaceItemCount(ItineraryPace pace, int itemCount) {
         Trip trip = trip(1L, TripConcept.FOOD);
-        List<PlaceResponse> candidatePlaces = places(itemCount);
+        int candidateCount = switch (pace) {
+            case RELAXED -> Math.max(itemCount, 3);
+            case NORMAL -> Math.max(itemCount, 4);
+            case BUSY -> Math.max(itemCount, 5);
+        };
+        List<PlaceResponse> candidatePlaces = places(candidateCount);
         ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, pace);
         String prompt = "prompt";
         String rawResponse = "raw response";
@@ -1885,7 +1948,12 @@ class ItineraryGenerateServiceTest {
             String expectedMessage
     ) {
         Trip trip = trip(1L, TripConcept.FOOD);
-        List<PlaceResponse> candidatePlaces = places(itemCount);
+        int candidateCount = switch (pace) {
+            case RELAXED -> Math.max(itemCount, 3);
+            case NORMAL -> Math.max(itemCount, 4);
+            case BUSY -> Math.max(itemCount, 5);
+        };
+        List<PlaceResponse> candidatePlaces = places(candidateCount);
         ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, pace);
         String prompt = "prompt";
         String rawResponse = "raw response";

@@ -175,6 +175,8 @@ public class ItineraryGenerateService {
         validateGenerateRequest(trip, candidatePlaces, request);
         List<PlaceResponse> selectedCandidatePlaces = selectLlmCandidatePlaces(trip, candidatePlaces, request);
         validateCandidatePlacesEnoughForTripDays(trip, selectedCandidatePlaces);
+        validateCandidatePlacesEnoughForPace(trip, request, selectedCandidatePlaces);
+        validateMustVisitPlacesFitPace(trip, request);
         String prompt = request == null
                 ? itineraryPromptGenerator.generate(trip, selectedCandidatePlaces)
                 : itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request);
@@ -357,10 +359,7 @@ public class ItineraryGenerateService {
             return;
         }
 
-        PaceItineraryPolicy pacePolicy = PaceItineraryPolicy.findByPace(request.normalizedPace())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Pace itinerary policy is not defined. pace=" + request.normalizedPace()
-                ));
+        PaceItineraryPolicy pacePolicy = pacePolicy(request);
         long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
         Map<Integer, Long> itemCountByDayNo = createRequests.stream()
                 .collect(Collectors.groupingBy(ItineraryCreateRequest::dayNo, Collectors.counting()));
@@ -792,6 +791,67 @@ public class ItineraryGenerateService {
                             + candidateCount
             );
         }
+    }
+
+    private void validateCandidatePlacesEnoughForPace(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> selectedCandidatePlaces
+    ) {
+        if (request == null || request.pace() == null) {
+            return;
+        }
+
+        PaceItineraryPolicy pacePolicy = pacePolicy(request);
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        long requiredMinItems = tripDays * pacePolicy.minItemsPerDay();
+        int candidateCount = selectedCandidatePlaces.size();
+
+        if (candidateCount < requiredMinItems) {
+            throw new IllegalArgumentException(
+                    "Candidate places are not enough to satisfy pace policy. pace="
+                            + pacePolicy.pace()
+                            + ", tripDays="
+                            + tripDays
+                            + ", requiredMinItems="
+                            + requiredMinItems
+                            + ", candidateCount="
+                            + candidateCount
+                            + ". Add more candidate places or choose a slower pace."
+            );
+        }
+    }
+
+    private void validateMustVisitPlacesFitPace(Trip trip, ItineraryGenerateRequest request) {
+        if (request == null || request.pace() == null) {
+            return;
+        }
+
+        PaceItineraryPolicy pacePolicy = pacePolicy(request);
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        long allowedMaxItems = tripDays * pacePolicy.maxItemsPerDay();
+        int mustVisitPlaceCount = request.normalizedMustVisitPlaceIds().size();
+
+        if (mustVisitPlaceCount > allowedMaxItems) {
+            throw new IllegalArgumentException(
+                    "mustVisitPlaceIds are too many to satisfy pace policy. pace="
+                            + pacePolicy.pace()
+                            + ", tripDays="
+                            + tripDays
+                            + ", allowedMaxItems="
+                            + allowedMaxItems
+                            + ", mustVisitPlaceCount="
+                            + mustVisitPlaceCount
+                            + ". Remove must-visit places or choose a busier pace."
+            );
+        }
+    }
+
+    private PaceItineraryPolicy pacePolicy(ItineraryGenerateRequest request) {
+        return PaceItineraryPolicy.findByPace(request.normalizedPace())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Pace itinerary policy is not defined. pace=" + request.normalizedPace()
+                ));
     }
 
     private Comparator<PlaceResponse> candidatePlaceComparator(TripConcept concept, ItineraryGenerateRequest request) {
