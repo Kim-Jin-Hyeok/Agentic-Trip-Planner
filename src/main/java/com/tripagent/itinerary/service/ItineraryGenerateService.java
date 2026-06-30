@@ -10,6 +10,7 @@ import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
+import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.itinerary.repository.ItineraryRepository;
@@ -293,6 +294,7 @@ public class ItineraryGenerateService {
     ) {
         validateDayAndOrderPolicies(trip, createRequests);
         validateAllTripDaysCovered(trip, createRequests);
+        validatePaceItemsPerDay(trip, request, createRequests);
         validateFirstTravelMinutes(createRequests);
         validateTravelMinutesBetweenPlaces(createRequests);
         validateDayTimeWindowBounds(trip, request, createRequests);
@@ -343,6 +345,40 @@ public class ItineraryGenerateService {
                     "Generated itinerary must include at least one item for every trip day. missingDayNos="
                             + missingDayNos
             );
+        }
+    }
+
+    private void validatePaceItemsPerDay(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            List<ItineraryCreateRequest> createRequests
+    ) {
+        if (request == null || request.pace() == null) {
+            return;
+        }
+
+        ItineraryPace pace = request.normalizedPace();
+        PacePolicy pacePolicy = PacePolicy.from(pace);
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        Map<Integer, Long> itemCountByDayNo = createRequests.stream()
+                .collect(Collectors.groupingBy(ItineraryCreateRequest::dayNo, Collectors.counting()));
+
+        for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+            long itemCount = itemCountByDayNo.getOrDefault(dayNo, 0L);
+            if (itemCount < pacePolicy.minItemsPerDay() || itemCount > pacePolicy.maxItemsPerDay()) {
+                throw new IllegalArgumentException(
+                        "Generated itinerary item count per day does not match pace policy. pace="
+                                + pace
+                                + ", dayNo="
+                                + dayNo
+                                + ", itemCount="
+                                + itemCount
+                                + ", minItemsPerDay="
+                                + pacePolicy.minItemsPerDay()
+                                + ", maxItemsPerDay="
+                                + pacePolicy.maxItemsPerDay()
+                );
+            }
         }
     }
 
@@ -939,5 +975,19 @@ public class ItineraryGenerateService {
             LocalTime startTime,
             LocalTime endTime
     ) {
+    }
+
+    private record PacePolicy(
+            int minItemsPerDay,
+            int maxItemsPerDay
+    ) {
+
+        private static PacePolicy from(ItineraryPace pace) {
+            return switch (pace) {
+                case RELAXED -> new PacePolicy(3, 4);
+                case NORMAL -> new PacePolicy(4, 5);
+                case BUSY -> new PacePolicy(5, 7);
+            };
+        }
     }
 }

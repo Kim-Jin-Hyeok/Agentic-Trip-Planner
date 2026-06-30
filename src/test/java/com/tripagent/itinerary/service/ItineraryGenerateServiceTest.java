@@ -143,18 +143,27 @@ class ItineraryGenerateServiceTest {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
-                place(20L, 90)
+                place(20L, 90),
+                place(30L, 60),
+                place(40L, 60),
+                place(50L, 60)
         );
         ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.BUSY);
         String prompt = "prompt";
         String rawResponse = "raw response";
         List<LlmItineraryItemResponse> parsedItems = List.of(
                 llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30),
+                llmItem(30L, 3, LocalTime.of(12, 0), LocalTime.of(13, 0), 30),
+                llmItem(40L, 4, LocalTime.of(13, 30), LocalTime.of(14, 30), 30),
+                llmItem(50L, 5, LocalTime.of(15, 0), LocalTime.of(16, 0), 30)
         );
         List<ItineraryCreateRequest> createRequests = List.of(
                 request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 5),
+                request(30L, 3, LocalTime.of(12, 0), LocalTime.of(13, 0), 5),
+                request(40L, 4, LocalTime.of(13, 30), LocalTime.of(14, 30), 5),
+                request(50L, 5, LocalTime.of(15, 0), LocalTime.of(16, 0), 5)
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
@@ -165,9 +174,115 @@ class ItineraryGenerateServiceTest {
 
         List<ItineraryCreateRequest> drafts = itineraryGenerateService.generateDraftItineraries(1L, request);
 
-        assertThat(drafts).hasSize(2);
+        assertThat(drafts).hasSize(5);
         verify(itineraryPromptGenerator).generate(trip, candidatePlaces, request);
-        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L, 30L, 40L, 50L));
+    }
+
+    @Test
+    void generateItinerariesSucceedsWhenRelaxedPaceHasThreeItemsPerDay() {
+        assertGenerateItinerariesSucceedsWithPaceItemCount(ItineraryPace.RELAXED, 3);
+    }
+
+    @Test
+    void generateItinerariesRejectsWhenRelaxedPaceHasFiveItemsPerDay() {
+        assertGenerateItinerariesFailsWithPaceItemCount(
+                ItineraryPace.RELAXED,
+                5,
+                "Generated itinerary item count per day does not match pace policy. pace=RELAXED, "
+                        + "dayNo=1, itemCount=5, minItemsPerDay=3, maxItemsPerDay=4"
+        );
+    }
+
+    @Test
+    void generateItinerariesSucceedsWhenNormalPaceHasFourItemsPerDay() {
+        assertGenerateItinerariesSucceedsWithPaceItemCount(ItineraryPace.NORMAL, 4);
+    }
+
+    @Test
+    void generateItinerariesRejectsWhenNormalPaceHasSixItemsPerDay() {
+        assertGenerateItinerariesFailsWithPaceItemCount(
+                ItineraryPace.NORMAL,
+                6,
+                "Generated itinerary item count per day does not match pace policy. pace=NORMAL, "
+                        + "dayNo=1, itemCount=6, minItemsPerDay=4, maxItemsPerDay=5"
+        );
+    }
+
+    @Test
+    void generateItinerariesSucceedsWhenBusyPaceHasFiveItemsPerDay() {
+        assertGenerateItinerariesSucceedsWithPaceItemCount(ItineraryPace.BUSY, 5);
+    }
+
+    @Test
+    void generateItinerariesRejectsWhenBusyPaceHasFourItemsPerDay() {
+        assertGenerateItinerariesFailsWithPaceItemCount(
+                ItineraryPace.BUSY,
+                4,
+                "Generated itinerary item count per day does not match pace policy. pace=BUSY, "
+                        + "dayNo=1, itemCount=4, minItemsPerDay=5, maxItemsPerDay=7"
+        );
+    }
+
+    @Test
+    void generateItinerariesRejectsWhenPaceRequestHasEmptyTripDay() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 2),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = places(4);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.NORMAL);
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = llmItems(4);
+        List<ItineraryCreateRequest> createRequests = createRequests(4);
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Generated itinerary must include at least one item for every trip day. missingDayNos=[2]");
+        verify(llmClient, times(3)).generate(prompt);
+        verify(itineraryService, never()).createItinerary(any(), any());
+    }
+
+    @Test
+    void generateItinerariesRetriesWhenPaceItemCountFailsAndThenSucceeds() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = places(6);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.NORMAL);
+        String prompt = "prompt";
+        String firstRawResponse = "first raw response";
+        String secondRawResponse = "second raw response";
+        List<LlmItineraryItemResponse> firstParsedItems = llmItems(6);
+        List<LlmItineraryItemResponse> secondParsedItems = llmItems(4);
+        List<ItineraryCreateRequest> firstCreateRequests = createRequests(6);
+        List<ItineraryCreateRequest> secondCreateRequests = createRequests(4);
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
+        when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
+        when(llmItineraryResponseConverter.toCreateRequests(secondParsedItems)).thenReturn(secondCreateRequests);
+        stubSuccessfulItinerarySaves(4);
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).hasSize(4);
+        verify(llmClient, times(2)).generate(prompt);
+        verify(itineraryService, times(4)).createItinerary(eq(1L), any());
     }
 
     @Test
@@ -1739,6 +1854,120 @@ class ItineraryGenerateServiceTest {
 
     private Trip trip(Long tripId, TripConcept concept) {
         return trip(tripId, concept, LocalTime.of(9, 0));
+    }
+
+    private void assertGenerateItinerariesSucceedsWithPaceItemCount(ItineraryPace pace, int itemCount) {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = places(itemCount);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, pace);
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = llmItems(itemCount);
+        List<ItineraryCreateRequest> createRequests = createRequests(itemCount);
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+        stubSuccessfulItinerarySaves(itemCount);
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).hasSize(itemCount);
+        verify(itineraryService, times(itemCount)).createItinerary(eq(1L), any());
+    }
+
+    private void assertGenerateItinerariesFailsWithPaceItemCount(
+            ItineraryPace pace,
+            int itemCount,
+            String expectedMessage
+    ) {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = places(itemCount);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, pace);
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = llmItems(itemCount);
+        List<ItineraryCreateRequest> createRequests = createRequests(itemCount);
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(expectedMessage);
+        verify(llmClient, times(3)).generate(prompt);
+        verify(itineraryService, never()).createItinerary(any(), any());
+    }
+
+    private List<PlaceResponse> places(int count) {
+        List<PlaceResponse> places = new java.util.ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            places.add(place(placeIdAt(index), 60));
+        }
+        return places;
+    }
+
+    private List<LlmItineraryItemResponse> llmItems(int count) {
+        List<LlmItineraryItemResponse> items = new java.util.ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            items.add(llmItem(
+                    placeIdAt(index),
+                    index + 1,
+                    itineraryStartTimeAt(index),
+                    itineraryEndTimeAt(index),
+                    index == 0 ? 0 : 30
+            ));
+        }
+        return items;
+    }
+
+    private List<ItineraryCreateRequest> createRequests(int count) {
+        List<ItineraryCreateRequest> requests = new java.util.ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            requests.add(request(
+                    placeIdAt(index),
+                    index + 1,
+                    itineraryStartTimeAt(index),
+                    itineraryEndTimeAt(index),
+                    index == 0 ? 0 : 5
+            ));
+        }
+        return requests;
+    }
+
+    private void stubSuccessfulItinerarySaves(int count) {
+        for (int index = 0; index < count; index++) {
+            Long placeId = placeIdAt(index);
+            when(itineraryService.createItinerary(
+                    1L,
+                    request(
+                            placeId,
+                            index + 1,
+                            itineraryStartTimeAt(index),
+                            itineraryEndTimeAt(index),
+                            index == 0 ? 0 : 5
+                    )
+            )).thenReturn(response(100L + index, 1L, placeId, index + 1));
+        }
+    }
+
+    private Long placeIdAt(int index) {
+        return 10L + (index * 10L);
+    }
+
+    private LocalTime itineraryStartTimeAt(int index) {
+        return LocalTime.of(9, 0).plusMinutes(index * 70L);
+    }
+
+    private LocalTime itineraryEndTimeAt(int index) {
+        return itineraryStartTimeAt(index).plusMinutes(60);
     }
 
     private Trip trip(Long tripId, TripConcept concept, LocalTime dailyStartTime) {
