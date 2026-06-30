@@ -3,6 +3,7 @@ package com.tripagent.ai.prompt;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
+import com.tripagent.itinerary.policy.PaceItineraryPolicy;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Trip;
@@ -81,9 +82,9 @@ public class ItineraryPromptGenerator {
         prompt.append("- preferredCategories: ").append(preferredCategories(request)).append("\n\n");
         prompt.append("Pace:\n");
         prompt.append("- selectedPace: ").append(pace(request)).append("\n");
-        prompt.append("- RELAXED: Plan 3 to 4 itinerary items per day with generous travel and rest time.\n");
-        prompt.append("- NORMAL: Plan 4 to 5 itinerary items per day with moderate travel time.\n");
-        prompt.append("- BUSY: Plan 5 to 7 itinerary items per day to visit more places while staying realistic.\n");
+        for (PaceItineraryPolicy pacePolicy : PaceItineraryPolicy.all()) {
+            prompt.append("- ").append(pacePolicy.promptGuideLine()).append("\n");
+        }
         appendExplicitPacePolicy(prompt, request);
         prompt.append("\n");
         prompt.append("candidatePlaces:\n");
@@ -170,12 +171,11 @@ public class ItineraryPromptGenerator {
             return;
         }
 
-        PacePolicy pacePolicy = PacePolicy.from(request.normalizedPace());
-        prompt.append("- Explicit pace item count policy: For every dayNo in the trip, create at least ")
-                .append(pacePolicy.minItemsPerDay())
-                .append(" and at most ")
-                .append(pacePolicy.maxItemsPerDay())
-                .append(" itinerary items per day.\n");
+        PaceItineraryPolicy pacePolicy = PaceItineraryPolicy.findByPace(request.normalizedPace())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Pace itinerary policy is not defined. pace=" + request.normalizedPace()
+                ));
+        prompt.append("- ").append(pacePolicy.explicitPromptPolicyLine()).append("\n");
         prompt.append("- This item count policy must be satisfied for each dayNo, including multi-day trips.\n");
         prompt.append("- If dayTimeWindows are provided, still satisfy this item count policy inside each dayNo's available time window.\n");
     }
@@ -187,17 +187,4 @@ public class ItineraryPromptGenerator {
     ) {
     }
 
-    private record PacePolicy(
-            int minItemsPerDay,
-            int maxItemsPerDay
-    ) {
-
-        private static PacePolicy from(ItineraryPace pace) {
-            return switch (pace) {
-                case RELAXED -> new PacePolicy(3, 4);
-                case NORMAL -> new PacePolicy(4, 5);
-                case BUSY -> new PacePolicy(5, 7);
-            };
-        }
-    }
 }

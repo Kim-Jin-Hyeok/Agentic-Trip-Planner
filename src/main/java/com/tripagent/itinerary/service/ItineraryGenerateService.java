@@ -10,8 +10,8 @@ import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
-import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.policy.PaceItineraryPolicy;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceResponse;
@@ -357,8 +357,10 @@ public class ItineraryGenerateService {
             return;
         }
 
-        ItineraryPace pace = request.normalizedPace();
-        PacePolicy pacePolicy = PacePolicy.from(pace);
+        PaceItineraryPolicy pacePolicy = PaceItineraryPolicy.findByPace(request.normalizedPace())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Pace itinerary policy is not defined. pace=" + request.normalizedPace()
+                ));
         long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
         Map<Integer, Long> itemCountByDayNo = createRequests.stream()
                 .collect(Collectors.groupingBy(ItineraryCreateRequest::dayNo, Collectors.counting()));
@@ -368,7 +370,7 @@ public class ItineraryGenerateService {
             if (itemCount < pacePolicy.minItemsPerDay() || itemCount > pacePolicy.maxItemsPerDay()) {
                 throw new IllegalArgumentException(
                         "Generated itinerary item count per day does not match pace policy. pace="
-                                + pace
+                                + pacePolicy.pace()
                                 + ", dayNo="
                                 + dayNo
                                 + ", itemCount="
@@ -977,17 +979,4 @@ public class ItineraryGenerateService {
     ) {
     }
 
-    private record PacePolicy(
-            int minItemsPerDay,
-            int maxItemsPerDay
-    ) {
-
-        private static PacePolicy from(ItineraryPace pace) {
-            return switch (pace) {
-                case RELAXED -> new PacePolicy(3, 4);
-                case NORMAL -> new PacePolicy(4, 5);
-                case BUSY -> new PacePolicy(5, 7);
-            };
-        }
-    }
 }
