@@ -81,9 +81,11 @@ public class ItineraryPromptGenerator {
         prompt.append("- preferredCategories: ").append(preferredCategories(request)).append("\n\n");
         prompt.append("Pace:\n");
         prompt.append("- selectedPace: ").append(pace(request)).append("\n");
-        prompt.append("- RELAXED: Plan about 2 itinerary items per day with generous travel and rest time.\n");
-        prompt.append("- NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.\n");
-        prompt.append("- BUSY: Plan about 3 to 4 itinerary items per day to visit more places while staying realistic.\n\n");
+        prompt.append("- RELAXED: Plan 3 to 4 itinerary items per day with generous travel and rest time.\n");
+        prompt.append("- NORMAL: Plan 4 to 5 itinerary items per day with moderate travel time.\n");
+        prompt.append("- BUSY: Plan 5 to 7 itinerary items per day to visit more places while staying realistic.\n");
+        appendExplicitPacePolicy(prompt, request);
+        prompt.append("\n");
         prompt.append("candidatePlaces:\n");
         for (PlaceResponse place : candidatePlaces) {
             prompt.append("- placeId: ").append(place.placeId()).append("\n");
@@ -163,10 +165,39 @@ public class ItineraryPromptGenerator {
         return request.normalizedPace();
     }
 
+    private void appendExplicitPacePolicy(StringBuilder prompt, ItineraryGenerateRequest request) {
+        if (request == null || request.pace() == null) {
+            return;
+        }
+
+        PacePolicy pacePolicy = PacePolicy.from(request.normalizedPace());
+        prompt.append("- Explicit pace item count policy: For every dayNo in the trip, create at least ")
+                .append(pacePolicy.minItemsPerDay())
+                .append(" and at most ")
+                .append(pacePolicy.maxItemsPerDay())
+                .append(" itinerary items per day.\n");
+        prompt.append("- This item count policy must be satisfied for each dayNo, including multi-day trips.\n");
+        prompt.append("- If dayTimeWindows are provided, still satisfy this item count policy inside each dayNo's available time window.\n");
+    }
+
     private record DayTimeWindow(
             Integer dayNo,
             LocalTime startTime,
             LocalTime endTime
     ) {
+    }
+
+    private record PacePolicy(
+            int minItemsPerDay,
+            int maxItemsPerDay
+    ) {
+
+        private static PacePolicy from(ItineraryPace pace) {
+            return switch (pace) {
+                case RELAXED -> new PacePolicy(3, 4);
+                case NORMAL -> new PacePolicy(4, 5);
+                case BUSY -> new PacePolicy(5, 7);
+            };
+        }
     }
 }

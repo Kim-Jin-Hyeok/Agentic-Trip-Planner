@@ -64,9 +64,9 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("- dailyEndTime: 18:00");
         assertThat(prompt).contains("- preferredCategories: []");
         assertThat(prompt).contains("- selectedPace: NORMAL");
-        assertThat(prompt).contains("RELAXED: Plan about 2 itinerary items per day with generous travel and rest time.");
-        assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
-        assertThat(prompt).contains("BUSY: Plan about 3 to 4 itinerary items per day to visit more places while staying realistic.");
+        assertThat(prompt).contains("RELAXED: Plan 3 to 4 itinerary items per day with generous travel and rest time.");
+        assertThat(prompt).contains("NORMAL: Plan 4 to 5 itinerary items per day with moderate travel time.");
+        assertThat(prompt).contains("BUSY: Plan 5 to 7 itinerary items per day to visit more places while staying realistic.");
         assertThat(prompt).contains("placeId: 10");
         assertThat(prompt).contains("name: Food Place");
         assertThat(prompt).contains("category: FOOD");
@@ -160,7 +160,8 @@ class ItineraryPromptGeneratorTest {
         String prompt = generator.generate(trip(), candidatePlaces());
 
         assertThat(prompt).contains("- selectedPace: NORMAL");
-        assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
+        assertThat(prompt).contains("NORMAL: Plan 4 to 5 itinerary items per day with moderate travel time.");
+        assertThat(prompt).doesNotContain("Explicit pace item count policy:");
     }
 
     @Test
@@ -170,7 +171,8 @@ class ItineraryPromptGeneratorTest {
         String prompt = generator.generate(trip(), candidatePlaces(), request);
 
         assertThat(prompt).contains("- selectedPace: NORMAL");
-        assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
+        assertThat(prompt).contains("NORMAL: Plan 4 to 5 itinerary items per day with moderate travel time.");
+        assertThat(prompt).doesNotContain("Explicit pace item count policy:");
     }
 
     @Test
@@ -180,7 +182,14 @@ class ItineraryPromptGeneratorTest {
         String prompt = generator.generate(trip(), candidatePlaces(), request);
 
         assertThat(prompt).contains("- selectedPace: RELAXED");
-        assertThat(prompt).contains("RELAXED: Plan about 2 itinerary items per day with generous travel and rest time.");
+        assertThat(prompt).contains("RELAXED: Plan 3 to 4 itinerary items per day with generous travel and rest time.");
+        assertThat(prompt).contains(
+                "Explicit pace item count policy: For every dayNo in the trip, create at least 3 and at most 4 itinerary items per day."
+        );
+        assertThat(prompt).contains("This item count policy must be satisfied for each dayNo, including multi-day trips.");
+        assertThat(prompt).contains(
+                "If dayTimeWindows are provided, still satisfy this item count policy inside each dayNo's available time window."
+        );
     }
 
     @Test
@@ -190,7 +199,10 @@ class ItineraryPromptGeneratorTest {
         String prompt = generator.generate(trip(), candidatePlaces(), request);
 
         assertThat(prompt).contains("- selectedPace: NORMAL");
-        assertThat(prompt).contains("NORMAL: Plan about 2 to 3 itinerary items per day with moderate travel time.");
+        assertThat(prompt).contains("NORMAL: Plan 4 to 5 itinerary items per day with moderate travel time.");
+        assertThat(prompt).contains(
+                "Explicit pace item count policy: For every dayNo in the trip, create at least 4 and at most 5 itinerary items per day."
+        );
     }
 
     @Test
@@ -200,7 +212,10 @@ class ItineraryPromptGeneratorTest {
         String prompt = generator.generate(trip(), candidatePlaces(), request);
 
         assertThat(prompt).contains("- selectedPace: BUSY");
-        assertThat(prompt).contains("BUSY: Plan about 3 to 4 itinerary items per day to visit more places while staying realistic.");
+        assertThat(prompt).contains("BUSY: Plan 5 to 7 itinerary items per day to visit more places while staying realistic.");
+        assertThat(prompt).contains(
+                "Explicit pace item count policy: For every dayNo in the trip, create at least 5 and at most 7 itinerary items per day."
+        );
     }
 
     @Test
