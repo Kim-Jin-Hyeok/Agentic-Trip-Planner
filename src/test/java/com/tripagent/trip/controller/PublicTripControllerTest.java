@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tripagent.common.exception.GlobalExceptionHandler;
+import com.tripagent.common.response.PageResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
@@ -42,21 +43,27 @@ class PublicTripControllerTest {
 
     @Test
     void searchPublicTripsReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.searchPublicTrips(null, null, null, null, null, null, null, PublicTripSort.LATEST))
-                .thenReturn(List.of(trip(2L)));
+        when(tripService.searchPublicTripPage(null, null, null, null, null, null, null, PublicTripSort.LATEST, null, null))
+                .thenReturn(new PageResponse<>(List.of(trip(2L)), 0, 20, 1, 1, true, true));
 
         mockMvc.perform(get("/api/public/trips"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].tripId").value(2L))
-                .andExpect(jsonPath("$.data[0].visibility").value("PUBLIC"));
+                .andExpect(jsonPath("$.data.content[0].tripId").value(2L))
+                .andExpect(jsonPath("$.data.content[0].visibility").value("PUBLIC"))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(20))
+                .andExpect(jsonPath("$.data.totalElements").value(1L))
+                .andExpect(jsonPath("$.data.totalPages").value(1))
+                .andExpect(jsonPath("$.data.first").value(true))
+                .andExpect(jsonPath("$.data.last").value(true));
     }
 
     @Test
     void searchPublicTripsPassesFilters() throws Exception {
         LocalDate startDateFrom = LocalDate.of(2026, 7, 1);
         LocalDate startDateTo = LocalDate.of(2026, 7, 10);
-        when(tripService.searchPublicTrips(
+        when(tripService.searchPublicTripPage(
                 "JE",
                 TripConcept.FOOD,
                 startDateFrom,
@@ -64,9 +71,11 @@ class PublicTripControllerTest {
                 null,
                 null,
                 2,
-                PublicTripSort.POPULAR
+                PublicTripSort.POPULAR,
+                1,
+                10
         ))
-                .thenReturn(List.of(trip(3L, TripConcept.FOOD)));
+                .thenReturn(new PageResponse<>(List.of(trip(3L, TripConcept.FOOD)), 1, 10, 11, 2, false, true));
 
         mockMvc.perform(get("/api/public/trips")
                         .param("destination", "JE")
@@ -74,10 +83,14 @@ class PublicTripControllerTest {
                         .param("startDateFrom", "2026-07-01")
                         .param("startDateTo", "2026-07-10")
                         .param("nights", "2")
-                        .param("sort", "POPULAR"))
+                        .param("sort", "POPULAR")
+                        .param("page", "1")
+                        .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].tripId").value(3L))
-                .andExpect(jsonPath("$.data[0].concept").value("FOOD"));
+                .andExpect(jsonPath("$.data.content[0].tripId").value(3L))
+                .andExpect(jsonPath("$.data.content[0].concept").value("FOOD"))
+                .andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.size").value(10));
     }
 
     @Test

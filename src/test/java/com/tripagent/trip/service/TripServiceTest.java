@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.domain.Place;
@@ -33,6 +34,10 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -535,7 +540,120 @@ class TripServiceTest {
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip nights must be between 1 and 3.");
-        verify(tripRepository, never()).searchTripsByVisibility(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(tripRepository, never()).searchTripsByVisibility(any(), any(), any(), any(), any(), any(), any(), any(), any(Sort.class));
+    }
+
+    @Test
+    void searchPublicTripPageReturnsPagedPublicTrips() {
+        Trip publicTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        publicTrip.changeVisibility(TripVisibility.PUBLIC);
+        PageRequest pageRequest = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "tripId"));
+        Page<Trip> tripPage = new PageImpl<>(List.of(publicTrip), pageRequest, 1);
+        when(tripRepository.searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(pageRequest)
+        )).thenReturn(tripPage);
+
+        PageResponse<TripResponse> response = tripService.searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                null,
+                null
+        );
+
+        assertThat(response.content()).extracting(TripResponse::tripId)
+                .containsExactly(2L);
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(20);
+        assertThat(response.totalElements()).isEqualTo(1L);
+        assertThat(response.totalPages()).isEqualTo(1);
+        assertThat(response.first()).isTrue();
+        assertThat(response.last()).isTrue();
+    }
+
+    @Test
+    void searchPublicTripPageUsesRequestedPageSizeAndPopularSort() {
+        Sort popularSort = Sort.by(Sort.Order.desc("likeCount"), Sort.Order.desc("tripId"));
+        PageRequest pageRequest = PageRequest.of(1, 10, popularSort);
+        when(tripRepository.searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                eq("jeju"),
+                eq(TripConcept.FOOD),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(2),
+                eq(pageRequest)
+        )).thenReturn(Page.empty(pageRequest));
+
+        PageResponse<TripResponse> response = tripService.searchPublicTripPage(
+                " JeJu ",
+                TripConcept.FOOD,
+                null,
+                null,
+                null,
+                null,
+                2,
+                PublicTripSort.POPULAR,
+                1,
+                10
+        );
+
+        assertThat(response.page()).isEqualTo(1);
+        assertThat(response.size()).isEqualTo(10);
+        assertThat(response.totalElements()).isZero();
+    }
+
+    @Test
+    void searchPublicTripPageRejectsNegativePage() {
+        assertThatThrownBy(() -> tripService.searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                -1,
+                20
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Page must be greater than or equal to 0.");
+        verify(tripRepository, never()).searchTripsByVisibility(any(), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void searchPublicTripPageRejectsTooLargeSize() {
+        assertThatThrownBy(() -> tripService.searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                0,
+                51
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Page size must be between 1 and 50.");
+        verify(tripRepository, never()).searchTripsByVisibility(any(), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test

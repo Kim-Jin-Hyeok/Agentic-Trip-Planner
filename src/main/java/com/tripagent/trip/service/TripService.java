@@ -1,6 +1,7 @@
 package com.tripagent.trip.service;
 
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
@@ -20,6 +21,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +33,9 @@ public class TripService {
 
     private static final long MIN_NIGHTS = 1;
     private static final long MAX_NIGHTS = 3;
+    private static final int DEFAULT_PUBLIC_TRIP_PAGE = 0;
+    private static final int DEFAULT_PUBLIC_TRIP_PAGE_SIZE = 20;
+    private static final int MAX_PUBLIC_TRIP_PAGE_SIZE = 50;
 
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
@@ -187,6 +194,45 @@ public class TripService {
                 .toList();
     }
 
+    public PageResponse<TripResponse> searchPublicTripPage(
+            String destination,
+            TripConcept concept,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
+            LocalDate endDateFrom,
+            LocalDate endDateTo,
+            Integer nights,
+            PublicTripSort publicTripSort,
+            Integer page,
+            Integer size
+    ) {
+        validateDateRange("startDate", startDateFrom, startDateTo);
+        validateDateRange("endDate", endDateFrom, endDateTo);
+        validateNights(nights);
+
+        String normalizedDestination = normalizeKeyword(destination);
+        Pageable pageable = PageRequest.of(
+                normalizedPublicTripPage(page),
+                normalizedPublicTripPageSize(size),
+                publicTripSort(publicTripSort)
+        );
+
+        Page<TripResponse> tripPage = tripRepository.searchTripsByVisibility(
+                        TripVisibility.PUBLIC,
+                        normalizedDestination,
+                        concept,
+                        startDateFrom,
+                        startDateTo,
+                        endDateFrom,
+                        endDateTo,
+                        nights,
+                        pageable
+                )
+                .map(TripResponse::from);
+
+        return PageResponse.from(tripPage);
+    }
+
     public TripDetailResponse getPublicTrip(Long tripId) {
         Trip trip = tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
                 .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
@@ -326,6 +372,26 @@ public class TripService {
             case LATEST -> Sort.by(Sort.Direction.DESC, "tripId");
             case POPULAR -> Sort.by(Sort.Order.desc("likeCount"), Sort.Order.desc("tripId"));
         };
+    }
+
+    private int normalizedPublicTripPage(Integer page) {
+        if (page == null) {
+            return DEFAULT_PUBLIC_TRIP_PAGE;
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("Page must be greater than or equal to 0.");
+        }
+        return page;
+    }
+
+    private int normalizedPublicTripPageSize(Integer size) {
+        if (size == null) {
+            return DEFAULT_PUBLIC_TRIP_PAGE_SIZE;
+        }
+        if (size < 1 || size > MAX_PUBLIC_TRIP_PAGE_SIZE) {
+            throw new IllegalArgumentException("Page size must be between 1 and 50.");
+        }
+        return size;
     }
 
     private String normalizeKeyword(String keyword) {
