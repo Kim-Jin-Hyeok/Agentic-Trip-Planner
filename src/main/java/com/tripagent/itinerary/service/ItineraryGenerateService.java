@@ -44,6 +44,7 @@ public class ItineraryGenerateService {
 
     private static final int MAX_LLM_VALIDATION_RETRY_COUNT = 2;
     private static final int MAX_LLM_CANDIDATE_PLACE_COUNT = 30;
+    private static final int MAX_TRAVEL_MINUTES_BETWEEN_PLACES = 90;
     private static final Set<String> MEAL_AND_REST_CATEGORY_NAMES = Set.of("FOOD", "CAFE");
     private static final Set<String> TOUR_CATEGORY_NAMES = Set.of("NATURE", "BEACH", "GARDEN", "MUSEUM");
     private static final String OPERATION_GENERATE = "generate";
@@ -293,6 +294,7 @@ public class ItineraryGenerateService {
         validateDayAndOrderPolicies(trip, createRequests);
         validateAllTripDaysCovered(trip, createRequests);
         validateFirstTravelMinutes(createRequests);
+        validateTravelMinutesBetweenPlaces(createRequests);
         validateDayTimeWindowBounds(trip, request, createRequests);
         validateNoDraftTimeOverlap(createRequests);
     }
@@ -351,6 +353,26 @@ public class ItineraryGenerateService {
                 throw new IllegalArgumentException(
                         "First itinerary item of each day must have travelMinutesFromPrevious 0. dayNo="
                                 + request.dayNo()
+                );
+            }
+        }
+    }
+
+    private void validateTravelMinutesBetweenPlaces(List<ItineraryCreateRequest> createRequests) {
+        for (ItineraryCreateRequest request : createRequests) {
+            if (Integer.valueOf(1).equals(request.orderNo())) {
+                continue;
+            }
+            if (request.travelMinutesFromPrevious() > MAX_TRAVEL_MINUTES_BETWEEN_PLACES) {
+                throw new IllegalArgumentException(
+                        "Itinerary travelMinutesFromPrevious must be less than or equal to "
+                                + MAX_TRAVEL_MINUTES_BETWEEN_PLACES
+                                + ". dayNo="
+                                + request.dayNo()
+                                + ", orderNo="
+                                + request.orderNo()
+                                + ", travelMinutesFromPrevious="
+                                + request.travelMinutesFromPrevious()
                 );
             }
         }
