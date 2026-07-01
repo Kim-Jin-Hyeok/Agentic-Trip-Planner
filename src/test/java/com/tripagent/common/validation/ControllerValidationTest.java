@@ -1,7 +1,6 @@
 package com.tripagent.common.validation;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,11 +9,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryReorderRequest;
-import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.itinerary.service.ItineraryService;
@@ -25,9 +24,14 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.core.MethodParameter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 class ControllerValidationTest {
 
@@ -48,6 +52,7 @@ class ControllerValidationTest {
 
         tripMockMvc = MockMvcBuilders
                 .standaloneSetup(new TripController(tripService, itineraryGenerateService))
+                .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -68,7 +73,7 @@ class ControllerValidationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(tripService, never()).createTrip(any(TripCreateRequest.class));
+        verify(tripService, never()).createTrip(any(TripCreateRequest.class), any());
     }
 
     @Test
@@ -158,14 +163,14 @@ class ControllerValidationTest {
 
     @Test
     void generateItinerariesAllowsMissingOptionalRequestBody() throws Exception {
-        when(itineraryGenerateService.generateItineraries(1L, null)).thenReturn(List.of());
+        when(itineraryGenerateService.generateItineraries(1L, null, 100L)).thenReturn(List.of());
 
         tripMockMvc.perform(post("/api/trips/1/generate"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").isArray());
 
-        verify(itineraryGenerateService).generateItineraries(1L, null);
+        verify(itineraryGenerateService).generateItineraries(1L, null, 100L);
     }
 
     @Test
@@ -184,7 +189,11 @@ class ControllerValidationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").value("Request body is invalid."));
 
-        verify(itineraryGenerateService, never()).generateItineraries(any(), any(ItineraryGenerateRequest.class));
+        verify(itineraryGenerateService, never()).generateItineraries(
+                any(),
+                any(ItineraryGenerateRequest.class),
+                any()
+        );
     }
 
     @Test
@@ -208,6 +217,28 @@ class ControllerValidationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(itineraryGenerateService, never()).generateItineraries(any(), any(ItineraryGenerateRequest.class));
+        verify(itineraryGenerateService, never()).generateItineraries(
+                any(),
+                any(ItineraryGenerateRequest.class),
+                any()
+        );
+    }
+
+    private static class TestLoginMemberIdArgumentResolver implements HandlerMethodArgumentResolver {
+
+        @Override
+        public boolean supportsParameter(MethodParameter parameter) {
+            return parameter.hasParameterAnnotation(LoginMemberId.class);
+        }
+
+        @Override
+        public Object resolveArgument(
+                MethodParameter parameter,
+                ModelAndViewContainer mavContainer,
+                NativeWebRequest webRequest,
+                WebDataBinderFactory binderFactory
+        ) {
+            return 100L;
+        }
     }
 }

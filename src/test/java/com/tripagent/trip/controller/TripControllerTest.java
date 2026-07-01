@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.trip.domain.Transportation;
@@ -26,6 +27,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.core.MethodParameter;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 class TripControllerTest {
 
@@ -38,13 +44,14 @@ class TripControllerTest {
         ItineraryGenerateService itineraryGenerateService = org.mockito.Mockito.mock(ItineraryGenerateService.class);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new TripController(tripService, itineraryGenerateService))
+                .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
 
     @Test
     void searchTripsReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.searchTrips(null, null, null, null, null, null))
+        when(tripService.searchTripsByOwnerId(100L, null, null, null, null, null, null))
                 .thenReturn(List.of(trip(2L), trip(1L)));
 
         mockMvc.perform(get("/api/trips"))
@@ -63,15 +70,15 @@ class TripControllerTest {
         LocalDate startDateTo = LocalDate.of(2026, 7, 10);
         LocalDate endDateFrom = LocalDate.of(2026, 7, 3);
         LocalDate endDateTo = LocalDate.of(2026, 7, 12);
-        when(tripService.searchTrips(
+        when(tripService.searchTripsByOwnerId(
+                100L,
                 "JE",
                 TripConcept.FOOD,
                 startDateFrom,
                 startDateTo,
                 endDateFrom,
                 endDateTo
-        ))
-                .thenReturn(List.of(trip(3L, TripConcept.FOOD)));
+        )).thenReturn(List.of(trip(3L, TripConcept.FOOD)));
 
         mockMvc.perform(get("/api/trips")
                         .param("destination", "JE")
@@ -90,7 +97,7 @@ class TripControllerTest {
     void searchTripsReturnsInvalidRequestWhenDateRangeIsInvalid() throws Exception {
         LocalDate startDateFrom = LocalDate.of(2026, 7, 10);
         LocalDate startDateTo = LocalDate.of(2026, 7, 1);
-        when(tripService.searchTrips(null, null, startDateFrom, startDateTo, null, null))
+        when(tripService.searchTripsByOwnerId(100L, null, null, startDateFrom, startDateTo, null, null))
                 .thenThrow(new IllegalArgumentException(
                         "startDateFrom must be less than or equal to startDateTo."
                 ));
@@ -107,7 +114,7 @@ class TripControllerTest {
 
     @Test
     void getTripReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.getTrip(1L)).thenReturn(new TripDetailResponse(
+        when(tripService.getTrip(1L, 100L)).thenReturn(new TripDetailResponse(
                 1L,
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
@@ -133,7 +140,7 @@ class TripControllerTest {
 
     @Test
     void updateTripVisibilityReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.updateTripVisibility(1L, TripVisibility.PUBLIC)).thenReturn(new TripResponse(
+        when(tripService.updateTripVisibility(1L, 100L, TripVisibility.PUBLIC)).thenReturn(new TripResponse(
                 1L,
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
@@ -159,19 +166,19 @@ class TripControllerTest {
 
     @Test
     void deleteTripReturnsNoContent() throws Exception {
-        doNothing().when(tripService).deleteTrip(1L);
+        doNothing().when(tripService).deleteTrip(1L, 100L);
 
         mockMvc.perform(delete("/api/trips/1"))
                 .andExpect(status().isNoContent());
 
-        verify(tripService).deleteTrip(1L);
+        verify(tripService).deleteTrip(1L, 100L);
     }
 
     @Test
     void deleteTripReturnsNotFoundErrorResponse() throws Exception {
         doThrow(new NoSuchElementException("Trip not found. tripId=999"))
                 .when(tripService)
-                .deleteTrip(999L);
+                .deleteTrip(999L, 100L);
 
         mockMvc.perform(delete("/api/trips/999"))
                 .andExpect(status().isNotFound())
@@ -199,5 +206,23 @@ class TripControllerTest {
                 0L,
                 TripVisibility.PRIVATE
         );
+    }
+
+    private static class TestLoginMemberIdArgumentResolver implements HandlerMethodArgumentResolver {
+
+        @Override
+        public boolean supportsParameter(MethodParameter parameter) {
+            return parameter.hasParameterAnnotation(LoginMemberId.class);
+        }
+
+        @Override
+        public Object resolveArgument(
+                MethodParameter parameter,
+                ModelAndViewContainer mavContainer,
+                NativeWebRequest webRequest,
+                WebDataBinderFactory binderFactory
+        ) {
+            return 100L;
+        }
     }
 }

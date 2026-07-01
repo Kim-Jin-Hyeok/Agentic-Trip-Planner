@@ -1,5 +1,6 @@
 package com.tripagent.trip.controller;
 
+import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
@@ -43,8 +44,11 @@ public class TripController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<TripResponse> createTrip(@Valid @RequestBody TripCreateRequest request) {
-        return ApiResponse.success(tripService.createTrip(request));
+    public ApiResponse<TripResponse> createTrip(
+            @LoginMemberId Long memberId,
+            @Valid @RequestBody TripCreateRequest request
+    ) {
+        return ApiResponse.success(tripService.createTrip(request, memberId));
     }
 
     @GetMapping
@@ -54,9 +58,11 @@ public class TripController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDateTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDateTo
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDateTo,
+            @LoginMemberId Long memberId
     ) {
-        return ApiResponse.success(tripService.searchTrips(
+        return ApiResponse.success(tripService.searchTripsByOwnerId(
+                memberId,
                 destination,
                 concept,
                 startDateFrom,
@@ -67,37 +73,46 @@ public class TripController {
     }
 
     @GetMapping("/{tripId}")
-    public ApiResponse<TripDetailResponse> getTrip(@PathVariable Long tripId) {
-        return ApiResponse.success(tripService.getTrip(tripId));
+    public ApiResponse<TripDetailResponse> getTrip(
+            @PathVariable Long tripId,
+            @LoginMemberId Long memberId
+    ) {
+        return ApiResponse.success(tripService.getTrip(tripId, memberId));
     }
 
     @DeleteMapping("/{tripId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteTrip(@PathVariable Long tripId) {
-        tripService.deleteTrip(tripId);
+    public void deleteTrip(
+            @PathVariable Long tripId,
+            @LoginMemberId Long memberId
+    ) {
+        tripService.deleteTrip(tripId, memberId);
     }
 
     @PatchMapping("/{tripId}/visibility")
     public ApiResponse<TripResponse> updateTripVisibility(
             @PathVariable Long tripId,
+            @LoginMemberId Long memberId,
             @Valid @RequestBody TripVisibilityUpdateRequest request
     ) {
-        return ApiResponse.success(tripService.updateTripVisibility(tripId, request.visibility()));
+        return ApiResponse.success(tripService.updateTripVisibility(tripId, memberId, request.visibility()));
     }
 
     @PostMapping("/{tripId}/generate")
     public ApiResponse<List<ItineraryResponse>> generateItineraries(
             @PathVariable Long tripId,
+            @LoginMemberId Long memberId,
             @Valid @RequestBody(required = false) ItineraryGenerateRequest request
     ) {
-        return ApiResponse.success(itineraryGenerateService.generateItineraries(tripId, request));
+        return ApiResponse.success(itineraryGenerateService.generateItineraries(tripId, request, memberId));
     }
 
     @PostMapping("/{tripId}/regenerate")
     public ApiResponse<List<ItineraryResponse>> regenerateItineraries(
             @PathVariable Long tripId,
+            @LoginMemberId Long memberId,
             @Valid @RequestBody(required = false) ItineraryGenerateRequest request
     ) {
-        return ApiResponse.success(itineraryGenerateService.regenerateItineraries(tripId, request));
+        return ApiResponse.success(itineraryGenerateService.regenerateItineraries(tripId, request, memberId));
     }
 }

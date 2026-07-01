@@ -94,7 +94,17 @@ public class ItineraryGenerateService {
 
     @Transactional
     public List<ItineraryResponse> generateItineraries(Long tripId, ItineraryGenerateRequest request) {
+        return generateItineraries(tripId, request, null);
+    }
+
+    @Transactional
+    public List<ItineraryResponse> generateItineraries(
+            Long tripId,
+            ItineraryGenerateRequest request,
+            Long ownerId
+    ) {
         validateTripId(tripId);
+        validateTripOwner(tripId, ownerId);
         if (itineraryRepository.existsByTrip_TripId(tripId)) {
             throw new IllegalArgumentException("Itinerary already exists for this trip.");
         }
@@ -110,7 +120,17 @@ public class ItineraryGenerateService {
 
     @Transactional
     public List<ItineraryResponse> regenerateItineraries(Long tripId, ItineraryGenerateRequest request) {
+        return regenerateItineraries(tripId, request, null);
+    }
+
+    @Transactional
+    public List<ItineraryResponse> regenerateItineraries(
+            Long tripId,
+            ItineraryGenerateRequest request,
+            Long ownerId
+    ) {
         validateTripId(tripId);
+        validateTripOwner(tripId, ownerId);
 
         List<ItineraryCreateRequest> createRequests = generateDraftItineraries(
                 tripId,
@@ -495,6 +515,18 @@ public class ItineraryGenerateService {
     private void validateTripId(Long tripId) {
         if (tripId == null) {
             throw new IllegalArgumentException("Trip id is required.");
+        }
+    }
+
+    private void validateTripOwner(Long tripId, Long ownerId) {
+        if (ownerId == null) {
+            return;
+        }
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        if (!ownerId.equals(trip.getOwnerId())) {
+            throw new IllegalArgumentException("Trip owner does not match. tripId=" + tripId);
         }
     }
 

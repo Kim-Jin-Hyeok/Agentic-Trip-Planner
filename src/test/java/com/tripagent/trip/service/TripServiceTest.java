@@ -111,6 +111,28 @@ class TripServiceTest {
     }
 
     @Test
+    void createTripWithAuthenticatedOwnerIdIgnoresRequestOwnerId() {
+        TripCreateRequest request = new TripCreateRequest(
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                999L
+        );
+        when(tripRepository.save(any(Trip.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        tripService.createTrip(request, 100L);
+
+        ArgumentCaptor<Trip> tripCaptor = ArgumentCaptor.forClass(Trip.class);
+        verify(tripRepository).save(tripCaptor.capture());
+        assertThat(tripCaptor.getValue().getOwnerId()).isEqualTo(100L);
+    }
+
+    @Test
     void createTripRejectsUnsupportedDestination() {
         TripCreateRequest request = new TripCreateRequest(
                 "BUSAN",
@@ -435,6 +457,24 @@ class TripServiceTest {
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.orderNo())
                 .containsExactly(1, 2);
         verify(itineraryRepository).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
+    }
+
+    @Test
+    void getTripWithOwnerIdRejectsDifferentOwner() {
+        Trip trip = trip(
+                1L,
+                "JEJU",
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                100L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> tripService.getTrip(1L, 200L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip owner does not match. tripId=1");
+        verify(itineraryRepository, never()).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
     }
 
     @Test
@@ -848,6 +888,25 @@ class TripServiceTest {
         InOrder inOrder = inOrder(itineraryRepository, tripRepository);
         inOrder.verify(itineraryRepository).deleteByTrip_TripId(1L);
         inOrder.verify(tripRepository).delete(trip);
+    }
+
+    @Test
+    void deleteTripWithOwnerIdRejectsDifferentOwner() {
+        Trip trip = trip(
+                1L,
+                "JEJU",
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                100L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> tripService.deleteTrip(1L, 200L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip owner does not match. tripId=1");
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+        verify(tripRepository, never()).delete(trip);
     }
 
     @Test

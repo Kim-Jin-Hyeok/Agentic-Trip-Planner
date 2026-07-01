@@ -53,6 +53,11 @@ public class TripService {
 
     @Transactional
     public TripResponse createTrip(TripCreateRequest request) {
+        return createTrip(request, request == null ? null : request.ownerId());
+    }
+
+    @Transactional
+    public TripResponse createTrip(TripCreateRequest request, Long ownerId) {
         validateCreateRequest(request);
 
         Trip trip = Trip.create(
@@ -64,7 +69,7 @@ public class TripService {
                 request.concept(),
                 request.transportation(),
                 request.lastAccommodationArea(),
-                request.ownerId()
+                ownerId
         );
 
         return TripResponse.from(tripRepository.save(trip));
@@ -76,6 +81,38 @@ public class TripService {
         }
 
         return tripRepository.findByOwnerIdOrderByTripIdDesc(ownerId)
+                .stream()
+                .map(TripResponse::from)
+                .toList();
+    }
+
+    public List<TripResponse> searchTripsByOwnerId(
+            Long ownerId,
+            String destination,
+            TripConcept concept,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
+            LocalDate endDateFrom,
+            LocalDate endDateTo
+    ) {
+        if (ownerId == null) {
+            throw new IllegalArgumentException("Trip ownerId is required.");
+        }
+        validateDateRange("startDate", startDateFrom, startDateTo);
+        validateDateRange("endDate", endDateFrom, endDateTo);
+
+        String normalizedDestination = normalizeKeyword(destination);
+
+        return tripRepository.searchTripsByOwnerId(
+                        ownerId,
+                        normalizedDestination,
+                        concept,
+                        startDateFrom,
+                        startDateTo,
+                        endDateFrom,
+                        endDateTo,
+                        Sort.by(Sort.Direction.DESC, "tripId")
+                )
                 .stream()
                 .map(TripResponse::from)
                 .toList();
@@ -109,8 +146,13 @@ public class TripService {
     }
 
     public TripDetailResponse getTrip(Long tripId) {
+        return getTrip(tripId, null);
+    }
+
+    public TripDetailResponse getTrip(Long tripId, Long ownerId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        validateTripOwner(trip, ownerId);
         List<ItineraryResponse> itineraries = itineraryRepository
                 .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
                 .stream()
@@ -293,8 +335,14 @@ public class TripService {
 
     @Transactional
     public void deleteTrip(Long tripId) {
+        deleteTrip(tripId, null);
+    }
+
+    @Transactional
+    public void deleteTrip(Long tripId, Long ownerId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        validateTripOwner(trip, ownerId);
 
         itineraryRepository.deleteByTrip_TripId(tripId);
         tripRepository.delete(trip);
