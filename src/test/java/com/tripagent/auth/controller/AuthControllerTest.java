@@ -33,7 +33,7 @@ class AuthControllerTest {
     void loginReturnsCommonSuccessResponse() throws Exception {
         LoginRequest request = new LoginRequest("test@example.com", "password123");
         when(authService.login(request))
-                .thenReturn(new LoginResponse(1L, "test@example.com", "testUser"));
+                .thenReturn(new LoginResponse(1L, "test@example.com", "testUser", "access-token", "Bearer"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -47,7 +47,9 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.memberId").value(1L))
                 .andExpect(jsonPath("$.data.email").value("test@example.com"))
-                .andExpect(jsonPath("$.data.nickname").value("testUser"));
+                .andExpect(jsonPath("$.data.nickname").value("testUser"))
+                .andExpect(jsonPath("$.data.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"));
     }
 
     @Test

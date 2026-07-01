@@ -5,14 +5,18 @@ import com.tripagent.member.domain.Member;
 public record LoginResponse(
         Long memberId,
         String email,
-        String nickname
+        String nickname,
+        String accessToken,
+        String tokenType
 ) {
 
-    public static LoginResponse from(Member member) {
+    public static LoginResponse from(Member member, String accessToken) {
         return new LoginResponse(
                 member.getMemberId(),
                 member.getEmail(),
-                member.getNickname()
+                member.getNickname(),
+                accessToken,
+                "Bearer"
         );
     }
 }

@@ -28,6 +28,9 @@ class AuthServiceTest {
     @Mock
     private PasswordHashService passwordHashService;
 
+    @Mock
+    private JwtTokenProvider jwtTokenProvider;
+
     @InjectMocks
     private AuthService authService;
 
@@ -38,12 +41,15 @@ class AuthServiceTest {
         LoginRequest request = new LoginRequest(" Test@Example.com ", "password123");
         when(memberRepository.findByEmail("test@example.com")).thenReturn(Optional.of(member));
         when(passwordHashService.matches("password123", "hashed-password")).thenReturn(true);
+        when(jwtTokenProvider.createAccessToken(member)).thenReturn("access-token");
 
         LoginResponse response = authService.login(request);
 
         assertThat(response.memberId()).isEqualTo(1L);
         assertThat(response.email()).isEqualTo("test@example.com");
         assertThat(response.nickname()).isEqualTo("testUser");
+        assertThat(response.accessToken()).isEqualTo("access-token");
+        assertThat(response.tokenType()).isEqualTo("Bearer");
     }
 
     @Test
@@ -55,6 +61,7 @@ class AuthServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Email or password is invalid.");
         verify(passwordHashService, never()).matches("password123", "hashed-password");
+        verify(jwtTokenProvider, never()).createAccessToken(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -67,6 +74,7 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Email or password is invalid.");
+        verify(jwtTokenProvider, never()).createAccessToken(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

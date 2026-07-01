@@ -16,3 +16,8 @@ ai:
   openai:
     api-key: ${AI_OPENAI_API_KEY:}
     model: ${AI_OPENAI_MODEL:}
+
+auth:
+  jwt:
+    secret: ${AUTH_JWT_SECRET:local-development-jwt-secret-change-before-prod}
+    access-token-expiration-minutes: ${AUTH_JWT_ACCESS_TOKEN_EXPIRATION_MINUTES:60}

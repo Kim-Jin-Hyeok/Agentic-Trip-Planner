@@ -17,10 +17,16 @@ public class AuthService {
 
     private final MemberRepository memberRepository;
     private final PasswordHashService passwordHashService;
+    private final JwtTokenProvider jwtTokenProvider;
 
-    public AuthService(MemberRepository memberRepository, PasswordHashService passwordHashService) {
+    public AuthService(
+            MemberRepository memberRepository,
+            PasswordHashService passwordHashService,
+            JwtTokenProvider jwtTokenProvider
+    ) {
         this.memberRepository = memberRepository;
         this.passwordHashService = passwordHashService;
+        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -33,7 +39,8 @@ public class AuthService {
             throw new IllegalArgumentException(INVALID_LOGIN_MESSAGE);
         }
 
-        return LoginResponse.from(member);
+        String accessToken = jwtTokenProvider.createAccessToken(member);
+        return LoginResponse.from(member, accessToken);
     }
 
     private void validateLoginRequest(LoginRequest request) {
