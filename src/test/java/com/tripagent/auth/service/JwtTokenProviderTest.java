@@ -46,6 +46,63 @@ class JwtTokenProviderTest {
     }
 
     @Test
+    void getMemberIdReturnsSubjectWhenTokenIsValid() {
+        JwtTokenProvider jwtTokenProvider = jwtTokenProvider(
+                "test-secret",
+                30,
+                Instant.parse("2026-07-01T00:00:00Z")
+        );
+        Member member = Member.create("test@example.com", "testUser", "hashed-password");
+        setId(member, 1L);
+        String accessToken = jwtTokenProvider.createAccessToken(member);
+
+        Long memberId = jwtTokenProvider.getMemberId(accessToken);
+
+        assertThat(memberId).isEqualTo(1L);
+    }
+
+    @Test
+    void getMemberIdRejectsTamperedToken() {
+        JwtTokenProvider jwtTokenProvider = jwtTokenProvider(
+                "test-secret",
+                30,
+                Instant.parse("2026-07-01T00:00:00Z")
+        );
+        Member member = Member.create("test@example.com", "testUser", "hashed-password");
+        setId(member, 1L);
+        String accessToken = jwtTokenProvider.createAccessToken(member);
+        String tamperedToken = accessToken.substring(0, accessToken.length() - 1) + "x";
+
+        assertThatThrownBy(() -> jwtTokenProvider.getMemberId(tamperedToken))
+                .isInstanceOf(com.tripagent.auth.support.AuthenticationException.class)
+                .hasMessage("Access token is invalid.");
+    }
+
+    @Test
+    void getMemberIdRejectsExpiredToken() {
+        JwtProperties jwtProperties = new JwtProperties();
+        jwtProperties.setSecret("test-secret");
+        jwtProperties.setAccessTokenExpirationMinutes(30);
+        JwtTokenProvider issuer = new JwtTokenProvider(
+                jwtProperties,
+                objectMapper,
+                Clock.fixed(Instant.parse("2026-07-01T00:00:00Z"), ZoneOffset.UTC)
+        );
+        JwtTokenProvider verifier = new JwtTokenProvider(
+                jwtProperties,
+                objectMapper,
+                Clock.fixed(Instant.parse("2026-07-01T00:31:00Z"), ZoneOffset.UTC)
+        );
+        Member member = Member.create("test@example.com", "testUser", "hashed-password");
+        setId(member, 1L);
+        String accessToken = issuer.createAccessToken(member);
+
+        assertThatThrownBy(() -> verifier.getMemberId(accessToken))
+                .isInstanceOf(com.tripagent.auth.support.AuthenticationException.class)
+                .hasMessage("Access token is expired.");
+    }
+
+    @Test
     void createAccessTokenRejectsBlankSecret() {
         JwtProperties jwtProperties = new JwtProperties();
         jwtProperties.setSecret(" ");
@@ -66,6 +123,17 @@ class JwtTokenProviderTest {
         byte[] decoded = Base64.getUrlDecoder().decode(encodedValue.getBytes(StandardCharsets.UTF_8));
         return objectMapper.readValue(decoded, new TypeReference<>() {
         });
+    }
+
+    private JwtTokenProvider jwtTokenProvider(String secret, long expirationMinutes, Instant now) {
+        JwtProperties jwtProperties = new JwtProperties();
+        jwtProperties.setSecret(secret);
+        jwtProperties.setAccessTokenExpirationMinutes(expirationMinutes);
+        return new JwtTokenProvider(
+                jwtProperties,
+                objectMapper,
+                Clock.fixed(now, ZoneOffset.UTC)
+        );
     }
 
     private void setId(Member member, Long memberId) {
