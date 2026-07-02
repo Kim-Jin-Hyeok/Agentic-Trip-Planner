@@ -47,6 +47,7 @@ public class ItineraryGenerateService {
     private static final int MAX_LLM_CANDIDATE_PLACE_COUNT = 30;
     private static final int MAX_BALANCED_REGION_COUNT = 3;
     private static final int MAX_TRAVEL_MINUTES_BETWEEN_PLACES = 90;
+    private static final int MIN_FALLBACK_STAY_MINUTES = 30;
     private static final Set<String> MEAL_AND_REST_CATEGORY_NAMES = Set.of("FOOD", "CAFE");
     private static final Set<String> TOUR_CATEGORY_NAMES = Set.of("NATURE", "BEACH", "GARDEN", "MUSEUM");
     private static final String OPERATION_GENERATE = "generate";
@@ -229,7 +230,7 @@ public class ItineraryGenerateService {
                 return createRequests;
             } catch (LlmException exception) {
                 logLlmFailure(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces, exception);
-                throw exception;
+                return generateFallbackDraftItinerariesOrThrow(trip, candidatePlaces, request, operation, exception);
             } catch (IllegalArgumentException exception) {
                 lastValidationException = exception;
                 logValidationFailure(
@@ -259,6 +260,175 @@ public class ItineraryGenerateService {
                 + lastValidationException.getMessage()
                 + "\nCorrect the itinerary so this validation failure is not repeated.\n"
                 + "Return JSON only. Do not include markdown or explanation outside JSON.\n";
+    }
+
+    private List<ItineraryCreateRequest> generateFallbackDraftItinerariesOrThrow(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            ItineraryGenerateRequest request,
+            String operation,
+            RuntimeException originalException
+    ) {
+        if (!supportsFallback(operation)) {
+            throw originalException;
+        }
+
+        try {
+            List<ItineraryCreateRequest> fallbackCreateRequests = generateFallbackDraftItineraries(
+                    trip,
+                    candidatePlaces,
+                    request
+            );
+            logFallbackDraftGenerationSuccess(trip, operation, request, candidatePlaces, originalException);
+            return fallbackCreateRequests;
+        } catch (RuntimeException fallbackException) {
+            logFallbackDraftGenerationFailure(
+                    trip,
+                    operation,
+                    request,
+                    candidatePlaces,
+                    originalException,
+                    fallbackException
+            );
+            throw originalException;
+        }
+    }
+
+    private boolean supportsFallback(String operation) {
+        return OPERATION_GENERATE.equals(operation) || OPERATION_REGENERATE.equals(operation);
+    }
+
+    private List<ItineraryCreateRequest> generateFallbackDraftItineraries(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            ItineraryGenerateRequest request
+    ) {
+        int tripDays = Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1);
+        PaceItineraryPolicy pacePolicy = request == null || request.pace() == null ? null : pacePolicy(request);
+        int minItemsPerDay = pacePolicy == null ? 1 : pacePolicy.minItemsPerDay();
+        int maxItemsPerDay = pacePolicy == null ? candidatePlaces.size() : pacePolicy.maxItemsPerDay();
+        int targetItemCount = targetFallbackItemCount(tripDays, minItemsPerDay, request, candidatePlaces);
+
+        List<PlaceResponse> selectedPlaces = candidatePlaces.stream()
+                .limit(targetItemCount)
+                .toList();
+        List<ItineraryCreateRequest> fallbackCreateRequests = new ArrayList<>();
+        int selectedPlaceIndex = 0;
+
+        for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+            int dayItemCount = fallbackDayItemCount(
+                    dayNo,
+                    tripDays,
+                    selectedPlaces.size() - selectedPlaceIndex,
+                    minItemsPerDay,
+                    maxItemsPerDay
+            );
+            List<PlaceResponse> dayPlaces = selectedPlaces.subList(selectedPlaceIndex, selectedPlaceIndex + dayItemCount);
+            fallbackCreateRequests.addAll(createFallbackDayItineraries(trip, request, dayNo, dayPlaces));
+            selectedPlaceIndex += dayItemCount;
+        }
+
+        List<Long> selectedPlaceIds = fallbackCreateRequests.stream()
+                .map(ItineraryCreateRequest::placeId)
+                .toList();
+        validateGeneratedPlaceControls(request, selectedPlaceIds);
+        candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
+        validateDraftItineraries(trip, request, fallbackCreateRequests);
+
+        return fallbackCreateRequests;
+    }
+
+    private int targetFallbackItemCount(
+            int tripDays,
+            int minItemsPerDay,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> candidatePlaces
+    ) {
+        int mustVisitPlaceCount = request == null ? 0 : request.normalizedMustVisitPlaceIds().size();
+        int requiredItemCount = Math.max(tripDays * minItemsPerDay, mustVisitPlaceCount);
+        return Math.min(candidatePlaces.size(), requiredItemCount);
+    }
+
+    private int fallbackDayItemCount(
+            int dayNo,
+            int tripDays,
+            int remainingItemCount,
+            int minItemsPerDay,
+            int maxItemsPerDay
+    ) {
+        int remainingDaysAfterToday = tripDays - dayNo;
+        int minimumItemsForLaterDays = remainingDaysAfterToday * minItemsPerDay;
+        int itemCount = remainingItemCount - minimumItemsForLaterDays;
+        return Math.min(maxItemsPerDay, Math.max(minItemsPerDay, itemCount));
+    }
+
+    private List<ItineraryCreateRequest> createFallbackDayItineraries(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            int dayNo,
+            List<PlaceResponse> dayPlaces
+    ) {
+        DayTimeWindow dayTimeWindow = createDayTimeWindows(trip, request).get(dayNo);
+        List<Integer> travelMinutes = fallbackTravelMinutes(dayPlaces);
+        int totalTravelMinutes = travelMinutes.stream()
+                .mapToInt(Integer::intValue)
+                .sum();
+        int availableStayMinutes = Math.toIntExact(
+                ChronoUnit.MINUTES.between(dayTimeWindow.startTime(), dayTimeWindow.endTime())
+        ) - totalTravelMinutes;
+        if (availableStayMinutes < dayPlaces.size() * MIN_FALLBACK_STAY_MINUTES) {
+            throw new IllegalArgumentException("Fallback itinerary cannot fit within day time window. dayNo=" + dayNo);
+        }
+
+        int maxStayMinutesPerPlace = availableStayMinutes / dayPlaces.size();
+        LocalTime cursor = dayTimeWindow.startTime();
+        List<ItineraryCreateRequest> createRequests = new ArrayList<>();
+
+        for (int index = 0; index < dayPlaces.size(); index++) {
+            PlaceResponse place = dayPlaces.get(index);
+            int travelMinutesFromPrevious = travelMinutes.get(index);
+            LocalTime startTime = cursor.plusMinutes(travelMinutesFromPrevious);
+            int stayMinutes = fallbackStayMinutes(place, maxStayMinutesPerPlace);
+            LocalTime endTime = startTime.plusMinutes(stayMinutes);
+
+            createRequests.add(new ItineraryCreateRequest(
+                    place.placeId(),
+                    dayNo,
+                    index + 1,
+                    startTime,
+                    endTime,
+                    travelMinutesFromPrevious,
+                    "Fallback itinerary item generated from candidate places."
+            ));
+
+            cursor = endTime;
+        }
+
+        return createRequests;
+    }
+
+    private List<Integer> fallbackTravelMinutes(List<PlaceResponse> dayPlaces) {
+        List<Integer> travelMinutes = new ArrayList<>();
+        PlaceResponse previousPlace = null;
+
+        for (PlaceResponse place : dayPlaces) {
+            if (previousPlace == null) {
+                travelMinutes.add(0);
+            } else {
+                travelMinutes.add(routeCalculationAdapter.calculateTravelMinutes(previousPlace, place));
+            }
+            previousPlace = place;
+        }
+
+        return travelMinutes;
+    }
+
+    private int fallbackStayMinutes(PlaceResponse place, int maxStayMinutesPerPlace) {
+        int preferredStayMinutes = place.avgStayMinutes() == null
+                ? MIN_FALLBACK_STAY_MINUTES
+                : place.avgStayMinutes();
+        int stayMinutes = Math.min(preferredStayMinutes, maxStayMinutesPerPlace);
+        return Math.max(MIN_FALLBACK_STAY_MINUTES, stayMinutes);
     }
 
     private List<ItineraryCreateRequest> generateValidatedDraftItinerary(
@@ -1136,6 +1306,56 @@ public class ItineraryGenerateService {
                 exception.getFailureType(),
                 exception.getProviderErrorType(),
                 exception.getProviderErrorCode(),
+                mustVisitPlaceIdsCount(request),
+                excludedPlaceIdsCount(request),
+                preferredCategoriesCount(request),
+                selectedCandidatePlaces.size(),
+                false
+        );
+    }
+
+    private void logFallbackDraftGenerationSuccess(
+            Trip trip,
+            String operation,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> selectedCandidatePlaces,
+            RuntimeException originalException
+    ) {
+        log.warn(
+                "Fallback itinerary draft generation succeeded. tripId={}, operation={}, originalExceptionClass={}, "
+                        + "originalReason={}, mustVisitPlaceIdsCount={}, excludedPlaceIdsCount={}, "
+                        + "preferredCategoriesCount={}, selectedCandidatePlacesCount={}, fallbackSuccess={}",
+                trip.getTripId(),
+                operation,
+                originalException.getClass().getSimpleName(),
+                originalException.getMessage(),
+                mustVisitPlaceIdsCount(request),
+                excludedPlaceIdsCount(request),
+                preferredCategoriesCount(request),
+                selectedCandidatePlaces.size(),
+                true
+        );
+    }
+
+    private void logFallbackDraftGenerationFailure(
+            Trip trip,
+            String operation,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> selectedCandidatePlaces,
+            RuntimeException originalException,
+            RuntimeException fallbackException
+    ) {
+        log.warn(
+                "Fallback itinerary draft generation failed. tripId={}, operation={}, originalExceptionClass={}, "
+                        + "originalReason={}, fallbackExceptionClass={}, fallbackReason={}, "
+                        + "mustVisitPlaceIdsCount={}, excludedPlaceIdsCount={}, preferredCategoriesCount={}, "
+                        + "selectedCandidatePlacesCount={}, fallbackSuccess={}",
+                trip.getTripId(),
+                operation,
+                originalException.getClass().getSimpleName(),
+                originalException.getMessage(),
+                fallbackException.getClass().getSimpleName(),
+                fallbackException.getMessage(),
                 mustVisitPlaceIdsCount(request),
                 excludedPlaceIdsCount(request),
                 preferredCategoriesCount(request),

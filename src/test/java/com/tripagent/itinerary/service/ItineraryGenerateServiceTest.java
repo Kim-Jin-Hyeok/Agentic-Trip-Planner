@@ -1813,7 +1813,7 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesDoesNotSaveWhenLlmFails() {
+    void generateItinerariesSavesFallbackWhenLlmFails() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1827,22 +1827,27 @@ class ItineraryGenerateServiceTest {
         when(llmClient.generate(anyString())).thenThrow(
                 LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
         );
+        when(itineraryService.createItinerary(
+                1L,
+                fallbackRequest(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        )).thenReturn(response(100L, 1L, 10L, 1));
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
-                .isInstanceOf(LlmException.class)
-                .hasMessage("OpenAI quota exceeded.");
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L);
         verify(llmClient).generate(prompt);
         verify(llmItineraryJsonParser, never()).parse("raw response");
         verify(llmItineraryResponseConverter, never()).toCreateRequests(List.of());
-        verify(candidatePlaceValidator, never()).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
-        verify(itineraryService, never()).createItinerary(
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L));
+        verify(itineraryService).createItinerary(
                 1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+                fallbackRequest(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
         );
     }
 
     @Test
-    void regenerateItinerariesDoesNotDeleteExistingItineraryWhenLlmFails() {
+    void regenerateItinerariesDeletesExistingItineraryAfterFallbackWhenLlmFails() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1855,15 +1860,21 @@ class ItineraryGenerateServiceTest {
         when(llmClient.generate(anyString())).thenThrow(
                 LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
         );
-
-        assertThatThrownBy(() -> itineraryGenerateService.regenerateItineraries(1L))
-                .isInstanceOf(LlmException.class)
-                .hasMessage("OpenAI quota exceeded.");
-        verify(llmClient).generate(prompt);
-        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
-        verify(itineraryService, never()).createItinerary(
+        when(itineraryService.createItinerary(
                 1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+                fallbackRequest(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        )).thenReturn(response(100L, 1L, 10L, 1));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.regenerateItineraries(1L);
+
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L);
+        verify(llmClient).generate(prompt);
+        InOrder inOrder = inOrder(itineraryRepository, itineraryService);
+        inOrder.verify(itineraryRepository).deleteByTrip_TripId(1L);
+        inOrder.verify(itineraryService).createItinerary(
+                1L,
+                fallbackRequest(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
         );
     }
 
@@ -2248,6 +2259,24 @@ class ItineraryGenerateServiceTest {
                 endTime,
                 travelMinutesFromPrevious,
                 "Mock itinerary item selected from candidate places."
+        );
+    }
+
+    private ItineraryCreateRequest fallbackRequest(
+            Long placeId,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
+        return new ItineraryCreateRequest(
+                placeId,
+                1,
+                orderNo,
+                startTime,
+                endTime,
+                travelMinutesFromPrevious,
+                "Fallback itinerary item generated from candidate places."
         );
     }
 
