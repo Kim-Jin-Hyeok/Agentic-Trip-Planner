@@ -330,6 +330,7 @@ public class ItineraryGenerateService {
                     maxItemsPerDay
             );
             List<PlaceResponse> dayPlaces = orderFallbackDayPlacesByRoute(
+                    trip,
                     selectedPlaces.subList(selectedPlaceIndex, selectedPlaceIndex + dayItemCount)
             );
             fallbackCreateRequests.addAll(createFallbackDayItineraries(trip, request, dayNo, dayPlaces));
@@ -370,13 +371,13 @@ public class ItineraryGenerateService {
         return Math.min(maxItemsPerDay, Math.max(minItemsPerDay, itemCount));
     }
 
-    private List<PlaceResponse> orderFallbackDayPlacesByRoute(List<PlaceResponse> dayPlaces) {
+    private List<PlaceResponse> orderFallbackDayPlacesByRoute(Trip trip, List<PlaceResponse> dayPlaces) {
         List<PlaceResponse> remainingPlaces = new ArrayList<>(dayPlaces);
         List<PlaceResponse> orderedPlaces = new ArrayList<>();
         PlaceResponse currentPlace = null;
 
         while (!remainingPlaces.isEmpty()) {
-            PlaceResponse nextPlace = findNearestFallbackPlace(currentPlace, remainingPlaces);
+            PlaceResponse nextPlace = findNextFallbackPlace(trip, currentPlace, remainingPlaces);
             orderedPlaces.add(nextPlace);
             remainingPlaces.remove(nextPlace);
             currentPlace = nextPlace;
@@ -385,9 +386,13 @@ public class ItineraryGenerateService {
         return orderedPlaces;
     }
 
-    private PlaceResponse findNearestFallbackPlace(PlaceResponse currentPlace, List<PlaceResponse> candidatePlaces) {
+    private PlaceResponse findNextFallbackPlace(
+            Trip trip,
+            PlaceResponse currentPlace,
+            List<PlaceResponse> candidatePlaces
+    ) {
         if (currentPlace == null) {
-            return candidatePlaces.getFirst();
+            return findFallbackStartPlace(trip, candidatePlaces);
         }
 
         return candidatePlaces.stream()
@@ -398,10 +403,22 @@ public class ItineraryGenerateService {
                 .orElseThrow();
     }
 
+    private PlaceResponse findFallbackStartPlace(Trip trip, List<PlaceResponse> candidatePlaces) {
+        return candidatePlaces.stream()
+                .filter(place -> isSameArea(trip.getLastAccommodationArea(), place.region()))
+                .findFirst()
+                .orElse(candidatePlaces.getFirst());
+    }
+
     private boolean isSameRegion(PlaceResponse previousPlace, PlaceResponse currentPlace) {
-        return previousPlace.region() != null
-                && !previousPlace.region().isBlank()
-                && previousPlace.region().equals(currentPlace.region());
+        return isSameArea(previousPlace.region(), currentPlace.region());
+    }
+
+    private boolean isSameArea(String firstArea, String secondArea) {
+        return firstArea != null
+                && !firstArea.isBlank()
+                && secondArea != null
+                && firstArea.trim().equalsIgnoreCase(secondArea.trim());
     }
 
     private List<ItineraryCreateRequest> createFallbackDayItineraries(
