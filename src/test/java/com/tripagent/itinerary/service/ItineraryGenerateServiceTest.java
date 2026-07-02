@@ -712,6 +712,43 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateDraftItinerariesIncludesRegionBalanceCandidatesWhenTopThirtyUsesOneRegion() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = new java.util.ArrayList<>(
+                java.util.stream.IntStream.rangeClosed(1, 30)
+                        .mapToObj(placeId -> placeWithFoodScoreAndRegion((long) placeId, "NATURE", 1000 - placeId, "EAST"))
+                        .toList()
+        );
+        candidatePlaces.add(placeWithFoodScoreAndRegion(31L, "NATURE", 1, "WEST"));
+        candidatePlaces.add(placeWithFoodScoreAndRegion(32L, "NATURE", 1, "NORTH"));
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(1L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(1L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList())).thenReturn(prompt);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        itineraryGenerateService.generateDraftItineraries(1L);
+
+        ArgumentCaptor<List<PlaceResponse>> candidateCaptor = ArgumentCaptor.forClass(List.class);
+        verify(itineraryPromptGenerator).generate(eq(trip), candidateCaptor.capture());
+        assertThat(candidateCaptor.getValue()).hasSize(30);
+        assertThat(candidateCaptor.getValue()).extracting(PlaceResponse::region)
+                .contains("EAST", "WEST", "NORTH");
+        assertThat(candidateCaptor.getValue()).extracting(PlaceResponse::placeId)
+                .contains(31L, 32L)
+                .doesNotContain(29L, 30L);
+    }
+
+    @Test
     void generateDraftItinerariesIncludesMustVisitPlaceOutsideTopThirty() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = java.util.stream.IntStream.rangeClosed(1, 31)
@@ -2125,11 +2162,20 @@ class ItineraryGenerateServiceTest {
     }
 
     private PlaceResponse placeWithFoodScore(Long placeId, String category, Integer foodScore) {
+        return placeWithFoodScoreAndRegion(placeId, category, foodScore, "EAST");
+    }
+
+    private PlaceResponse placeWithFoodScoreAndRegion(
+            Long placeId,
+            String category,
+            Integer foodScore,
+            String region
+    ) {
         return new PlaceResponse(
                 placeId,
                 "Place " + placeId,
                 category,
-                "EAST",
+                region,
                 "JEJU",
                 33.0,
                 126.0,

@@ -45,6 +45,7 @@ public class ItineraryGenerateService {
 
     private static final int MAX_LLM_VALIDATION_RETRY_COUNT = 2;
     private static final int MAX_LLM_CANDIDATE_PLACE_COUNT = 30;
+    private static final int MAX_BALANCED_REGION_COUNT = 3;
     private static final int MAX_TRAVEL_MINUTES_BETWEEN_PLACES = 90;
     private static final Set<String> MEAL_AND_REST_CATEGORY_NAMES = Set.of("FOOD", "CAFE");
     private static final Set<String> TOUR_CATEGORY_NAMES = Set.of("NATURE", "BEACH", "GARDEN", "MUSEUM");
@@ -686,8 +687,14 @@ public class ItineraryGenerateService {
                         ordinaryPlaces.stream().limit(ordinaryPlaceLimit)
                 )
                 .toList();
-        return includeCategoryBalanceCandidates(
+        List<PlaceResponse> categoryBalancedCandidatePlaces = includeCategoryBalanceCandidates(
                 selectedCandidatePlaces,
+                filteredCandidatePlaces,
+                mustVisitPlaceIds,
+                candidatePlaceComparator(trip.getConcept(), request)
+        );
+        return includeRegionBalanceCandidates(
+                categoryBalancedCandidatePlaces,
                 filteredCandidatePlaces,
                 mustVisitPlaceIds,
                 candidatePlaceComparator(trip.getConcept(), request)
@@ -820,6 +827,106 @@ public class ItineraryGenerateService {
         return places.stream()
                 .filter(place -> categoryNames.contains(place.category()))
                 .count();
+    }
+
+    private List<PlaceResponse> includeRegionBalanceCandidates(
+            List<PlaceResponse> selectedCandidatePlaces,
+            List<PlaceResponse> candidatePlaces,
+            Set<Long> mustVisitPlaceIds,
+            Comparator<PlaceResponse> comparator
+    ) {
+        if (selectedCandidatePlaces.size() >= candidatePlaces.size()) {
+            return selectedCandidatePlaces;
+        }
+
+        int targetRegionCount = Math.min(
+                Math.min(MAX_BALANCED_REGION_COUNT, countDistinctRegions(candidatePlaces)),
+                selectedCandidatePlaces.size()
+        );
+        if (countDistinctRegions(selectedCandidatePlaces) >= targetRegionCount) {
+            return selectedCandidatePlaces;
+        }
+
+        List<PlaceResponse> regionBalancedCandidatePlaces = new ArrayList<>(selectedCandidatePlaces);
+        while (countDistinctRegions(regionBalancedCandidatePlaces) < targetRegionCount) {
+            Set<Long> selectedPlaceIds = regionBalancedCandidatePlaces.stream()
+                    .map(PlaceResponse::placeId)
+                    .collect(Collectors.toSet());
+            Set<String> selectedRegions = regionBalancedCandidatePlaces.stream()
+                    .map(PlaceResponse::region)
+                    .filter(this::hasRegion)
+                    .collect(Collectors.toSet());
+
+            PlaceResponse regionCandidate = candidatePlaces.stream()
+                    .filter(candidatePlace -> !selectedPlaceIds.contains(candidatePlace.placeId()))
+                    .filter(candidatePlace -> hasRegion(candidatePlace.region()))
+                    .filter(candidatePlace -> !selectedRegions.contains(candidatePlace.region()))
+                    .min(comparator)
+                    .orElse(null);
+            if (regionCandidate == null) {
+                return regionBalancedCandidatePlaces;
+            }
+
+            int replacementIndex = lastReplaceableRegionCandidateIndex(
+                    regionBalancedCandidatePlaces,
+                    mustVisitPlaceIds
+            );
+            if (replacementIndex < 0) {
+                return regionBalancedCandidatePlaces;
+            }
+
+            regionBalancedCandidatePlaces.set(replacementIndex, regionCandidate);
+        }
+
+        return regionBalancedCandidatePlaces;
+    }
+
+    private int lastReplaceableRegionCandidateIndex(
+            List<PlaceResponse> selectedCandidatePlaces,
+            Set<Long> mustVisitPlaceIds
+    ) {
+        for (int index = selectedCandidatePlaces.size() - 1; index >= 0; index--) {
+            PlaceResponse candidatePlace = selectedCandidatePlaces.get(index);
+            if (!mustVisitPlaceIds.contains(candidatePlace.placeId())
+                    && countRegion(selectedCandidatePlaces, candidatePlace.region()) > 1
+                    && !MEAL_AND_REST_CATEGORY_NAMES.contains(candidatePlace.category())
+                    && !TOUR_CATEGORY_NAMES.contains(candidatePlace.category())) {
+                return index;
+            }
+        }
+
+        for (int index = selectedCandidatePlaces.size() - 1; index >= 0; index--) {
+            PlaceResponse candidatePlace = selectedCandidatePlaces.get(index);
+            if (!mustVisitPlaceIds.contains(candidatePlace.placeId())
+                    && countRegion(selectedCandidatePlaces, candidatePlace.region()) > 1
+                    && keepsExistingBalanceCategory(selectedCandidatePlaces, candidatePlace)) {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private int countDistinctRegions(List<PlaceResponse> places) {
+        return (int) places.stream()
+                .map(PlaceResponse::region)
+                .filter(this::hasRegion)
+                .distinct()
+                .count();
+    }
+
+    private long countRegion(List<PlaceResponse> places, String region) {
+        if (!hasRegion(region)) {
+            return 0;
+        }
+
+        return places.stream()
+                .filter(place -> region.equals(place.region()))
+                .count();
+    }
+
+    private boolean hasRegion(String region) {
+        return region != null && !region.isBlank();
     }
 
     private void validateCandidatePlacesEnoughForTripDays(
