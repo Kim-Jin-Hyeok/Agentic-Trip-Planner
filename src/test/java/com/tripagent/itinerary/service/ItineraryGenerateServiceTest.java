@@ -185,12 +185,11 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesRejectsWhenRelaxedPaceHasFiveItemsPerDay() {
-        assertGenerateItinerariesFailsWithPaceItemCount(
+    void generateItinerariesSavesFallbackWhenRelaxedPaceValidationFails() {
+        assertGenerateItinerariesSavesFallbackWithPaceItemCount(
                 ItineraryPace.RELAXED,
                 5,
-                "Generated itinerary item count per day does not match pace policy. pace=RELAXED, "
-                        + "dayNo=1, itemCount=5, minItemsPerDay=3, maxItemsPerDay=4"
+                3
         );
     }
 
@@ -200,12 +199,11 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesRejectsWhenNormalPaceHasSixItemsPerDay() {
-        assertGenerateItinerariesFailsWithPaceItemCount(
+    void generateItinerariesSavesFallbackWhenNormalPaceValidationFails() {
+        assertGenerateItinerariesSavesFallbackWithPaceItemCount(
                 ItineraryPace.NORMAL,
                 6,
-                "Generated itinerary item count per day does not match pace policy. pace=NORMAL, "
-                        + "dayNo=1, itemCount=6, minItemsPerDay=4, maxItemsPerDay=5"
+                4
         );
     }
 
@@ -215,17 +213,16 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesRejectsWhenBusyPaceHasFourItemsPerDay() {
-        assertGenerateItinerariesFailsWithPaceItemCount(
+    void generateItinerariesSavesFallbackWhenBusyPaceValidationFails() {
+        assertGenerateItinerariesSavesFallbackWithPaceItemCount(
                 ItineraryPace.BUSY,
                 4,
-                "Generated itinerary item count per day does not match pace policy. pace=BUSY, "
-                        + "dayNo=1, itemCount=4, minItemsPerDay=5, maxItemsPerDay=7"
+                5
         );
     }
 
     @Test
-    void generateItinerariesRejectsWhenPaceRequestHasEmptyTripDay() {
+    void generateItinerariesSavesFallbackWhenPaceRequestHasEmptyTripDay() {
         Trip trip = trip(
                 1L,
                 TripConcept.FOOD,
@@ -248,11 +245,11 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Generated itinerary must include at least one item for every trip day. missingDayNos=[2]");
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).hasSize(8);
         verify(llmClient, times(3)).generate(anyString());
-        verify(itineraryService, never()).createItinerary(any(), any());
+        verify(itineraryService, times(8)).createItinerary(eq(1L), any());
     }
 
     @Test
@@ -1356,7 +1353,7 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesFailsWhenAllRetriesFailValidation() {
+    void generateItinerariesSavesFallbackWhenAllRetriesFailValidation() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1383,15 +1380,12 @@ class ItineraryGenerateServiceTest {
                 .when(candidatePlaceValidator)
                 .validatePlaceIds(candidatePlaces, List.of(10L, 10L));
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Place id must not be duplicated in generated itinerary. placeId=10");
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).hasSize(1);
         verify(llmClient, times(3)).generate(anyString());
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 10L));
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
-        );
+        verify(itineraryService).createItinerary(eq(1L), any());
     }
 
     @Test
@@ -1482,7 +1476,7 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesRejectsWhenCalculatedTravelMinutesExceedsMaximum() {
+    void generateItinerariesSavesFallbackWhenCalculatedTravelMinutesExceedsMaximum() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1508,15 +1502,11 @@ class ItineraryGenerateServiceTest {
         doReturn(0).when(routeCalculationAdapter).calculateTravelMinutes(null, candidatePlaces.get(0));
         doReturn(91).when(routeCalculationAdapter).calculateTravelMinutes(candidatePlaces.get(0), candidatePlaces.get(1));
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Itinerary travelMinutesFromPrevious must be less than or equal to 90. "
-                        + "dayNo=1, orderNo=2, travelMinutesFromPrevious=91");
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).hasSize(1);
         verify(llmClient, times(3)).generate(anyString());
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(20L, 2, LocalTime.of(11, 40), LocalTime.of(12, 40), 91)
-        );
+        verify(itineraryService).createItinerary(eq(1L), any());
     }
 
     @Test
@@ -1571,7 +1561,7 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesRejectsFirstStartTimeBeforeDailyStartTimeBeforeSaving() {
+    void generateItinerariesSavesFallbackWhenFirstStartTimeBeforeDailyStartTime() {
         Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(10, 30));
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1595,22 +1585,15 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("First itinerary item of each day must start at or after trip dailyStartTime. dayNo=1");
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).hasSize(1);
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
-        );
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
-        );
+        verify(itineraryService).createItinerary(eq(1L), any());
     }
 
     @Test
-    void generateItinerariesRejectsEndTimeAfterDailyEndTimeBeforeSaving() {
+    void generateItinerariesSavesFallbackWhenEndTimeAfterDailyEndTime() {
         Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(9, 0), LocalTime.of(10, 30));
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1634,23 +1617,16 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime. dayNo=1");
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).hasSize(1);
         verify(llmClient, times(3)).generate(anyString());
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
-        );
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
-        );
+        verify(itineraryService).createItinerary(eq(1L), any());
     }
 
     @Test
-    void generateItinerariesRejectsStartTimeBeforeDayTimeWindowBeforeSaving() {
+    void generateItinerariesSavesFallbackWhenStartTimeBeforeDayTimeWindow() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1684,15 +1660,20 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Itinerary startTime must be at or after day time window startTime. dayNo=1");
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).hasSize(1);
         verify(llmClient, times(3)).generate(anyString());
-        verify(itineraryService, never()).createItinerary(eq(1L), any());
+        verify(itineraryService).createGeneratedItinerary(
+                eq(1L),
+                any(),
+                eq(LocalTime.of(14, 0)),
+                eq(LocalTime.of(18, 0))
+        );
     }
 
     @Test
-    void generateItinerariesRejectsMissingTripDayBeforeSaving() {
+    void generateItinerariesSavesFallbackWhenTripDayIsMissing() {
         Trip trip = trip(
                 1L,
                 TripConcept.FOOD,
@@ -1724,20 +1705,11 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(
-                        "Generated itinerary must include at least one item for every trip day. missingDayNos=[2]"
-                );
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).hasSize(3);
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(10L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
-        );
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(20L, 3, 1, LocalTime.of(9, 0), LocalTime.of(10, 30), 0)
-        );
+        verify(itineraryService, times(3)).createItinerary(eq(1L), any());
     }
 
     @Test
@@ -1879,7 +1851,7 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void regenerateItinerariesDoesNotDeleteExistingItineraryWhenDraftValidationFails() {
+    void regenerateItinerariesDeletesExistingItineraryAfterFallbackWhenDraftValidationFails() {
         Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(10, 30));
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1902,19 +1874,17 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
-        assertThatThrownBy(() -> itineraryGenerateService.regenerateItineraries(1L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("First itinerary item of each day must start at or after trip dailyStartTime. dayNo=1");
+        List<ItineraryResponse> responses = itineraryGenerateService.regenerateItineraries(1L);
+
+        assertThat(responses).hasSize(1);
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
-        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
-        );
+        InOrder inOrder = inOrder(itineraryRepository, itineraryService);
+        inOrder.verify(itineraryRepository).deleteByTrip_TripId(1L);
+        inOrder.verify(itineraryService).createItinerary(eq(1L), any());
     }
 
     @Test
-    void regenerateItinerariesDoesNotDeleteExistingItineraryWhenMustVisitMissingAfterRetries() {
+    void regenerateItinerariesDeletesExistingItineraryAfterFallbackWhenMustVisitMissingAfterRetries() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1940,15 +1910,13 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
-        assertThatThrownBy(() -> itineraryGenerateService.regenerateItineraries(1L, request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Generated itinerary must include mustVisitPlaceId. placeId=20");
+        List<ItineraryResponse> responses = itineraryGenerateService.regenerateItineraries(1L, request);
+
+        assertThat(responses).hasSize(1);
         verify(llmClient, times(3)).generate(anyString());
-        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
-        verify(itineraryService, never()).createItinerary(
-                1L,
-                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
-        );
+        InOrder inOrder = inOrder(itineraryRepository, itineraryService);
+        inOrder.verify(itineraryRepository).deleteByTrip_TripId(1L);
+        inOrder.verify(itineraryService).createItinerary(eq(1L), any());
     }
 
     @Test
@@ -1998,10 +1966,10 @@ class ItineraryGenerateServiceTest {
         verify(itineraryService, times(itemCount)).createItinerary(eq(1L), any());
     }
 
-    private void assertGenerateItinerariesFailsWithPaceItemCount(
+    private void assertGenerateItinerariesSavesFallbackWithPaceItemCount(
             ItineraryPace pace,
             int itemCount,
-            String expectedMessage
+            int expectedFallbackItemCount
     ) {
         Trip trip = trip(1L, TripConcept.FOOD);
         int candidateCount = switch (pace) {
@@ -2023,11 +1991,11 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
 
-        assertThatThrownBy(() -> itineraryGenerateService.generateItineraries(1L, request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(expectedMessage);
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).hasSize(expectedFallbackItemCount);
         verify(llmClient, times(3)).generate(anyString());
-        verify(itineraryService, never()).createItinerary(any(), any());
+        verify(itineraryService, times(expectedFallbackItemCount)).createItinerary(eq(1L), any());
     }
 
     private List<PlaceResponse> places(int count) {

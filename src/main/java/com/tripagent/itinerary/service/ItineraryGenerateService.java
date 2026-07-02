@@ -246,7 +246,13 @@ public class ItineraryGenerateService {
         }
 
         logFinalValidationFailure(trip, operation, maxAttemptCount, request, candidatePlaces, lastValidationException);
-        throw lastValidationException;
+        return generateFallbackDraftItinerariesOrThrow(
+                trip,
+                candidatePlaces,
+                request,
+                operation,
+                lastValidationException
+        );
     }
 
     private String promptForValidationAttempt(String prompt, IllegalArgumentException lastValidationException) {
