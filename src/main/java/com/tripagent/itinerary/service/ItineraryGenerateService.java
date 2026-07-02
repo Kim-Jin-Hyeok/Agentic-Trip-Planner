@@ -11,6 +11,7 @@ import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.policy.PaceItineraryPolicy;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.itinerary.repository.ItineraryRepository;
@@ -50,13 +51,6 @@ public class ItineraryGenerateService {
     private static final int MIN_FALLBACK_STAY_MINUTES = 30;
     private static final Set<String> MEAL_AND_REST_CATEGORY_NAMES = Set.of("FOOD", "CAFE");
     private static final Set<String> TOUR_CATEGORY_NAMES = Set.of("NATURE", "BEACH", "GARDEN", "MUSEUM");
-    private static final Map<String, String> ACCOMMODATION_AREA_REGION_MAPPINGS = Map.of(
-            "SEOGWIPO", "WEST",
-            "JEJU_CITY", "NORTH",
-            "AEWOL", "WEST",
-            "JOCHEON", "EAST",
-            "SEONGSAN", "EAST"
-    );
     private static final String OPERATION_GENERATE = "generate";
     private static final String OPERATION_REGENERATE = "regenerate";
     private static final String OPERATION_GENERATE_DRAFT = "generateDraft";
@@ -71,6 +65,7 @@ public class ItineraryGenerateService {
     private final ItineraryService itineraryService;
     private final ItineraryRepository itineraryRepository;
     private final RouteCalculationAdapter routeCalculationAdapter;
+    private final AccommodationAreaRegionMapper accommodationAreaRegionMapper;
 
     public ItineraryGenerateService(
             TripRepository tripRepository,
@@ -82,7 +77,8 @@ public class ItineraryGenerateService {
             CandidatePlaceValidator candidatePlaceValidator,
             ItineraryService itineraryService,
             ItineraryRepository itineraryRepository,
-            RouteCalculationAdapter routeCalculationAdapter
+            RouteCalculationAdapter routeCalculationAdapter,
+            AccommodationAreaRegionMapper accommodationAreaRegionMapper
     ) {
         this.tripRepository = tripRepository;
         this.placeService = placeService;
@@ -94,6 +90,7 @@ public class ItineraryGenerateService {
         this.itineraryService = itineraryService;
         this.itineraryRepository = itineraryRepository;
         this.routeCalculationAdapter = routeCalculationAdapter;
+        this.accommodationAreaRegionMapper = accommodationAreaRegionMapper;
     }
 
     @Transactional
@@ -419,7 +416,7 @@ public class ItineraryGenerateService {
             return sameAreaPlace;
         }
 
-        String mappedRegion = mappedAccommodationRegion(trip.getLastAccommodationArea());
+        String mappedRegion = accommodationAreaRegionMapper.toPlaceRegion(trip.getLastAccommodationArea());
         if (mappedRegion != null) {
             return candidatePlaces.stream()
                     .filter(place -> isSameArea(mappedRegion, place.region()))
@@ -428,15 +425,6 @@ public class ItineraryGenerateService {
         }
 
         return candidatePlaces.getFirst();
-    }
-
-    private String mappedAccommodationRegion(String accommodationArea) {
-        String normalizedAccommodationArea = normalizeArea(accommodationArea);
-        if (normalizedAccommodationArea == null) {
-            return null;
-        }
-
-        return ACCOMMODATION_AREA_REGION_MAPPINGS.get(normalizedAccommodationArea);
     }
 
     private String normalizeArea(String area) {

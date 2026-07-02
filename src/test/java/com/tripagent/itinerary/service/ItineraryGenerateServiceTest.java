@@ -28,6 +28,7 @@ import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceSummaryResponse;
@@ -86,6 +87,9 @@ class ItineraryGenerateServiceTest {
 
     @Spy
     private RouteCalculationAdapter routeCalculationAdapter = new SimpleRouteCalculationAdapter();
+
+    @Spy
+    private AccommodationAreaRegionMapper accommodationAreaRegionMapper = new AccommodationAreaRegionMapper();
 
     @InjectMocks
     private ItineraryGenerateService itineraryGenerateService;
