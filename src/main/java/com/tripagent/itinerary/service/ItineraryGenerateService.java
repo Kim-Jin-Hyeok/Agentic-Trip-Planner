@@ -329,7 +329,9 @@ public class ItineraryGenerateService {
                     minItemsPerDay,
                     maxItemsPerDay
             );
-            List<PlaceResponse> dayPlaces = selectedPlaces.subList(selectedPlaceIndex, selectedPlaceIndex + dayItemCount);
+            List<PlaceResponse> dayPlaces = orderFallbackDayPlacesByRoute(
+                    selectedPlaces.subList(selectedPlaceIndex, selectedPlaceIndex + dayItemCount)
+            );
             fallbackCreateRequests.addAll(createFallbackDayItineraries(trip, request, dayNo, dayPlaces));
             selectedPlaceIndex += dayItemCount;
         }
@@ -366,6 +368,40 @@ public class ItineraryGenerateService {
         int minimumItemsForLaterDays = remainingDaysAfterToday * minItemsPerDay;
         int itemCount = remainingItemCount - minimumItemsForLaterDays;
         return Math.min(maxItemsPerDay, Math.max(minItemsPerDay, itemCount));
+    }
+
+    private List<PlaceResponse> orderFallbackDayPlacesByRoute(List<PlaceResponse> dayPlaces) {
+        List<PlaceResponse> remainingPlaces = new ArrayList<>(dayPlaces);
+        List<PlaceResponse> orderedPlaces = new ArrayList<>();
+        PlaceResponse currentPlace = null;
+
+        while (!remainingPlaces.isEmpty()) {
+            PlaceResponse nextPlace = findNearestFallbackPlace(currentPlace, remainingPlaces);
+            orderedPlaces.add(nextPlace);
+            remainingPlaces.remove(nextPlace);
+            currentPlace = nextPlace;
+        }
+
+        return orderedPlaces;
+    }
+
+    private PlaceResponse findNearestFallbackPlace(PlaceResponse currentPlace, List<PlaceResponse> candidatePlaces) {
+        if (currentPlace == null) {
+            return candidatePlaces.getFirst();
+        }
+
+        return candidatePlaces.stream()
+                .min(Comparator.comparingInt((PlaceResponse place) ->
+                                routeCalculationAdapter.calculateTravelMinutes(currentPlace, place))
+                        .thenComparing(place -> !isSameRegion(currentPlace, place))
+                        .thenComparing(PlaceResponse::placeId))
+                .orElseThrow();
+    }
+
+    private boolean isSameRegion(PlaceResponse previousPlace, PlaceResponse currentPlace) {
+        return previousPlace.region() != null
+                && !previousPlace.region().isBlank()
+                && previousPlace.region().equals(currentPlace.region());
     }
 
     private List<ItineraryCreateRequest> createFallbackDayItineraries(
