@@ -58,6 +58,7 @@ class ControllerValidationTest {
                 .build();
         itineraryMockMvc = MockMvcBuilders
                 .standaloneSetup(new com.tripagent.itinerary.controller.ItineraryController(itineraryService))
+                .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -97,7 +98,7 @@ class ControllerValidationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(itineraryService, never()).createItinerary(any(), any(ItineraryCreateRequest.class));
+        verify(itineraryService, never()).createItinerary(any(), any(ItineraryCreateRequest.class), any());
     }
 
     @Test
@@ -116,7 +117,7 @@ class ControllerValidationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(itineraryService, never()).updateItinerary(any(), any(), any(ItineraryUpdateRequest.class));
+        verify(itineraryService, never()).updateItinerary(any(), any(), any(ItineraryUpdateRequest.class), any());
     }
 
     @Test
@@ -135,7 +136,7 @@ class ControllerValidationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(itineraryService, never()).reorderItineraries(any(), any(ItineraryReorderRequest.class));
+        verify(itineraryService, never()).reorderItineraries(any(), any(ItineraryReorderRequest.class), any());
     }
 
     @Test
@@ -151,7 +152,8 @@ class ControllerValidationTest {
                   ]
                 }
                 """;
-        when(itineraryService.reorderItineraries(any(), any(ItineraryReorderRequest.class))).thenReturn(List.of());
+        when(itineraryService.reorderItineraries(any(), any(ItineraryReorderRequest.class), any()))
+                .thenReturn(List.of());
 
         itineraryMockMvc.perform(patch("/api/trips/1/itineraries/reorder")
                         .contentType(MediaType.APPLICATION_JSON)

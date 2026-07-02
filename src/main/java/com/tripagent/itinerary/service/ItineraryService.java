@@ -43,10 +43,14 @@ public class ItineraryService {
 
     @Transactional
     public ItineraryResponse createItinerary(Long tripId, ItineraryCreateRequest request) {
+        return createItinerary(tripId, request, null);
+    }
+
+    @Transactional
+    public ItineraryResponse createItinerary(Long tripId, ItineraryCreateRequest request, Long ownerId) {
         validateRequest(tripId, request);
 
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        Trip trip = findTripAndValidateOwner(tripId, ownerId);
 
         validateItineraryValues(
                 trip,
@@ -117,10 +121,19 @@ public class ItineraryService {
 
     @Transactional
     public ItineraryResponse updateItinerary(Long tripId, Long itineraryId, ItineraryUpdateRequest request) {
+        return updateItinerary(tripId, itineraryId, request, null);
+    }
+
+    @Transactional
+    public ItineraryResponse updateItinerary(
+            Long tripId,
+            Long itineraryId,
+            ItineraryUpdateRequest request,
+            Long ownerId
+    ) {
         validateUpdateRequest(tripId, itineraryId, request);
 
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        Trip trip = findTripAndValidateOwner(tripId, ownerId);
         Itinerary itinerary = itineraryRepository.findById(itineraryId)
                 .orElseThrow(() -> new NoSuchElementException("Itinerary not found. itineraryId=" + itineraryId));
         validateItineraryBelongsToTrip(itinerary, tripId);
@@ -166,10 +179,18 @@ public class ItineraryService {
 
     @Transactional
     public List<ItineraryResponse> reorderItineraries(Long tripId, ItineraryReorderRequest request) {
+        return reorderItineraries(tripId, request, null);
+    }
+
+    @Transactional
+    public List<ItineraryResponse> reorderItineraries(
+            Long tripId,
+            ItineraryReorderRequest request,
+            Long ownerId
+    ) {
         validateReorderRequest(tripId, request);
 
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        Trip trip = findTripAndValidateOwner(tripId, ownerId);
         Map<Long, ItineraryReorderRequestItem> reorderItems = validateAndMapReorderItems(tripId, request);
         List<Itinerary> tripItineraries = itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId);
         List<ReorderState> finalStates = buildReorderStates(tripItineraries, reorderItems);
@@ -213,10 +234,30 @@ public class ItineraryService {
         itineraryRepository.delete(itinerary);
     }
 
+    @Transactional
+    public void deleteItinerary(Long tripId, Long itineraryId, Long ownerId) {
+        validateTripAndItineraryIds(tripId, itineraryId);
+        findTripAndValidateOwner(tripId, ownerId);
+
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new NoSuchElementException("Itinerary not found. itineraryId=" + itineraryId));
+        validateItineraryBelongsToTrip(itinerary, tripId);
+
+        itineraryRepository.delete(itinerary);
+    }
+
     public List<ItineraryResponse> getItineraries(Long tripId) {
         if (!tripRepository.existsById(tripId)) {
             throw new NoSuchElementException("Trip not found. tripId=" + tripId);
         }
+
+        return itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId).stream()
+                .map(ItineraryResponse::from)
+                .toList();
+    }
+
+    public List<ItineraryResponse> getItineraries(Long tripId, Long ownerId) {
+        findTripAndValidateOwner(tripId, ownerId);
 
         return itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId).stream()
                 .map(ItineraryResponse::from)
@@ -539,6 +580,22 @@ public class ItineraryService {
         }
         if (itineraryId == null) {
             throw new IllegalArgumentException("Itinerary id is required.");
+        }
+    }
+
+    private Trip findTripAndValidateOwner(Long tripId, Long ownerId) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        validateTripOwner(trip, ownerId);
+        return trip;
+    }
+
+    private void validateTripOwner(Trip trip, Long ownerId) {
+        if (ownerId == null) {
+            return;
+        }
+        if (!ownerId.equals(trip.getOwnerId())) {
+            throw new IllegalArgumentException("Trip owner does not match. tripId=" + trip.getTripId());
         }
     }
 

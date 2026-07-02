@@ -1,5 +1,6 @@
 package com.tripagent.itinerary.controller;
 
+import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryReorderRequest;
@@ -33,39 +34,46 @@ public class ItineraryController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ItineraryResponse> createItinerary(
             @PathVariable Long tripId,
+            @LoginMemberId Long memberId,
             @Valid @RequestBody ItineraryCreateRequest request
     ) {
-        return ApiResponse.success(itineraryService.createItinerary(tripId, request));
+        return ApiResponse.success(itineraryService.createItinerary(tripId, request, memberId));
     }
 
     @GetMapping
-    public ApiResponse<List<ItineraryResponse>> getItineraries(@PathVariable Long tripId) {
-        return ApiResponse.success(itineraryService.getItineraries(tripId));
+    public ApiResponse<List<ItineraryResponse>> getItineraries(
+            @PathVariable Long tripId,
+            @LoginMemberId Long memberId
+    ) {
+        return ApiResponse.success(itineraryService.getItineraries(tripId, memberId));
     }
 
     @PatchMapping("/reorder")
     public ApiResponse<List<ItineraryResponse>> reorderItineraries(
             @PathVariable Long tripId,
+            @LoginMemberId Long memberId,
             @Valid @RequestBody ItineraryReorderRequest request
     ) {
-        return ApiResponse.success(itineraryService.reorderItineraries(tripId, request));
+        return ApiResponse.success(itineraryService.reorderItineraries(tripId, request, memberId));
     }
 
     @PatchMapping("/{itineraryId}")
     public ApiResponse<ItineraryResponse> updateItinerary(
             @PathVariable Long tripId,
             @PathVariable Long itineraryId,
+            @LoginMemberId Long memberId,
             @Valid @RequestBody ItineraryUpdateRequest request
     ) {
-        return ApiResponse.success(itineraryService.updateItinerary(tripId, itineraryId, request));
+        return ApiResponse.success(itineraryService.updateItinerary(tripId, itineraryId, request, memberId));
     }
 
     @DeleteMapping("/{itineraryId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteItinerary(
             @PathVariable Long tripId,
-            @PathVariable Long itineraryId
+            @PathVariable Long itineraryId,
+            @LoginMemberId Long memberId
     ) {
-        itineraryService.deleteItinerary(tripId, itineraryId);
+        itineraryService.deleteItinerary(tripId, itineraryId, memberId);
     }
 }

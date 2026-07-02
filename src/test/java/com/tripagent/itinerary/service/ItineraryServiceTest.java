@@ -92,6 +92,19 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void createItineraryWithOwnerIdRejectsDifferentOwner() {
+        Trip trip = trip(1L, 100L);
+        ItineraryCreateRequest request = request(10L, 1, 1);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> itineraryService.createItinerary(1L, request, 200L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip owner does not match. tripId=1");
+        verify(placeRepository, never()).findById(10L);
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
     void createItineraryRejectsUnknownPlace() {
         Trip trip = trip(1L);
         ItineraryCreateRequest request = request(10L, 1, 1);
@@ -786,6 +799,17 @@ class ItineraryServiceTest {
                 .hasMessage("Trip not found. tripId=1");
     }
 
+    @Test
+    void getItinerariesWithOwnerIdRejectsDifferentOwner() {
+        Trip trip = trip(1L, 100L);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> itineraryService.getItineraries(1L, 200L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip owner does not match. tripId=1");
+        verify(itineraryRepository, never()).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
+    }
+
     private ItineraryReorderRequest reorderRequest(ItineraryReorderRequestItem... items) {
         return new ItineraryReorderRequest(List.of(items));
     }
@@ -808,6 +832,22 @@ class ItineraryServiceTest {
 
     private Trip trip(Long tripId) {
         return trip(tripId, LocalTime.of(9, 0));
+    }
+
+    private Trip trip(Long tripId, Long ownerId) {
+        Trip trip = Trip.create(
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                ownerId
+        );
+        setId(trip, "tripId", tripId);
+        return trip;
     }
 
     private Trip trip(Long tripId, LocalTime dailyStartTime) {
