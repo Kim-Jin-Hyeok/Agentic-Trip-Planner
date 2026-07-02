@@ -650,6 +650,23 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void reorderItinerariesRejectsOrderNoNotFollowingTimeOrder() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(15, 0), LocalTime.of(16, 0), 0);
+        Itinerary second = itinerary(200L, trip, place, 2, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 30);
+        ItineraryReorderRequest request = reorderRequest(item(200L, 1, 2));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(first, second));
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary orderNo must follow time order within each day. dayNo=1");
+    }
+
+    @Test
     void reorderItinerariesAllowsAdjacentTimeAfterDayNoChange() {
         Trip trip = trip(1L);
         Place place = place(10L);

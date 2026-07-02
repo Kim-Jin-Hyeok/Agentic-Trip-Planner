@@ -541,6 +541,7 @@ public class ItineraryService {
         }
 
         validateNoFinalTimeOverlap(finalStates);
+        validateFinalOrderTimeSequence(finalStates);
     }
 
     private void validateNoFinalTimeOverlap(List<ReorderState> finalStates) {
@@ -554,6 +555,23 @@ public class ItineraryService {
 
             if (previous.dayNo().equals(current.dayNo()) && current.startTime().isBefore(previous.endTime())) {
                 throw new IllegalArgumentException("Itinerary time overlaps with existing itinerary.");
+            }
+        }
+    }
+
+    private void validateFinalOrderTimeSequence(List<ReorderState> finalStates) {
+        List<ReorderState> sortedStates = finalStates.stream()
+                .sorted(Comparator.comparing(ReorderState::dayNo).thenComparing(ReorderState::orderNo))
+                .toList();
+
+        for (int index = 1; index < sortedStates.size(); index++) {
+            ReorderState previous = sortedStates.get(index - 1);
+            ReorderState current = sortedStates.get(index);
+
+            if (previous.dayNo().equals(current.dayNo()) && current.startTime().isBefore(previous.endTime())) {
+                throw new IllegalArgumentException(
+                        "Itinerary orderNo must follow time order within each day. dayNo=" + current.dayNo()
+                );
             }
         }
     }
