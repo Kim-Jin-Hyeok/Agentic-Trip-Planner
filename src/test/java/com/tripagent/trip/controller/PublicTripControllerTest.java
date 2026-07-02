@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.trip.domain.Transportation;
@@ -24,8 +25,13 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.MethodParameter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 class PublicTripControllerTest {
 
@@ -37,6 +43,7 @@ class PublicTripControllerTest {
         tripService = org.mockito.Mockito.mock(TripService.class);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new PublicTripController(tripService))
+                .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -124,8 +131,7 @@ class PublicTripControllerTest {
         when(tripService.likePublicTrip(1L, 100L))
                 .thenReturn(new TripLikeResponse(1L, 100L, 1L, true));
 
-        mockMvc.perform(post("/api/public/trips/1/likes")
-                        .param("userId", "100"))
+        mockMvc.perform(post("/api/public/trips/1/likes"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.tripId").value(1L))
@@ -141,8 +147,7 @@ class PublicTripControllerTest {
         when(tripService.unlikePublicTrip(1L, 100L))
                 .thenReturn(new TripLikeResponse(1L, 100L, 0L, false));
 
-        mockMvc.perform(delete("/api/public/trips/1/likes")
-                        .param("userId", "100"))
+        mockMvc.perform(delete("/api/public/trips/1/likes"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.tripId").value(1L))
@@ -184,5 +189,23 @@ class PublicTripControllerTest {
                 0L,
                 TripVisibility.PUBLIC
         );
+    }
+
+    private static class TestLoginMemberIdArgumentResolver implements HandlerMethodArgumentResolver {
+
+        @Override
+        public boolean supportsParameter(MethodParameter parameter) {
+            return parameter.hasParameterAnnotation(LoginMemberId.class);
+        }
+
+        @Override
+        public Object resolveArgument(
+                MethodParameter parameter,
+                ModelAndViewContainer mavContainer,
+                NativeWebRequest webRequest,
+                WebDataBinderFactory binderFactory
+        ) {
+            return 100L;
+        }
     }
 }

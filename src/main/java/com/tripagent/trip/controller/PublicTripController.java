@@ -1,5 +1,6 @@
 package com.tripagent.trip.controller;
 
+import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.trip.domain.TripConcept;
@@ -63,16 +64,16 @@ public class PublicTripController {
     @PostMapping("/{tripId}/likes")
     public ApiResponse<TripLikeResponse> likePublicTrip(
             @PathVariable Long tripId,
-            @RequestParam Long userId
+            @LoginMemberId Long memberId
     ) {
-        return ApiResponse.success(tripService.likePublicTrip(tripId, userId));
+        return ApiResponse.success(tripService.likePublicTrip(tripId, memberId));
     }
 
     @DeleteMapping("/{tripId}/likes")
     public ApiResponse<TripLikeResponse> unlikePublicTrip(
             @PathVariable Long tripId,
-            @RequestParam Long userId
+            @LoginMemberId Long memberId
     ) {
-        return ApiResponse.success(tripService.unlikePublicTrip(tripId, userId));
+        return ApiResponse.success(tripService.unlikePublicTrip(tripId, memberId));
     }
 }
