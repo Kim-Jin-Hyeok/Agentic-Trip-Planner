@@ -88,6 +88,28 @@ class TripServiceTest {
     }
 
     @Test
+    void createTripSavesValidKoreanJejuTrip() {
+        TripCreateRequest request = new TripCreateRequest(
+                "제주",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO"
+        );
+        when(tripRepository.save(any(Trip.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TripResponse response = tripService.createTrip(request);
+
+        assertThat(response.destination()).isEqualTo("제주");
+        assertThat(response.nights()).isEqualTo(2);
+        assertThat(response.transportation()).isEqualTo(Transportation.RENT_CAR);
+        verify(tripRepository).save(any(Trip.class));
+    }
+
+    @Test
     void createTripSavesOwnerIdWhenProvided() {
         TripCreateRequest request = new TripCreateRequest(
                 "JEJU",
