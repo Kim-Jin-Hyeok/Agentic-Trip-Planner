@@ -1463,6 +1463,43 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesStartsFallbackFromMappedAccommodationRegion() {
+        Trip trip = trip(1L, TripConcept.FOOD, "SEOGWIPO");
+        List<PlaceResponse> candidatePlaces = List.of(
+                placeWithFoodScoreAndRegion(10L, "NATURE", 1, "EAST"),
+                placeWithFoodScoreAndRegion(20L, "NATURE", 1, "WEST"),
+                placeWithFoodScoreAndRegion(30L, "NATURE", 1, "NORTH")
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.RELAXED);
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = llmItems(3);
+        List<ItineraryCreateRequest> invalidCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(8, 0), LocalTime.of(9, 0), 0),
+                request(20L, 2, LocalTime.of(9, 30), LocalTime.of(10, 30), 30),
+                request(30L, 3, LocalTime.of(11, 0), LocalTime.of(12, 0), 30)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(invalidCreateRequests);
+
+        itineraryGenerateService.generateItineraries(1L, request);
+
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor = ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService, times(3)).createItinerary(eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues()).extracting(ItineraryCreateRequest::placeId)
+                .startsWith(20L);
+        assertThat(requestCaptor.getAllValues()).extracting(ItineraryCreateRequest::orderNo)
+                .containsExactly(1, 2, 3);
+        assertThat(requestCaptor.getAllValues().getFirst().travelMinutesFromPrevious()).isZero();
+        verify(llmClient, times(3)).generate(anyString());
+    }
+
+    @Test
     void generateItinerariesUsesCalculatedTravelMinutesBeforeSaving() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(

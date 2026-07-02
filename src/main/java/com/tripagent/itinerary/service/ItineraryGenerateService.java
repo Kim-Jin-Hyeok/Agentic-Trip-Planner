@@ -50,6 +50,13 @@ public class ItineraryGenerateService {
     private static final int MIN_FALLBACK_STAY_MINUTES = 30;
     private static final Set<String> MEAL_AND_REST_CATEGORY_NAMES = Set.of("FOOD", "CAFE");
     private static final Set<String> TOUR_CATEGORY_NAMES = Set.of("NATURE", "BEACH", "GARDEN", "MUSEUM");
+    private static final Map<String, String> ACCOMMODATION_AREA_REGION_MAPPINGS = Map.of(
+            "SEOGWIPO", "WEST",
+            "JEJU_CITY", "NORTH",
+            "AEWOL", "WEST",
+            "JOCHEON", "EAST",
+            "SEONGSAN", "EAST"
+    );
     private static final String OPERATION_GENERATE = "generate";
     private static final String OPERATION_REGENERATE = "regenerate";
     private static final String OPERATION_GENERATE_DRAFT = "generateDraft";
@@ -404,10 +411,40 @@ public class ItineraryGenerateService {
     }
 
     private PlaceResponse findFallbackStartPlace(Trip trip, List<PlaceResponse> candidatePlaces) {
-        return candidatePlaces.stream()
+        PlaceResponse sameAreaPlace = candidatePlaces.stream()
                 .filter(place -> isSameArea(trip.getLastAccommodationArea(), place.region()))
                 .findFirst()
-                .orElse(candidatePlaces.getFirst());
+                .orElse(null);
+        if (sameAreaPlace != null) {
+            return sameAreaPlace;
+        }
+
+        String mappedRegion = mappedAccommodationRegion(trip.getLastAccommodationArea());
+        if (mappedRegion != null) {
+            return candidatePlaces.stream()
+                    .filter(place -> isSameArea(mappedRegion, place.region()))
+                    .findFirst()
+                    .orElse(candidatePlaces.getFirst());
+        }
+
+        return candidatePlaces.getFirst();
+    }
+
+    private String mappedAccommodationRegion(String accommodationArea) {
+        String normalizedAccommodationArea = normalizeArea(accommodationArea);
+        if (normalizedAccommodationArea == null) {
+            return null;
+        }
+
+        return ACCOMMODATION_AREA_REGION_MAPPINGS.get(normalizedAccommodationArea);
+    }
+
+    private String normalizeArea(String area) {
+        if (area == null || area.isBlank()) {
+            return null;
+        }
+
+        return area.trim().toUpperCase();
     }
 
     private boolean isSameRegion(PlaceResponse previousPlace, PlaceResponse currentPlace) {
@@ -415,10 +452,9 @@ public class ItineraryGenerateService {
     }
 
     private boolean isSameArea(String firstArea, String secondArea) {
-        return firstArea != null
-                && !firstArea.isBlank()
-                && secondArea != null
-                && firstArea.trim().equalsIgnoreCase(secondArea.trim());
+        String normalizedFirstArea = normalizeArea(firstArea);
+        String normalizedSecondArea = normalizeArea(secondArea);
+        return normalizedFirstArea != null && normalizedFirstArea.equals(normalizedSecondArea);
     }
 
     private List<ItineraryCreateRequest> createFallbackDayItineraries(
@@ -522,21 +558,27 @@ public class ItineraryGenerateService {
                 .sorted(Comparator.comparing(ItineraryCreateRequest::dayNo)
                         .thenComparing(ItineraryCreateRequest::orderNo))
                 .toList();
-        List<ItineraryCreateRequest> correctedRequests = new ArrayList<>();
-        Integer previousDayNo = null;
+        List<ItineraryCreateRequest> requestsWithCalculatedTravelMinutes = new ArrayList<>();
         PlaceResponse previousPlace = null;
 
         for (ItineraryCreateRequest request : sortedRequests) {
-            if (!request.dayNo().equals(previousDayNo)) {
-                previousPlace = null;
+            PlaceResponse currentPlace = candidatePlaceById.get(request.placeId());
+            if (currentPlace == null) {
+                throw new IllegalArgumentException("Itinerary placeId must be included in candidate places. placeId="
+                        + request.placeId());
             }
 
-            PlaceResponse currentPlace = candidatePlaceById.get(request.placeId());
+            PlaceResponse previousPlaceForCalculation = previousPlace;
+            if (Integer.valueOf(1).equals(request.orderNo())) {
+                previousPlaceForCalculation = null;
+            }
+
             int travelMinutesFromPrevious = routeCalculationAdapter.calculateTravelMinutes(
-                    previousPlace,
+                    previousPlaceForCalculation,
                     currentPlace
             );
-            correctedRequests.add(new ItineraryCreateRequest(
+
+            requestsWithCalculatedTravelMinutes.add(new ItineraryCreateRequest(
                     request.placeId(),
                     request.dayNo(),
                     request.orderNo(),
@@ -545,12 +587,10 @@ public class ItineraryGenerateService {
                     travelMinutesFromPrevious,
                     request.reason()
             ));
-
-            previousDayNo = request.dayNo();
             previousPlace = currentPlace;
         }
 
-        return correctedRequests;
+        return requestsWithCalculatedTravelMinutes;
     }
 
     private void validateDraftItineraries(
