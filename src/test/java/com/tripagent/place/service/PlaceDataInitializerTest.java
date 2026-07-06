@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tripagent.place.domain.Place;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.repository.PlaceRepository;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +74,22 @@ class PlaceDataInitializerTest {
         assertThat(initializer.seedPlaces())
                 .extracting(Place::getCategory)
                 .allSatisfy(category -> assertThat(supportedCategoryNames).contains(category));
+    }
+
+    @Test
+    void productionSeedSqlMatchesJavaSeedPlaces() throws IOException {
+        List<Place> seedPlaces = initializer.seedPlaces();
+        String sql = Files.readString(Path.of("db", "seed", "places.sql"));
+        long insertStatementCount = sql.lines()
+                .filter(line -> line.startsWith("INSERT INTO places"))
+                .count();
+
+        assertThat(insertStatementCount).isEqualTo(seedPlaces.size());
+        assertThat(seedPlaces)
+                .allSatisfy(place -> {
+                    assertThat(sql).contains("'" + place.getName() + "'");
+                    assertThat(sql).contains("'" + place.getAddress() + "'");
+                });
     }
 
     private Map<String, Long> countByRegion(List<Place> places) {

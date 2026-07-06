@@ -1,0 +1,107 @@
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '성산일출봉', 'NATURE', 'EAST', '제주특별자치도 서귀포시 성산읍 성산리 1', 33.458056, 126.942500, 90, FALSE, TRUE, 2, 5, 1, 1, 5, 4, 4, '제주 동쪽을 대표하는 일출 명소입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '성산일출봉' AND address = '제주특별자치도 서귀포시 성산읍 성산리 1');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '비자림', 'NATURE', 'EAST', '제주특별자치도 제주시 구좌읍 비자숲길 55', 33.491111, 126.811389, 80, FALSE, TRUE, 3, 5, 1, 1, 4, 4, 5, '조용한 숲길을 걸으며 쉬기 좋은 장소입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '비자림' AND address = '제주특별자치도 제주시 구좌읍 비자숲길 55');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '오설록 티뮤지엄', 'CAFE', 'WEST', '제주특별자치도 서귀포시 안덕면 신화역사로 15', 33.305833, 126.289444, 70, TRUE, TRUE, 5, 4, 2, 5, 4, 4, 4, '녹차밭과 디저트를 함께 즐길 수 있는 실내외 복합 장소입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '오설록 티뮤지엄' AND address = '제주특별자치도 서귀포시 안덕면 신화역사로 15');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '동문재래시장', 'FOOD', 'NORTH', '제주특별자치도 제주시 관덕로14길 20', 33.511667, 126.526111, 90, TRUE, FALSE, 4, 2, 5, 2, 3, 3, 4, '제주 먹거리와 기념품을 둘러보기 좋은 전통시장입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '동문재래시장' AND address = '제주특별자치도 제주시 관덕로14길 20');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '카멜리아힐', 'GARDEN', 'WEST', '제주특별자치도 서귀포시 안덕면 병악로 166', 33.289444, 126.370000, 100, FALSE, TRUE, 3, 4, 1, 2, 5, 5, 4, '계절별 꽃과 산책로를 즐길 수 있는 정원형 관광지입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '카멜리아힐' AND address = '제주특별자치도 서귀포시 안덕면 병악로 166');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '고집돌우럭 중문점', 'FOOD', 'WEST', '제주특별자치도 서귀포시 일주서로 879', 33.254167, 126.412222, 80, TRUE, TRUE, 4, 2, 5, 2, 3, 4, 4, '우럭조림과 제주 식재료를 중심으로 한 식사를 즐기기 좋은 음식점입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '고집돌우럭 중문점' AND address = '제주특별자치도 서귀포시 일주서로 879');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '자매국수 본점', 'FOOD', 'NORTH', '제주특별자치도 제주시 탑동로11길 6', 33.517222, 126.523889, 60, TRUE, TRUE, 4, 2, 5, 2, 2, 3, 4, '고기국수와 비빔국수로 제주 로컬 식사를 경험하기 좋은 장소입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '자매국수 본점' AND address = '제주특별자치도 제주시 탑동로11길 6');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '카페 델문도', 'CAFE', 'EAST', '제주특별자치도 제주시 조천읍 조함해안로 519-10', 33.543056, 126.669722, 70, TRUE, TRUE, 4, 3, 2, 5, 4, 4, 3, '함덕해수욕장 바다 전망을 보며 쉬기 좋은 해변 카페입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '카페 델문도' AND address = '제주특별자치도 제주시 조천읍 조함해안로 519-10');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '봄날카페', 'CAFE', 'WEST', '제주특별자치도 제주시 애월읍 애월로1길 25', 33.462778, 126.310278, 70, TRUE, TRUE, 4, 3, 2, 5, 4, 4, 3, '애월 바다를 가까이에서 감상하며 머물기 좋은 감성 카페입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '봄날카페' AND address = '제주특별자치도 제주시 애월읍 애월로1길 25');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '섭지코지', 'NATURE', 'EAST', '제주특별자치도 서귀포시 성산읍 고성리 62-4', 33.424167, 126.930556, 90, FALSE, TRUE, 2, 4, 1, 1, 5, 4, 3, '해안 절경과 산책로가 어우러져 사진을 남기기 좋은 명소입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '섭지코지' AND address = '제주특별자치도 서귀포시 성산읍 고성리 62-4');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '용머리해안', 'NATURE', 'WEST', '제주특별자치도 서귀포시 안덕면 사계리 112-3', 33.234167, 126.314722, 80, FALSE, TRUE, 1, 3, 1, 1, 5, 4, 3, '화산 지형과 바다 풍경을 함께 볼 수 있는 서쪽 해안 명소입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '용머리해안' AND address = '제주특별자치도 서귀포시 안덕면 사계리 112-3');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '사려니숲길', 'NATURE', 'EAST', '제주특별자치도 제주시 조천읍 교래리 산137-1', 33.408333, 126.628611, 100, FALSE, TRUE, 3, 5, 1, 1, 4, 5, 4, '삼나무 숲길을 따라 조용히 걷기 좋은 힐링 산책 코스입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '사려니숲길' AND address = '제주특별자치도 제주시 조천읍 교래리 산137-1');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '제주절물자연휴양림', 'NATURE', 'NORTH', '제주특별자치도 제주시 명림로 584', 33.439722, 126.625833, 110, FALSE, TRUE, 3, 5, 1, 1, 3, 4, 5, '숲 산책로와 휴식 공간이 잘 갖춰진 가족형 자연 휴양지입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '제주절물자연휴양림' AND address = '제주특별자치도 제주시 명림로 584');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '새별오름', 'NATURE', 'WEST', '제주특별자치도 제주시 애월읍 봉성리 산59-8', 33.366667, 126.357222, 80, FALSE, TRUE, 2, 4, 1, 1, 5, 5, 3, '노을과 억새 풍경이 좋아 커플 여행과 사진 촬영에 어울리는 오름입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '새별오름' AND address = '제주특별자치도 제주시 애월읍 봉성리 산59-8');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '이호테우해변', 'BEACH', 'NORTH', '제주특별자치도 제주시 이호일동 1665-13', 33.497222, 126.452778, 70, FALSE, TRUE, 2, 4, 1, 2, 5, 5, 4, '말 등대와 해변 풍경이 인상적이라 산책과 사진 촬영에 좋은 해변입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '이호테우해변' AND address = '제주특별자치도 제주시 이호일동 1665-13');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '아쿠아플라넷 제주', 'FAMILY', 'EAST', '제주특별자치도 서귀포시 성산읍 섭지코지로 95', 33.432778, 126.927778, 120, TRUE, TRUE, 5, 2, 2, 2, 3, 3, 5, '비 오는 날에도 방문하기 좋은 대형 수족관 중심의 가족 여행지입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '아쿠아플라넷 제주' AND address = '제주특별자치도 서귀포시 성산읍 섭지코지로 95');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '제주항공우주박물관', 'MUSEUM', 'WEST', '제주특별자치도 서귀포시 안덕면 녹차분재로 218', 33.304722, 126.298889, 120, TRUE, TRUE, 5, 2, 1, 2, 3, 3, 5, '항공과 우주 전시를 실내에서 둘러볼 수 있어 가족 단위 방문에 적합합니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '제주항공우주박물관' AND address = '제주특별자치도 서귀포시 안덕면 녹차분재로 218');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '천지연폭포', 'NATURE', 'SOUTH', '제주특별자치도 서귀포시 천지동 667-7', 33.246944, 126.554167, 80, FALSE, TRUE, 3, 4, 1, 1, 5, 4, 4, '서귀포 도심과 가까워 산책하듯 둘러보기 좋은 폭포 명소입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '천지연폭포' AND address = '제주특별자치도 서귀포시 천지동 667-7');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '정방폭포', 'NATURE', 'SOUTH', '제주특별자치도 서귀포시 칠십리로214번길 37', 33.244722, 126.571389, 70, FALSE, TRUE, 2, 4, 1, 1, 5, 4, 4, '바다로 바로 떨어지는 폭포를 가까이서 볼 수 있는 서귀포 대표 명소입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '정방폭포' AND address = '제주특별자치도 서귀포시 칠십리로214번길 37');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '서귀포매일올레시장', 'FOOD', 'SOUTH', '제주특별자치도 서귀포시 중앙로62번길 18', 33.249722, 126.563056, 90, TRUE, FALSE, 4, 2, 5, 2, 3, 3, 4, '서귀포 로컬 먹거리와 간식을 한 번에 둘러보기 좋은 전통시장입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '서귀포매일올레시장' AND address = '제주특별자치도 서귀포시 중앙로62번길 18');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '오는정김밥', 'FOOD', 'SOUTH', '제주특별자치도 서귀포시 동문동로 2', 33.250833, 126.568611, 40, TRUE, FALSE, 4, 2, 5, 1, 2, 3, 3, '일정 중 가볍게 들러 포장 식사를 준비하기 좋은 서귀포 김밥 맛집입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '오는정김밥' AND address = '제주특별자치도 서귀포시 동문동로 2');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '유동커피', 'CAFE', 'SOUTH', '제주특별자치도 서귀포시 태평로 406-1', 33.247778, 126.562222, 60, TRUE, FALSE, 4, 3, 2, 5, 3, 4, 3, '서귀포 도심 일정 사이에 쉬어가기 좋은 로컬 카페입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '유동커피' AND address = '제주특별자치도 서귀포시 태평로 406-1');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '원앤온리', 'CAFE', 'SOUTH', '제주특별자치도 서귀포시 안덕면 산방로 141', 33.239444, 126.320833, 80, TRUE, TRUE, 4, 3, 2, 5, 5, 5, 3, '산방산과 바다 전망을 함께 즐길 수 있어 사진과 휴식에 어울리는 카페입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '원앤온리' AND address = '제주특별자치도 서귀포시 안덕면 산방로 141');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '우진해장국', 'FOOD', 'NORTH', '제주특별자치도 제주시 서사로 11', 33.511389, 126.520000, 60, TRUE, FALSE, 4, 2, 5, 1, 2, 3, 3, '제주시권 일정 전후로 든든하게 식사하기 좋은 향토 음식점입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '우진해장국' AND address = '제주특별자치도 제주시 서사로 11');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '명진전복', 'FOOD', 'EAST', '제주특별자치도 제주시 구좌읍 해맞이해안로 1282', 33.532778, 126.850556, 80, TRUE, TRUE, 4, 2, 5, 1, 3, 4, 4, '동쪽 해안 동선에서 전복 요리로 식사를 구성하기 좋은 음식점입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '명진전복' AND address = '제주특별자치도 제주시 구좌읍 해맞이해안로 1282');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '블루보틀 제주', 'CAFE', 'EAST', '제주특별자치도 제주시 구좌읍 번영로 2133-30', 33.445278, 126.778889, 70, TRUE, TRUE, 4, 3, 2, 5, 4, 4, 3, '동쪽 중산간 이동 중 커피와 휴식을 넣기 좋은 카페입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '블루보틀 제주' AND address = '제주특별자치도 제주시 구좌읍 번영로 2133-30');
+
+INSERT INTO places (name, category, region, address, latitude, longitude, avg_stay_minutes, indoor_yn, parking_yn, rainy_day_score, healing_score, food_score, cafe_score, photo_score, couple_score, family_score, description, use_yn)
+SELECT '국립제주박물관', 'MUSEUM', 'NORTH', '제주특별자치도 제주시 일주동로 17', 33.513056, 126.548889, 100, TRUE, TRUE, 5, 3, 1, 2, 3, 3, 5, '제주의 역사와 문화를 실내에서 차분히 둘러볼 수 있는 박물관입니다.', TRUE
+WHERE NOT EXISTS (SELECT 1 FROM places WHERE name = '국립제주박물관' AND address = '제주특별자치도 제주시 일주동로 17');
