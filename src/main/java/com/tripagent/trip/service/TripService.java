@@ -17,6 +17,7 @@ import com.tripagent.trip.repository.TripLikeRepository;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
@@ -394,10 +395,57 @@ public class TripService {
             return;
         }
         if (itineraryRepository.existsByTrip_TripId(trip.getTripId())) {
+            List<ItineraryResponse> itineraries = itineraryRepository
+                    .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(trip.getTripId())
+                    .stream()
+                    .map(ItineraryResponse::from)
+                    .toList();
+            validatePublishableItineraries(trip, itineraries);
             return;
         }
 
         throw new IllegalArgumentException("Trip must have at least one itinerary before publishing.");
+    }
+
+    private void validatePublishableItineraries(Trip trip, List<ItineraryResponse> itineraries) {
+        int tripDays = Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1);
+        List<Integer> missingDayNos = new ArrayList<>();
+
+        for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+            Integer currentDayNo = dayNo;
+            List<ItineraryResponse> dayItineraries = itineraries.stream()
+                    .filter(itinerary -> currentDayNo.equals(itinerary.dayNo()))
+                    .toList();
+            if (dayItineraries.isEmpty()) {
+                missingDayNos.add(dayNo);
+                continue;
+            }
+
+            validatePublishableDayOrder(dayNo, dayItineraries);
+        }
+
+        if (!missingDayNos.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Trip itinerary must include every trip day before publishing. missingDayNos=" + missingDayNos
+            );
+        }
+    }
+
+    private void validatePublishableDayOrder(Integer dayNo, List<ItineraryResponse> dayItineraries) {
+        for (int index = 0; index < dayItineraries.size(); index++) {
+            int expectedOrderNo = index + 1;
+            Integer actualOrderNo = dayItineraries.get(index).orderNo();
+            if (!Integer.valueOf(expectedOrderNo).equals(actualOrderNo)) {
+                throw new IllegalArgumentException(
+                        "Trip itinerary orderNo must be consecutive from 1 before publishing. dayNo="
+                                + dayNo
+                                + ", expectedOrderNo="
+                                + expectedOrderNo
+                                + ", actualOrderNo="
+                                + actualOrderNo
+                );
+            }
+        }
     }
 
     private Trip findPublicTrip(Long tripId) {

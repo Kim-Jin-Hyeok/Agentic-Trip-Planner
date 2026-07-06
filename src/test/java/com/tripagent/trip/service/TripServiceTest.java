@@ -768,6 +768,8 @@ class TripServiceTest {
         Trip trip = trip(1L);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(publishableItineraries(trip));
 
         TripResponse response = tripService.updateTripVisibility(1L, TripVisibility.PUBLIC);
 
@@ -787,6 +789,8 @@ class TripServiceTest {
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(publishableItineraries(trip));
 
         TripResponse response = tripService.updateTripVisibility(1L, 100L, TripVisibility.PUBLIC);
 
@@ -803,6 +807,62 @@ class TripServiceTest {
         assertThatThrownBy(() -> tripService.updateTripVisibility(1L, TripVisibility.PUBLIC))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip must have at least one itinerary before publishing.");
+        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
+    }
+
+    @Test
+    void updateTripVisibilityRejectsPublicVisibilityWhenTripDayIsMissing() {
+        Trip trip = trip(1L);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(
+                        itinerary(trip, 10L, 1, 1),
+                        itinerary(trip, 30L, 3, 1)
+                ));
+
+        assertThatThrownBy(() -> tripService.updateTripVisibility(1L, TripVisibility.PUBLIC))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip itinerary must include every trip day before publishing. missingDayNos=[2]");
+        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
+    }
+
+    @Test
+    void updateTripVisibilityRejectsPublicVisibilityWhenDayOrderDoesNotStartFromOne() {
+        Trip trip = trip(1L);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(
+                        itinerary(trip, 10L, 1, 2),
+                        itinerary(trip, 20L, 2, 1),
+                        itinerary(trip, 30L, 3, 1)
+                ));
+
+        assertThatThrownBy(() -> tripService.updateTripVisibility(1L, TripVisibility.PUBLIC))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip itinerary orderNo must be consecutive from 1 before publishing. "
+                        + "dayNo=1, expectedOrderNo=1, actualOrderNo=2");
+        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
+    }
+
+    @Test
+    void updateTripVisibilityRejectsPublicVisibilityWhenDayOrderHasGap() {
+        Trip trip = trip(1L);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(
+                        itinerary(trip, 10L, 1, 1),
+                        itinerary(trip, 11L, 1, 3),
+                        itinerary(trip, 20L, 2, 1),
+                        itinerary(trip, 30L, 3, 1)
+                ));
+
+        assertThatThrownBy(() -> tripService.updateTripVisibility(1L, TripVisibility.PUBLIC))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip itinerary orderNo must be consecutive from 1 before publishing. "
+                        + "dayNo=1, expectedOrderNo=2, actualOrderNo=3");
         assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
     }
 
@@ -1068,6 +1128,27 @@ class TripServiceTest {
         );
         setId(place, "placeId", placeId);
         return place;
+    }
+
+    private List<Itinerary> publishableItineraries(Trip trip) {
+        return List.of(
+                itinerary(trip, 10L, 1, 1),
+                itinerary(trip, 20L, 2, 1),
+                itinerary(trip, 30L, 3, 1)
+        );
+    }
+
+    private Itinerary itinerary(Trip trip, Long placeId, Integer dayNo, Integer orderNo) {
+        return Itinerary.create(
+                trip,
+                place(placeId, "Place " + placeId),
+                dayNo,
+                orderNo,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0),
+                orderNo == 1 ? 0 : 30,
+                "reason"
+        );
     }
 
     private void setId(Object target, String fieldName, Long id) {
