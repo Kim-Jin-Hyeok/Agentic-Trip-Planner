@@ -10,6 +10,7 @@ import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -59,6 +60,11 @@ public class PublicTripController {
     @GetMapping("/{tripId}")
     public ApiResponse<TripDetailResponse> getPublicTrip(@PathVariable Long tripId) {
         return ApiResponse.success(tripService.getPublicTrip(tripId));
+    }
+
+    @GetMapping("/likes")
+    public ApiResponse<List<TripResponse>> searchLikedPublicTrips(@LoginMemberId Long memberId) {
+        return ApiResponse.success(tripService.searchLikedPublicTrips(memberId));
     }
 
     @PostMapping("/{tripId}/likes")

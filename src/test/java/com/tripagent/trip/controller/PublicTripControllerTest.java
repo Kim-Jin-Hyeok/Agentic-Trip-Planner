@@ -153,6 +153,34 @@ class PublicTripControllerTest {
     }
 
     @Test
+    void searchLikedPublicTripsReturnsCommonSuccessResponse() throws Exception {
+        when(tripService.searchLikedPublicTrips(100L))
+                .thenReturn(List.of(new TripResponse(
+                        3L,
+                        "JEJU",
+                        LocalDate.of(2026, 7, 1),
+                        LocalDate.of(2026, 7, 3),
+                        2,
+                        LocalTime.of(9, 0),
+                        LocalTime.of(18, 0),
+                        TripConcept.FOOD,
+                        Transportation.RENT_CAR,
+                        "SEOGWIPO",
+                        5L,
+                        TripVisibility.PUBLIC
+                )));
+
+        mockMvc.perform(get("/api/public/trips/likes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].tripId").value(3L))
+                .andExpect(jsonPath("$.data[0].visibility").value("PUBLIC"))
+                .andExpect(jsonPath("$.data[0].likeCount").value(5L));
+
+        verify(tripService).searchLikedPublicTrips(100L);
+    }
+
+    @Test
     void likePublicTripReturnsCommonSuccessResponse() throws Exception {
         when(tripService.likePublicTrip(1L, 100L))
                 .thenReturn(new TripLikeResponse(1L, 100L, 1L, true));

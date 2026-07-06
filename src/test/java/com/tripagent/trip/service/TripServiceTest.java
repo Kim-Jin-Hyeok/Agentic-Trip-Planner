@@ -778,6 +778,54 @@ class TripServiceTest {
     }
 
     @Test
+    void searchLikedPublicTripsReturnsUserLikedPublicTripsByTripIdDesc() {
+        Trip firstTrip = trip(3L);
+        firstTrip.changeVisibility(TripVisibility.PUBLIC);
+        firstTrip.increaseLikeCount();
+        Trip secondTrip = trip(2L);
+        secondTrip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripLikeRepository.findByUserIdOrderByTrip_TripIdDesc(100L))
+                .thenReturn(List.of(
+                        TripLike.create(firstTrip, 100L),
+                        TripLike.create(secondTrip, 100L)
+                ));
+
+        List<TripResponse> responses = tripService.searchLikedPublicTrips(100L);
+
+        assertThat(responses).extracting(TripResponse::tripId)
+                .containsExactly(3L, 2L);
+        assertThat(responses).extracting(TripResponse::visibility)
+                .containsExactly(TripVisibility.PUBLIC, TripVisibility.PUBLIC);
+        assertThat(responses).extracting(TripResponse::likeCount)
+                .containsExactly(1L, 0L);
+    }
+
+    @Test
+    void searchLikedPublicTripsExcludesPrivateTripsDefensively() {
+        Trip publicTrip = trip(3L);
+        publicTrip.changeVisibility(TripVisibility.PUBLIC);
+        Trip privateTrip = trip(2L);
+        when(tripLikeRepository.findByUserIdOrderByTrip_TripIdDesc(100L))
+                .thenReturn(List.of(
+                        TripLike.create(publicTrip, 100L),
+                        TripLike.create(privateTrip, 100L)
+                ));
+
+        List<TripResponse> responses = tripService.searchLikedPublicTrips(100L);
+
+        assertThat(responses).extracting(TripResponse::tripId)
+                .containsExactly(3L);
+    }
+
+    @Test
+    void searchLikedPublicTripsRejectsNullUserId() {
+        assertThatThrownBy(() -> tripService.searchLikedPublicTrips(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip like userId is required.");
+        verify(tripLikeRepository, never()).findByUserIdOrderByTrip_TripIdDesc(any());
+    }
+
+    @Test
     void updateTripVisibilityChangesVisibility() {
         Trip trip = trip(1L);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));

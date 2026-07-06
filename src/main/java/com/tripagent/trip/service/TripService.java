@@ -288,6 +288,17 @@ public class TripService {
         return TripDetailResponse.from(trip, itineraries);
     }
 
+    public List<TripResponse> searchLikedPublicTrips(Long userId) {
+        validateLikeUserId(userId);
+
+        return tripLikeRepository.findByUserIdOrderByTrip_TripIdDesc(userId)
+                .stream()
+                .map(TripLike::getTrip)
+                .filter(trip -> trip.getVisibility() == TripVisibility.PUBLIC)
+                .map(TripResponse::from)
+                .toList();
+    }
+
     @Transactional
     public TripLikeResponse likePublicTrip(Long tripId, Long userId) {
         validateLikeUserId(userId);
