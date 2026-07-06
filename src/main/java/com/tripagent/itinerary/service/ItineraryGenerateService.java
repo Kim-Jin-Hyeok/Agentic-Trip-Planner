@@ -589,9 +589,12 @@ public class ItineraryGenerateService {
         validateDayAndOrderPolicies(trip, createRequests);
         validateAllTripDaysCovered(trip, createRequests);
         validatePaceItemsPerDay(trip, request, createRequests);
+        validateNoDuplicatedPlace(createRequests);
         validateFirstTravelMinutes(createRequests);
         validateTravelMinutesBetweenPlaces(createRequests);
         validateDayTimeWindowBounds(trip, request, createRequests);
+        validateDraftOrderTimeSequence(createRequests);
+        validateTravelTimeFitsSchedule(createRequests);
         validateNoDraftTimeOverlap(createRequests);
     }
 
@@ -687,6 +690,18 @@ public class ItineraryGenerateService {
         }
     }
 
+    private void validateNoDuplicatedPlace(List<ItineraryCreateRequest> createRequests) {
+        Set<Long> placeIds = new HashSet<>();
+
+        for (ItineraryCreateRequest request : createRequests) {
+            if (!placeIds.add(request.placeId())) {
+                throw new IllegalArgumentException(
+                        "Place id must not be duplicated in generated itinerary. placeId=" + request.placeId()
+                );
+            }
+        }
+    }
+
     private void validateTravelMinutesBetweenPlaces(List<ItineraryCreateRequest> createRequests) {
         for (ItineraryCreateRequest request : createRequests) {
             if (Integer.valueOf(1).equals(request.orderNo())) {
@@ -702,6 +717,55 @@ public class ItineraryGenerateService {
                                 + request.orderNo()
                                 + ", travelMinutesFromPrevious="
                                 + request.travelMinutesFromPrevious()
+                );
+            }
+        }
+    }
+
+    private void validateDraftOrderTimeSequence(List<ItineraryCreateRequest> createRequests) {
+        List<ItineraryCreateRequest> sortedRequests = createRequests.stream()
+                .sorted(Comparator.comparing(ItineraryCreateRequest::dayNo)
+                        .thenComparing(ItineraryCreateRequest::orderNo))
+                .toList();
+
+        for (int index = 1; index < sortedRequests.size(); index++) {
+            ItineraryCreateRequest previous = sortedRequests.get(index - 1);
+            ItineraryCreateRequest current = sortedRequests.get(index);
+
+            if (previous.dayNo().equals(current.dayNo()) && current.startTime().isBefore(previous.endTime())) {
+                throw new IllegalArgumentException(
+                        "Itinerary orderNo must follow time order in generated itinerary. dayNo="
+                                + current.dayNo()
+                                + ", orderNo="
+                                + current.orderNo()
+                );
+            }
+        }
+    }
+
+    private void validateTravelTimeFitsSchedule(List<ItineraryCreateRequest> createRequests) {
+        List<ItineraryCreateRequest> sortedRequests = createRequests.stream()
+                .sorted(Comparator.comparing(ItineraryCreateRequest::dayNo)
+                        .thenComparing(ItineraryCreateRequest::orderNo))
+                .toList();
+
+        for (int index = 1; index < sortedRequests.size(); index++) {
+            ItineraryCreateRequest previous = sortedRequests.get(index - 1);
+            ItineraryCreateRequest current = sortedRequests.get(index);
+
+            if (!previous.dayNo().equals(current.dayNo())) {
+                continue;
+            }
+
+            LocalTime earliestStartTime = previous.endTime().plusMinutes(current.travelMinutesFromPrevious());
+            if (current.startTime().isBefore(earliestStartTime)) {
+                throw new IllegalArgumentException(
+                        "Itinerary startTime must allow travelMinutesFromPrevious in generated itinerary. dayNo="
+                                + current.dayNo()
+                                + ", orderNo="
+                                + current.orderNo()
+                                + ", earliestStartTime="
+                                + earliestStartTime
                 );
             }
         }

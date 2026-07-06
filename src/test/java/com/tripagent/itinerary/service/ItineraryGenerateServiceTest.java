@@ -1329,11 +1329,6 @@ class ItineraryGenerateServiceTest {
         when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
         when(llmItineraryResponseConverter.toCreateRequests(secondParsedItems)).thenReturn(secondCreateRequests);
-        doThrow(new IllegalArgumentException("Place id must not be duplicated in generated itinerary. placeId=10"))
-                .doNothing()
-                .when(candidatePlaceValidator)
-                .validatePlaceIds(candidatePlaces, List.of(10L, 10L));
-        doNothing().when(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
         when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
                 .thenReturn(response(100L, 1L, 10L, 1));
         when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
@@ -1380,9 +1375,6 @@ class ItineraryGenerateServiceTest {
         when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
-        doThrow(new IllegalArgumentException("Place id must not be duplicated in generated itinerary. placeId=10"))
-                .when(candidatePlaceValidator)
-                .validatePlaceIds(candidatePlaces, List.of(10L, 10L));
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
 
@@ -1390,6 +1382,107 @@ class ItineraryGenerateServiceTest {
         verify(llmClient, times(3)).generate(anyString());
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 10L));
         verify(itineraryService).createItinerary(eq(1L), any());
+    }
+
+    @Test
+    void generateItinerariesRetriesWhenOrderTimeSequenceFailsAndThenSucceeds() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        String prompt = "prompt";
+        String firstRawResponse = "first raw response";
+        String secondRawResponse = "second raw response";
+        List<LlmItineraryItemResponse> firstParsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                llmItem(20L, 2, LocalTime.of(9, 0), LocalTime.of(10, 0), 30)
+        );
+        List<LlmItineraryItemResponse> secondParsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> firstCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                request(20L, 2, LocalTime.of(9, 0), LocalTime.of(10, 0), 5)
+        );
+        List<ItineraryCreateRequest> secondCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(anyString())).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
+        when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
+        when(llmItineraryResponseConverter.toCreateRequests(secondParsedItems)).thenReturn(secondCreateRequests);
+        when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
+                .thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
+                .thenReturn(response(200L, 1L, 20L, 2));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L, 20L);
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(llmClient, times(2)).generate(promptCaptor.capture());
+        assertThat(promptCaptor.getAllValues().get(1))
+                .contains("Itinerary orderNo must follow time order in generated itinerary. dayNo=1, orderNo=2");
+    }
+
+    @Test
+    void generateItinerariesRetriesWhenTravelTimeDoesNotFitScheduleAndThenSucceeds() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 90)
+        );
+        String prompt = "prompt";
+        String firstRawResponse = "first raw response";
+        String secondRawResponse = "second raw response";
+        List<LlmItineraryItemResponse> firstParsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 3), LocalTime.of(11, 0), 30)
+        );
+        List<LlmItineraryItemResponse> secondParsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 30)
+        );
+        List<ItineraryCreateRequest> firstCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 3), LocalTime.of(11, 0), 5)
+        );
+        List<ItineraryCreateRequest> secondCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(anyString())).thenReturn(firstRawResponse, secondRawResponse);
+        when(llmItineraryJsonParser.parse(firstRawResponse)).thenReturn(firstParsedItems);
+        when(llmItineraryJsonParser.parse(secondRawResponse)).thenReturn(secondParsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(firstParsedItems)).thenReturn(firstCreateRequests);
+        when(llmItineraryResponseConverter.toCreateRequests(secondParsedItems)).thenReturn(secondCreateRequests);
+        when(itineraryService.createItinerary(1L, request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)))
+                .thenReturn(response(100L, 1L, 10L, 1));
+        when(itineraryService.createItinerary(1L, request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)))
+                .thenReturn(response(200L, 1L, 20L, 2));
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
+
+        assertThat(responses).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L, 20L);
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(llmClient, times(2)).generate(promptCaptor.capture());
+        assertThat(promptCaptor.getAllValues().get(1))
+                .contains("Itinerary startTime must allow travelMinutesFromPrevious in generated itinerary. "
+                        + "dayNo=1, orderNo=2, earliestStartTime=10:05");
     }
 
     @Test
