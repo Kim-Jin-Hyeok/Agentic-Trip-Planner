@@ -743,14 +743,28 @@ class TripServiceTest {
     void getPublicTripReturnsPublicTripDetailWithItineraries() {
         Trip trip = trip(1L);
         trip.changeVisibility(TripVisibility.PUBLIC);
+        List<Itinerary> itineraries = List.of(
+                itinerary(trip, 10L, 1, 1),
+                itinerary(trip, 20L, 1, 2),
+                itinerary(trip, 30L, 2, 1)
+        );
         when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
-        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(itineraries);
 
         TripDetailResponse response = tripService.getPublicTrip(1L);
 
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
-        assertThat(response.itineraries()).isEmpty();
+        assertThat(response.itineraries()).hasSize(3);
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.placeId())
+                .containsExactly(10L, 20L, 30L);
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.place().name())
+                .containsExactly("Place 10", "Place 20", "Place 30");
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.dayNo())
+                .containsExactly(1, 1, 2);
+        assertThat(response.itineraries()).extracting(itinerary -> itinerary.orderNo())
+                .containsExactly(1, 2, 1);
+        verify(itineraryRepository).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
     }
 
     @Test

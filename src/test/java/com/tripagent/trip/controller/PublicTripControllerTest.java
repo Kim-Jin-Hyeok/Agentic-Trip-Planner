@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.common.response.PageResponse;
+import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.place.dto.PlaceSummaryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
@@ -115,7 +117,27 @@ class PublicTripControllerTest {
                 "SEOGWIPO",
                 3L,
                 TripVisibility.PUBLIC,
-                List.of()
+                List.of(new ItineraryResponse(
+                        10L,
+                        1L,
+                        100L,
+                        new PlaceSummaryResponse(
+                                100L,
+                                "Seongsan Sunrise Peak",
+                                "NATURE",
+                                "EAST",
+                                "Jeju",
+                                33.458,
+                                126.942,
+                                "UNESCO heritage site."
+                        ),
+                        1,
+                        1,
+                        LocalTime.of(9, 0),
+                        LocalTime.of(10, 30),
+                        0,
+                        "첫 일정으로 동쪽 대표 명소를 방문합니다."
+                ))
         ));
 
         mockMvc.perform(get("/api/public/trips/1"))
@@ -123,7 +145,11 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.tripId").value(1L))
                 .andExpect(jsonPath("$.data.visibility").value("PUBLIC"))
-                .andExpect(jsonPath("$.data.itineraries").isArray());
+                .andExpect(jsonPath("$.data.itineraries").isArray())
+                .andExpect(jsonPath("$.data.itineraries[0].placeId").value(100L))
+                .andExpect(jsonPath("$.data.itineraries[0].place.name").value("Seongsan Sunrise Peak"))
+                .andExpect(jsonPath("$.data.itineraries[0].dayNo").value(1))
+                .andExpect(jsonPath("$.data.itineraries[0].orderNo").value(1));
     }
 
     @Test
