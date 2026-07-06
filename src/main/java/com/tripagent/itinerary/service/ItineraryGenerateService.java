@@ -1332,9 +1332,20 @@ public class ItineraryGenerateService {
         return Comparator
                 .comparing((PlaceResponse place) -> isPreferredCategory(place, request))
                 .reversed()
+                .thenComparing(Comparator.comparing((PlaceResponse place) -> rainyDayScore(place, request)).reversed())
                 .thenComparing(Comparator.comparing((PlaceResponse place) -> conceptScore(place, trip.getConcept())).reversed())
                 .thenComparing(Comparator.comparing((PlaceResponse place) -> isAccommodationRegion(place, trip)).reversed())
                 .thenComparing(PlaceResponse::placeId);
+    }
+
+    private int rainyDayScore(PlaceResponse place, ItineraryGenerateRequest request) {
+        if (request == null || !request.normalizedRainyDayMode()) {
+            return 0;
+        }
+
+        int indoorScore = Boolean.TRUE.equals(place.indoorYn()) ? 1_000 : 0;
+        int rainyDayScore = place.rainyDayScore() == null ? 0 : place.rainyDayScore();
+        return indoorScore + rainyDayScore;
     }
 
     private boolean isAccommodationRegion(PlaceResponse place, Trip trip) {

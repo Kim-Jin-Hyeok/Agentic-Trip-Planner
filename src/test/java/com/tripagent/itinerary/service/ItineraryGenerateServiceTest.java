@@ -908,6 +908,69 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateDraftItinerariesBoostsIndoorAndRainyDayScoreWhenRainyDayModeIsEnabled() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        PlaceResponse outdoorHighConceptScore = placeWithFoodScoreRegionIndoorAndRainyScore(
+                10L,
+                "NATURE",
+                100,
+                "EAST",
+                false,
+                10
+        );
+        PlaceResponse indoorLowRainyScore = placeWithFoodScoreRegionIndoorAndRainyScore(
+                20L,
+                "MUSEUM",
+                1,
+                "EAST",
+                true,
+                1
+        );
+        PlaceResponse indoorHighRainyScore = placeWithFoodScoreRegionIndoorAndRainyScore(
+                30L,
+                "CAFE",
+                1,
+                "EAST",
+                true,
+                5
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                outdoorHighConceptScore,
+                indoorLowRainyScore,
+                indoorHighRainyScore
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                true
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(30L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(30L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn(prompt);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        itineraryGenerateService.generateDraftItineraries(1L, request);
+
+        ArgumentCaptor<List<PlaceResponse>> candidateCaptor = ArgumentCaptor.forClass(List.class);
+        verify(itineraryPromptGenerator).generate(eq(trip), candidateCaptor.capture(), eq(request));
+        assertThat(candidateCaptor.getValue()).extracting(PlaceResponse::placeId)
+                .containsExactly(30L, 20L, 10L);
+    }
+
+    @Test
     void generateDraftItinerariesExcludesPlaceIdsRegardlessOfPreferredCategories() {
         Trip trip = trip(1L, TripConcept.FOOD);
         PlaceResponse firstPlace = place(10L, "FOOD", 60);
@@ -2415,6 +2478,36 @@ class ItineraryGenerateServiceTest {
                 false,
                 true,
                 1,
+                2,
+                foodScore,
+                4,
+                5,
+                4,
+                3,
+                "description"
+        );
+    }
+
+    private PlaceResponse placeWithFoodScoreRegionIndoorAndRainyScore(
+            Long placeId,
+            String category,
+            Integer foodScore,
+            String region,
+            Boolean indoorYn,
+            Integer rainyDayScore
+    ) {
+        return new PlaceResponse(
+                placeId,
+                "Place " + placeId,
+                category,
+                region,
+                "JEJU",
+                33.0,
+                126.0,
+                60,
+                indoorYn,
+                true,
+                rainyDayScore,
                 2,
                 foodScore,
                 4,
