@@ -27,10 +27,11 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: openai
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-openai}
       DB_URL: jdbc:mysql://mysql:3306/trip_planner?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       DB_USERNAME: trip
       DB_PASSWORD: trippw
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-local-development-jwt-secret-change-before-prod}
       AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY}
       AI_OPENAI_MODEL: ${AI_OPENAI_MODEL}
     depends_on:
