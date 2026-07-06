@@ -329,6 +329,7 @@ public class TripService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         validateTripOwner(trip, ownerId);
+        validateCanUpdateVisibility(trip, visibility);
         trip.changeVisibility(visibility);
         return TripResponse.from(trip);
     }
@@ -386,6 +387,17 @@ public class TripService {
         if (!ownerId.equals(trip.getOwnerId())) {
             throw new IllegalArgumentException("Trip owner does not match. tripId=" + trip.getTripId());
         }
+    }
+
+    private void validateCanUpdateVisibility(Trip trip, TripVisibility visibility) {
+        if (visibility != TripVisibility.PUBLIC) {
+            return;
+        }
+        if (itineraryRepository.existsByTrip_TripId(trip.getTripId())) {
+            return;
+        }
+
+        throw new IllegalArgumentException("Trip must have at least one itinerary before publishing.");
     }
 
     private Trip findPublicTrip(Long tripId) {

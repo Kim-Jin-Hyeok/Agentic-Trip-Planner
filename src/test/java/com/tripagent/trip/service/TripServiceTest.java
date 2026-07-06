@@ -767,6 +767,7 @@ class TripServiceTest {
     void updateTripVisibilityChangesVisibility() {
         Trip trip = trip(1L);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
 
         TripResponse response = tripService.updateTripVisibility(1L, TripVisibility.PUBLIC);
 
@@ -785,11 +786,37 @@ class TripServiceTest {
                 100L
         );
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
 
         TripResponse response = tripService.updateTripVisibility(1L, 100L, TripVisibility.PUBLIC);
 
         assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
         assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PUBLIC);
+    }
+
+    @Test
+    void updateTripVisibilityRejectsPublicVisibilityWhenTripHasNoItinerary() {
+        Trip trip = trip(1L);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+
+        assertThatThrownBy(() -> tripService.updateTripVisibility(1L, TripVisibility.PUBLIC))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip must have at least one itinerary before publishing.");
+        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
+    }
+
+    @Test
+    void updateTripVisibilityAllowsPrivateVisibilityWithoutItinerary() {
+        Trip trip = trip(1L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        TripResponse response = tripService.updateTripVisibility(1L, TripVisibility.PRIVATE);
+
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
+        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
+        verify(itineraryRepository, never()).existsByTrip_TripId(1L);
     }
 
     @Test
