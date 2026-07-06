@@ -878,6 +878,36 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateDraftItinerariesBoostsAccommodationRegionWhenConceptScoreIsSame() {
+        Trip trip = trip(1L, TripConcept.FOOD, "SEOGWIPO");
+        PlaceResponse eastHighScore = placeWithFoodScoreAndRegion(10L, "NATURE", 100, "EAST");
+        PlaceResponse northLowerScore = placeWithFoodScoreAndRegion(20L, "NATURE", 99, "NORTH");
+        PlaceResponse westHighScore = placeWithFoodScoreAndRegion(30L, "NATURE", 100, "WEST");
+        List<PlaceResponse> candidatePlaces = List.of(eastHighScore, northLowerScore, westHighScore);
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(30L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(30L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList())).thenReturn(prompt);
+        when(llmClient.generate(anyString())).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        itineraryGenerateService.generateDraftItineraries(1L);
+
+        ArgumentCaptor<List<PlaceResponse>> candidateCaptor = ArgumentCaptor.forClass(List.class);
+        verify(itineraryPromptGenerator).generate(eq(trip), candidateCaptor.capture());
+        assertThat(candidateCaptor.getValue()).extracting(PlaceResponse::placeId)
+                .containsExactly(30L, 10L, 20L);
+    }
+
+    @Test
     void generateDraftItinerariesExcludesPlaceIdsRegardlessOfPreferredCategories() {
         Trip trip = trip(1L, TripConcept.FOOD);
         PlaceResponse firstPlace = place(10L, "FOOD", 60);
@@ -1505,7 +1535,7 @@ class ItineraryGenerateServiceTest {
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
-        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn(prompt);
         when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(invalidCreateRequests);
@@ -1542,7 +1572,7 @@ class ItineraryGenerateServiceTest {
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
-        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn(prompt);
         when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(invalidCreateRequests);
@@ -1579,7 +1609,7 @@ class ItineraryGenerateServiceTest {
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
-        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn(prompt);
         when(llmClient.generate(anyString())).thenReturn(rawResponse);
         when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
         when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(invalidCreateRequests);

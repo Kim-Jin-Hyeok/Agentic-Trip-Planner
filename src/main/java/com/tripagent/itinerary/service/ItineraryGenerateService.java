@@ -994,11 +994,11 @@ public class ItineraryGenerateService {
 
         List<PlaceResponse> mustVisitPlaces = filteredCandidatePlaces.stream()
                 .filter(candidatePlace -> mustVisitPlaceIds.contains(candidatePlace.placeId()))
-                .sorted(candidatePlaceComparator(trip.getConcept(), request))
+                .sorted(candidatePlaceComparator(trip, request))
                 .toList();
         List<PlaceResponse> ordinaryPlaces = filteredCandidatePlaces.stream()
                 .filter(candidatePlace -> !mustVisitPlaceIds.contains(candidatePlace.placeId()))
-                .sorted(candidatePlaceComparator(trip.getConcept(), request))
+                .sorted(candidatePlaceComparator(trip, request))
                 .toList();
 
         int ordinaryPlaceLimit = Math.max(0, MAX_LLM_CANDIDATE_PLACE_COUNT - mustVisitPlaces.size());
@@ -1012,13 +1012,13 @@ public class ItineraryGenerateService {
                 selectedCandidatePlaces,
                 filteredCandidatePlaces,
                 mustVisitPlaceIds,
-                candidatePlaceComparator(trip.getConcept(), request)
+                candidatePlaceComparator(trip, request)
         );
         return includeRegionBalanceCandidates(
                 categoryBalancedCandidatePlaces,
                 filteredCandidatePlaces,
                 mustVisitPlaceIds,
-                candidatePlaceComparator(trip.getConcept(), request)
+                candidatePlaceComparator(trip, request)
         );
     }
 
@@ -1328,12 +1328,18 @@ public class ItineraryGenerateService {
                 ));
     }
 
-    private Comparator<PlaceResponse> candidatePlaceComparator(TripConcept concept, ItineraryGenerateRequest request) {
+    private Comparator<PlaceResponse> candidatePlaceComparator(Trip trip, ItineraryGenerateRequest request) {
         return Comparator
                 .comparing((PlaceResponse place) -> isPreferredCategory(place, request))
                 .reversed()
-                .thenComparing(Comparator.comparing((PlaceResponse place) -> conceptScore(place, concept)).reversed())
+                .thenComparing(Comparator.comparing((PlaceResponse place) -> conceptScore(place, trip.getConcept())).reversed())
+                .thenComparing(Comparator.comparing((PlaceResponse place) -> isAccommodationRegion(place, trip)).reversed())
                 .thenComparing(PlaceResponse::placeId);
+    }
+
+    private boolean isAccommodationRegion(PlaceResponse place, Trip trip) {
+        String accommodationRegion = accommodationAreaRegionMapper.toPlaceRegion(trip.getLastAccommodationArea());
+        return accommodationRegion != null && accommodationRegion.equals(place.region());
     }
 
     private boolean isPreferredCategory(PlaceResponse place, ItineraryGenerateRequest request) {
