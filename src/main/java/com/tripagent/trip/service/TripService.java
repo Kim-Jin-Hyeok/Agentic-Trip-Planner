@@ -288,15 +288,22 @@ public class TripService {
         return TripDetailResponse.from(trip, itineraries);
     }
 
-    public List<TripResponse> searchLikedPublicTrips(Long userId) {
+    public PageResponse<TripResponse> searchLikedPublicTripPage(Long userId, Integer page, Integer size) {
         validateLikeUserId(userId);
+        Pageable pageable = PageRequest.of(
+                normalizedPublicTripPage(page),
+                normalizedPublicTripPageSize(size)
+        );
 
-        return tripLikeRepository.findByUserIdOrderByTrip_TripIdDesc(userId)
-                .stream()
+        Page<TripResponse> tripPage = tripLikeRepository.findByUserIdAndTrip_VisibilityOrderByTrip_TripIdDesc(
+                        userId,
+                        TripVisibility.PUBLIC,
+                        pageable
+                )
                 .map(TripLike::getTrip)
-                .filter(trip -> trip.getVisibility() == TripVisibility.PUBLIC)
-                .map(TripResponse::from)
-                .toList();
+                .map(TripResponse::from);
+
+        return PageResponse.from(tripPage);
     }
 
     @Transactional

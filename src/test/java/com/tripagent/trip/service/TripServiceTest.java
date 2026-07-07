@@ -778,51 +778,78 @@ class TripServiceTest {
     }
 
     @Test
-    void searchLikedPublicTripsReturnsUserLikedPublicTripsByTripIdDesc() {
+    void searchLikedPublicTripPageReturnsUserLikedPublicTripsByTripIdDesc() {
         Trip firstTrip = trip(3L);
         firstTrip.changeVisibility(TripVisibility.PUBLIC);
         firstTrip.increaseLikeCount();
         Trip secondTrip = trip(2L);
         secondTrip.changeVisibility(TripVisibility.PUBLIC);
-        when(tripLikeRepository.findByUserIdOrderByTrip_TripIdDesc(100L))
-                .thenReturn(List.of(
+        PageRequest pageRequest = PageRequest.of(0, 20);
+        when(tripLikeRepository.findByUserIdAndTrip_VisibilityOrderByTrip_TripIdDesc(
+                100L,
+                TripVisibility.PUBLIC,
+                pageRequest
+        ))
+                .thenReturn(new PageImpl<>(List.of(
                         TripLike.create(firstTrip, 100L),
                         TripLike.create(secondTrip, 100L)
-                ));
+                ), pageRequest, 2));
 
-        List<TripResponse> responses = tripService.searchLikedPublicTrips(100L);
+        PageResponse<TripResponse> response = tripService.searchLikedPublicTripPage(100L, null, null);
 
-        assertThat(responses).extracting(TripResponse::tripId)
+        assertThat(response.content()).extracting(TripResponse::tripId)
                 .containsExactly(3L, 2L);
-        assertThat(responses).extracting(TripResponse::visibility)
+        assertThat(response.content()).extracting(TripResponse::visibility)
                 .containsExactly(TripVisibility.PUBLIC, TripVisibility.PUBLIC);
-        assertThat(responses).extracting(TripResponse::likeCount)
+        assertThat(response.content()).extracting(TripResponse::likeCount)
                 .containsExactly(1L, 0L);
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(20);
+        assertThat(response.totalElements()).isEqualTo(2L);
+        assertThat(response.totalPages()).isEqualTo(1);
+        assertThat(response.first()).isTrue();
+        assertThat(response.last()).isTrue();
     }
 
     @Test
-    void searchLikedPublicTripsExcludesPrivateTripsDefensively() {
-        Trip publicTrip = trip(3L);
-        publicTrip.changeVisibility(TripVisibility.PUBLIC);
-        Trip privateTrip = trip(2L);
-        when(tripLikeRepository.findByUserIdOrderByTrip_TripIdDesc(100L))
-                .thenReturn(List.of(
-                        TripLike.create(publicTrip, 100L),
-                        TripLike.create(privateTrip, 100L)
-                ));
+    void searchLikedPublicTripPageUsesRequestedPageSizeAndPublicVisibility() {
+        PageRequest pageRequest = PageRequest.of(1, 10);
+        when(tripLikeRepository.findByUserIdAndTrip_VisibilityOrderByTrip_TripIdDesc(
+                100L,
+                TripVisibility.PUBLIC,
+                pageRequest
+        )).thenReturn(Page.empty(pageRequest));
 
-        List<TripResponse> responses = tripService.searchLikedPublicTrips(100L);
+        PageResponse<TripResponse> response = tripService.searchLikedPublicTripPage(100L, 1, 10);
 
-        assertThat(responses).extracting(TripResponse::tripId)
-                .containsExactly(3L);
+        assertThat(response.content()).isEmpty();
+        assertThat(response.page()).isEqualTo(1);
+        assertThat(response.size()).isEqualTo(10);
+        assertThat(response.totalElements()).isZero();
     }
 
     @Test
-    void searchLikedPublicTripsRejectsNullUserId() {
-        assertThatThrownBy(() -> tripService.searchLikedPublicTrips(null))
+    void searchLikedPublicTripPageRejectsNullUserId() {
+        assertThatThrownBy(() -> tripService.searchLikedPublicTripPage(null, 0, 20))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip like userId is required.");
-        verify(tripLikeRepository, never()).findByUserIdOrderByTrip_TripIdDesc(any());
+        verify(tripLikeRepository, never()).findByUserIdAndTrip_VisibilityOrderByTrip_TripIdDesc(
+                any(),
+                any(),
+                any(Pageable.class)
+        );
+    }
+
+    @Test
+    void searchLikedPublicTripPageRejectsInvalidSize() {
+        assertThatThrownBy(() -> tripService.searchLikedPublicTripPage(100L, 0, 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Page size must be between 1 and 50.");
+        verify(tripLikeRepository, never()).findByUserIdAndTrip_VisibilityOrderByTrip_TripIdDesc(
+                any(),
+                any(),
+                any(Pageable.class)
+        );
     }
 
     @Test

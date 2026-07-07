@@ -154,30 +154,45 @@ class PublicTripControllerTest {
 
     @Test
     void searchLikedPublicTripsReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.searchLikedPublicTrips(100L))
-                .thenReturn(List.of(new TripResponse(
-                        3L,
-                        "JEJU",
-                        LocalDate.of(2026, 7, 1),
-                        LocalDate.of(2026, 7, 3),
+        when(tripService.searchLikedPublicTripPage(100L, 1, 10))
+                .thenReturn(new PageResponse<>(List.of(new TripResponse(
+                                3L,
+                                "JEJU",
+                                LocalDate.of(2026, 7, 1),
+                                LocalDate.of(2026, 7, 3),
+                                2,
+                                LocalTime.of(9, 0),
+                                LocalTime.of(18, 0),
+                                TripConcept.FOOD,
+                                Transportation.RENT_CAR,
+                                "SEOGWIPO",
+                                5L,
+                                TripVisibility.PUBLIC
+                        )),
+                        1,
+                        10,
+                        11,
                         2,
-                        LocalTime.of(9, 0),
-                        LocalTime.of(18, 0),
-                        TripConcept.FOOD,
-                        Transportation.RENT_CAR,
-                        "SEOGWIPO",
-                        5L,
-                        TripVisibility.PUBLIC
-                )));
+                        false,
+                        true
+                ));
 
-        mockMvc.perform(get("/api/public/trips/likes"))
+        mockMvc.perform(get("/api/public/trips/likes")
+                        .param("page", "1")
+                        .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].tripId").value(3L))
-                .andExpect(jsonPath("$.data[0].visibility").value("PUBLIC"))
-                .andExpect(jsonPath("$.data[0].likeCount").value(5L));
+                .andExpect(jsonPath("$.data.content[0].tripId").value(3L))
+                .andExpect(jsonPath("$.data.content[0].visibility").value("PUBLIC"))
+                .andExpect(jsonPath("$.data.content[0].likeCount").value(5L))
+                .andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.size").value(10))
+                .andExpect(jsonPath("$.data.totalElements").value(11L))
+                .andExpect(jsonPath("$.data.totalPages").value(2))
+                .andExpect(jsonPath("$.data.first").value(false))
+                .andExpect(jsonPath("$.data.last").value(true));
 
-        verify(tripService).searchLikedPublicTrips(100L);
+        verify(tripService).searchLikedPublicTripPage(100L, 1, 10);
     }
 
     @Test
