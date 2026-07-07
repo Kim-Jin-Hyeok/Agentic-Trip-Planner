@@ -18,9 +18,11 @@ import com.tripagent.trip.repository.TripRepository;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -249,6 +251,34 @@ public class TripService {
             Integer page,
             Integer size
     ) {
+        return searchPublicTripPage(
+                destination,
+                concept,
+                startDateFrom,
+                startDateTo,
+                endDateFrom,
+                endDateTo,
+                nights,
+                publicTripSort,
+                page,
+                size,
+                null
+        );
+    }
+
+    public PageResponse<TripResponse> searchPublicTripPage(
+            String destination,
+            TripConcept concept,
+            LocalDate startDateFrom,
+            LocalDate startDateTo,
+            LocalDate endDateFrom,
+            LocalDate endDateTo,
+            Integer nights,
+            PublicTripSort publicTripSort,
+            Integer page,
+            Integer size,
+            Long currentUserId
+    ) {
         validateDateRange("startDate", startDateFrom, startDateTo);
         validateDateRange("endDate", endDateFrom, endDateTo);
         validateNights(nights);
@@ -260,7 +290,7 @@ public class TripService {
                 publicTripSort(publicTripSort)
         );
 
-        Page<TripResponse> tripPage = tripRepository.searchTripsByVisibility(
+        Page<Trip> tripPage = tripRepository.searchTripsByVisibility(
                         TripVisibility.PUBLIC,
                         normalizedDestination,
                         concept,
@@ -270,13 +300,19 @@ public class TripService {
                         endDateTo,
                         nights,
                         pageable
-                )
-                .map(TripResponse::from);
+                );
+        Set<Long> likedTripIds = findLikedTripIds(currentUserId, tripPage.getContent());
+        Page<TripResponse> responsePage = tripPage
+                .map(trip -> TripResponse.from(trip, likedTripIds.contains(trip.getTripId())));
 
-        return PageResponse.from(tripPage);
+        return PageResponse.from(responsePage);
     }
 
     public TripDetailResponse getPublicTrip(Long tripId) {
+        return getPublicTrip(tripId, null);
+    }
+
+    public TripDetailResponse getPublicTrip(Long tripId, Long currentUserId) {
         Trip trip = tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
                 .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
         List<ItineraryResponse> itineraries = itineraryRepository
@@ -284,8 +320,10 @@ public class TripService {
                 .stream()
                 .map(ItineraryResponse::from)
                 .toList();
+        boolean liked = currentUserId != null
+                && tripLikeRepository.existsByTrip_TripIdAndUserId(tripId, currentUserId);
 
-        return TripDetailResponse.from(trip, itineraries);
+        return TripDetailResponse.from(trip, itineraries, liked);
     }
 
     public PageResponse<TripResponse> searchLikedPublicTripPage(Long userId, Integer page, Integer size) {
@@ -301,7 +339,7 @@ public class TripService {
                         pageable
                 )
                 .map(TripLike::getTrip)
-                .map(TripResponse::from);
+                .map(trip -> TripResponse.from(trip, true));
 
         return PageResponse.from(tripPage);
     }
@@ -475,6 +513,21 @@ public class TripService {
         if (userId == null) {
             throw new IllegalArgumentException("Trip like userId is required.");
         }
+    }
+
+    private Set<Long> findLikedTripIds(Long userId, List<Trip> trips) {
+        if (userId == null || trips.isEmpty()) {
+            return Set.of();
+        }
+
+        List<Long> tripIds = trips.stream()
+                .map(Trip::getTripId)
+                .toList();
+
+        return tripLikeRepository.findByUserIdAndTrip_TripIdIn(userId, tripIds)
+                .stream()
+                .map(tripLike -> tripLike.getTrip().getTripId())
+                .collect(java.util.stream.Collectors.toCollection(HashSet::new));
     }
 
     private void validateDateRange(String fieldName, LocalDate from, LocalDate to) {

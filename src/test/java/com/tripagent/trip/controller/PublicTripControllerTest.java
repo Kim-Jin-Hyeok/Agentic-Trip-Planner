@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tripagent.auth.support.LoginMemberId;
+import com.tripagent.auth.service.JwtTokenProvider;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
@@ -38,13 +39,15 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 class PublicTripControllerTest {
 
     private TripService tripService;
+    private JwtTokenProvider jwtTokenProvider;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         tripService = org.mockito.Mockito.mock(TripService.class);
+        jwtTokenProvider = org.mockito.Mockito.mock(JwtTokenProvider.class);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new PublicTripController(tripService))
+                .standaloneSetup(new PublicTripController(tripService, jwtTokenProvider))
                 .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -52,7 +55,19 @@ class PublicTripControllerTest {
 
     @Test
     void searchPublicTripsReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.searchPublicTripPage(null, null, null, null, null, null, null, PublicTripSort.LATEST, null, null))
+        when(tripService.searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                null,
+                null,
+                null
+        ))
                 .thenReturn(new PageResponse<>(List.of(trip(2L)), 0, 20, 1, 1, true, true));
 
         mockMvc.perform(get("/api/public/trips"))
@@ -60,6 +75,7 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].tripId").value(2L))
                 .andExpect(jsonPath("$.data.content[0].visibility").value("PUBLIC"))
+                .andExpect(jsonPath("$.data.content[0].liked").value(false))
                 .andExpect(jsonPath("$.data.page").value(0))
                 .andExpect(jsonPath("$.data.size").value(20))
                 .andExpect(jsonPath("$.data.totalElements").value(1L))
@@ -72,6 +88,7 @@ class PublicTripControllerTest {
     void searchPublicTripsPassesFilters() throws Exception {
         LocalDate startDateFrom = LocalDate.of(2026, 7, 1);
         LocalDate startDateTo = LocalDate.of(2026, 7, 10);
+        when(jwtTokenProvider.getMemberId("access-token")).thenReturn(100L);
         when(tripService.searchPublicTripPage(
                 "JE",
                 TripConcept.FOOD,
@@ -82,9 +99,10 @@ class PublicTripControllerTest {
                 2,
                 PublicTripSort.POPULAR,
                 1,
-                10
+                10,
+                100L
         ))
-                .thenReturn(new PageResponse<>(List.of(trip(3L, TripConcept.FOOD)), 1, 10, 11, 2, false, true));
+                .thenReturn(new PageResponse<>(List.of(trip(3L, TripConcept.FOOD, true)), 1, 10, 11, 2, false, true));
 
         mockMvc.perform(get("/api/public/trips")
                         .param("destination", "JE")
@@ -94,17 +112,20 @@ class PublicTripControllerTest {
                         .param("nights", "2")
                         .param("sort", "POPULAR")
                         .param("page", "1")
-                        .param("size", "10"))
+                        .param("size", "10")
+                        .header("Authorization", "Bearer access-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].tripId").value(3L))
                 .andExpect(jsonPath("$.data.content[0].concept").value("FOOD"))
+                .andExpect(jsonPath("$.data.content[0].liked").value(true))
                 .andExpect(jsonPath("$.data.page").value(1))
                 .andExpect(jsonPath("$.data.size").value(10));
     }
 
     @Test
     void getPublicTripReturnsCommonSuccessResponse() throws Exception {
-        when(tripService.getPublicTrip(1L)).thenReturn(new TripDetailResponse(
+        when(jwtTokenProvider.getMemberId("access-token")).thenReturn(100L);
+        when(tripService.getPublicTrip(1L, 100L)).thenReturn(new TripDetailResponse(
                 1L,
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
@@ -117,6 +138,7 @@ class PublicTripControllerTest {
                 "SEOGWIPO",
                 3L,
                 TripVisibility.PUBLIC,
+                true,
                 List.of(new ItineraryResponse(
                         10L,
                         1L,
@@ -140,11 +162,13 @@ class PublicTripControllerTest {
                 ))
         ));
 
-        mockMvc.perform(get("/api/public/trips/1"))
+        mockMvc.perform(get("/api/public/trips/1")
+                        .header("Authorization", "Bearer access-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.tripId").value(1L))
                 .andExpect(jsonPath("$.data.visibility").value("PUBLIC"))
+                .andExpect(jsonPath("$.data.liked").value(true))
                 .andExpect(jsonPath("$.data.itineraries").isArray())
                 .andExpect(jsonPath("$.data.itineraries[0].placeId").value(100L))
                 .andExpect(jsonPath("$.data.itineraries[0].place.name").value("Seongsan Sunrise Peak"))
@@ -167,7 +191,8 @@ class PublicTripControllerTest {
                                 Transportation.RENT_CAR,
                                 "SEOGWIPO",
                                 5L,
-                                TripVisibility.PUBLIC
+                                TripVisibility.PUBLIC,
+                                true
                         )),
                         1,
                         10,
@@ -185,6 +210,7 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.content[0].tripId").value(3L))
                 .andExpect(jsonPath("$.data.content[0].visibility").value("PUBLIC"))
                 .andExpect(jsonPath("$.data.content[0].likeCount").value(5L))
+                .andExpect(jsonPath("$.data.content[0].liked").value(true))
                 .andExpect(jsonPath("$.data.page").value(1))
                 .andExpect(jsonPath("$.data.size").value(10))
                 .andExpect(jsonPath("$.data.totalElements").value(11L))
@@ -229,7 +255,7 @@ class PublicTripControllerTest {
 
     @Test
     void getPublicTripReturnsNotFoundWhenTripIsPrivateOrMissing() throws Exception {
-        when(tripService.getPublicTrip(999L))
+        when(tripService.getPublicTrip(999L, null))
                 .thenThrow(new NoSuchElementException("Public trip not found. tripId=999"));
 
         mockMvc.perform(get("/api/public/trips/999"))
@@ -240,10 +266,14 @@ class PublicTripControllerTest {
     }
 
     private TripResponse trip(Long tripId) {
-        return trip(tripId, TripConcept.HEALING);
+        return trip(tripId, TripConcept.HEALING, false);
     }
 
     private TripResponse trip(Long tripId, TripConcept concept) {
+        return trip(tripId, concept, false);
+    }
+
+    private TripResponse trip(Long tripId, TripConcept concept, boolean liked) {
         return new TripResponse(
                 tripId,
                 "JEJU",
@@ -256,7 +286,8 @@ class PublicTripControllerTest {
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
                 0L,
-                TripVisibility.PUBLIC
+                TripVisibility.PUBLIC,
+                liked
         );
     }
 

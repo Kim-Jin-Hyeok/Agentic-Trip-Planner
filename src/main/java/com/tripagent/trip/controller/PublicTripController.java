@@ -1,6 +1,7 @@
 package com.tripagent.trip.controller;
 
 import com.tripagent.auth.support.LoginMemberId;
+import com.tripagent.auth.service.JwtTokenProvider;
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.trip.domain.TripConcept;
@@ -17,16 +18,21 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/public/trips")
 public class PublicTripController {
 
-    private final TripService tripService;
+    private static final String BEARER_PREFIX = "Bearer ";
 
-    public PublicTripController(TripService tripService) {
+    private final TripService tripService;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    public PublicTripController(TripService tripService, JwtTokenProvider jwtTokenProvider) {
         this.tripService = tripService;
+        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     @GetMapping
@@ -40,7 +46,8 @@ public class PublicTripController {
             @RequestParam(required = false) Integer nights,
             @RequestParam(required = false, defaultValue = "LATEST") PublicTripSort sort,
             @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size
+            @RequestParam(required = false) Integer size,
+            @RequestHeader(value = "Authorization", required = false) String authorization
     ) {
         return ApiResponse.success(tripService.searchPublicTripPage(
                 destination,
@@ -52,13 +59,17 @@ public class PublicTripController {
                 nights,
                 sort,
                 page,
-                size
+                size,
+                resolveOptionalMemberId(authorization)
         ));
     }
 
     @GetMapping("/{tripId}")
-    public ApiResponse<TripDetailResponse> getPublicTrip(@PathVariable Long tripId) {
-        return ApiResponse.success(tripService.getPublicTrip(tripId));
+    public ApiResponse<TripDetailResponse> getPublicTrip(
+            @PathVariable Long tripId,
+            @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        return ApiResponse.success(tripService.getPublicTrip(tripId, resolveOptionalMemberId(authorization)));
     }
 
     @GetMapping("/likes")
@@ -84,5 +95,18 @@ public class PublicTripController {
             @LoginMemberId Long memberId
     ) {
         return ApiResponse.success(tripService.unlikePublicTrip(tripId, memberId));
+    }
+
+    private Long resolveOptionalMemberId(String authorization) {
+        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+            return null;
+        }
+
+        String accessToken = authorization.substring(BEARER_PREFIX.length()).trim();
+        if (accessToken.isBlank()) {
+            return null;
+        }
+
+        return jwtTokenProvider.getMemberId(accessToken);
     }
 }

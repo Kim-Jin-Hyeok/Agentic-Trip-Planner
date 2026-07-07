@@ -19,10 +19,46 @@ public record TripResponse(
         Transportation transportation,
         String lastAccommodationArea,
         Long likeCount,
-        TripVisibility visibility
+        TripVisibility visibility,
+        boolean liked
 ) {
 
+    public TripResponse(
+            Long tripId,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            Integer nights,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long likeCount,
+            TripVisibility visibility
+    ) {
+        this(
+                tripId,
+                destination,
+                startDate,
+                endDate,
+                nights,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                transportation,
+                lastAccommodationArea,
+                likeCount,
+                visibility,
+                false
+        );
+    }
+
     public static TripResponse from(Trip trip) {
+        return from(trip, false);
+    }
+
+    public static TripResponse from(Trip trip, boolean liked) {
         return new TripResponse(
                 trip.getTripId(),
                 trip.getDestination(),
@@ -35,7 +71,8 @@ public record TripResponse(
                 trip.getTransportation(),
                 trip.getLastAccommodationArea(),
                 trip.getLikeCount(),
-                trip.getVisibility()
+                trip.getVisibility(),
+                liked
         );
     }
 }

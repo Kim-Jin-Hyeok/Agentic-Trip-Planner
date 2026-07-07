@@ -638,12 +638,55 @@ class TripServiceTest {
 
         assertThat(response.content()).extracting(TripResponse::tripId)
                 .containsExactly(2L);
+        assertThat(response.content()).extracting(TripResponse::liked)
+                .containsExactly(false);
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
         assertThat(response.totalElements()).isEqualTo(1L);
         assertThat(response.totalPages()).isEqualTo(1);
         assertThat(response.first()).isTrue();
         assertThat(response.last()).isTrue();
+    }
+
+    @Test
+    void searchPublicTripPageMarksLikedTripsForCurrentUser() {
+        Trip likedTrip = trip(3L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        likedTrip.changeVisibility(TripVisibility.PUBLIC);
+        Trip notLikedTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        notLikedTrip.changeVisibility(TripVisibility.PUBLIC);
+        PageRequest pageRequest = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "tripId"));
+        when(tripRepository.searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(pageRequest)
+        )).thenReturn(new PageImpl<>(List.of(likedTrip, notLikedTrip), pageRequest, 2));
+        when(tripLikeRepository.findByUserIdAndTrip_TripIdIn(100L, List.of(3L, 2L)))
+                .thenReturn(List.of(TripLike.create(likedTrip, 100L)));
+
+        PageResponse<TripResponse> response = tripService.searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                null,
+                null,
+                100L
+        );
+
+        assertThat(response.content()).extracting(TripResponse::tripId)
+                .containsExactly(3L, 2L);
+        assertThat(response.content()).extracting(TripResponse::liked)
+                .containsExactly(true, false);
     }
 
     @Test
@@ -764,7 +807,22 @@ class TripServiceTest {
                 .containsExactly(1, 1, 2);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.orderNo())
                 .containsExactly(1, 2, 1);
+        assertThat(response.liked()).isFalse();
         verify(itineraryRepository).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
+    }
+
+    @Test
+    void getPublicTripMarksLikedWhenCurrentUserLikedTrip() {
+        Trip trip = trip(1L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
+        when(tripLikeRepository.existsByTrip_TripIdAndUserId(1L, 100L)).thenReturn(true);
+
+        TripDetailResponse response = tripService.getPublicTrip(1L, 100L);
+
+        assertThat(response.tripId()).isEqualTo(1L);
+        assertThat(response.liked()).isTrue();
     }
 
     @Test
@@ -803,6 +861,8 @@ class TripServiceTest {
                 .containsExactly(TripVisibility.PUBLIC, TripVisibility.PUBLIC);
         assertThat(response.content()).extracting(TripResponse::likeCount)
                 .containsExactly(1L, 0L);
+        assertThat(response.content()).extracting(TripResponse::liked)
+                .containsExactly(true, true);
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
         assertThat(response.totalElements()).isEqualTo(2L);
