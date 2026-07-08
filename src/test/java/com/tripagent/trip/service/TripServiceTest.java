@@ -747,6 +747,55 @@ class TripServiceTest {
     }
 
     @Test
+    void searchPublicTripPageMapsRepresentativePlacesByTripAndLimitsToThree() {
+        Trip firstTrip = trip(3L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        firstTrip.changeVisibility(TripVisibility.PUBLIC);
+        Trip secondTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        secondTrip.changeVisibility(TripVisibility.PUBLIC);
+        PageRequest pageRequest = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "tripId"));
+        when(tripRepository.searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(pageRequest)
+        )).thenReturn(new PageImpl<>(List.of(firstTrip, secondTrip), pageRequest, 2));
+        when(itineraryRepository.findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(List.of(3L, 2L)))
+                .thenReturn(List.of(
+                        itinerary(firstTrip, 31L, 1, 1),
+                        itinerary(firstTrip, 32L, 1, 2),
+                        itinerary(firstTrip, 33L, 2, 1),
+                        itinerary(firstTrip, 34L, 2, 2),
+                        itinerary(secondTrip, 21L, 1, 1),
+                        itinerary(secondTrip, 22L, 2, 1)
+                ));
+
+        PageResponse<PublicTripResponse> response = tripService.searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                null,
+                null
+        );
+
+        assertThat(response.content()).extracting(PublicTripResponse::tripId)
+                .containsExactly(3L, 2L);
+        assertThat(response.content().get(0).representativePlaces()).extracting(TripPlaceSummaryResponse::placeId)
+                .containsExactly(31L, 32L, 33L);
+        assertThat(response.content().get(1).representativePlaces()).extracting(TripPlaceSummaryResponse::placeId)
+                .containsExactly(21L, 22L);
+    }
+
+    @Test
     void searchPublicTripPageUsesLikeCountViewCountAndTripIdForPopularSort() {
         when(tripRepository.searchTripsByVisibility(
                 eq(TripVisibility.PUBLIC),
