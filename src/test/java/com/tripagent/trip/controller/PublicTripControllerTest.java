@@ -348,6 +348,41 @@ class PublicTripControllerTest {
     }
 
     @Test
+    void searchPublicTripsReturnsUnauthorizedWhenBearerTokenIsInvalid() throws Exception {
+        MockMvc authMockMvc = MockMvcBuilders
+                .standaloneSetup(new PublicTripController(tripService))
+                .setCustomArgumentResolvers(
+                        new TestLoginMemberIdArgumentResolver(),
+                        new OptionalLoginMemberIdArgumentResolver(jwtTokenProvider, new BearerTokenExtractor())
+                )
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+        when(jwtTokenProvider.getMemberId("invalid-token"))
+                .thenThrow(new AuthenticationException("Access token is invalid."));
+
+        authMockMvc.perform(get("/api/public/trips")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("Access token is invalid."));
+
+        verify(tripService, never()).searchPublicTripPage(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+        );
+    }
+
+    @Test
     void searchLikedPublicTripsReturnsCommonSuccessResponse() throws Exception {
         when(tripService.searchLikedPublicTripPage(100L, 1, 10))
                 .thenReturn(new PageResponse<>(List.of(new PublicTripResponse(
