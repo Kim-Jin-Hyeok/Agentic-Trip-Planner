@@ -9,6 +9,7 @@ import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
+import com.tripagent.trip.domain.TripView;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripAuthorResponse;
@@ -18,6 +19,7 @@ import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripLikeRepository;
 import com.tripagent.trip.repository.TripRepository;
+import com.tripagent.trip.repository.TripViewRepository;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -49,17 +51,20 @@ public class TripService {
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
     private final TripLikeRepository tripLikeRepository;
+    private final TripViewRepository tripViewRepository;
     private final MemberRepository memberRepository;
 
     public TripService(
             TripRepository tripRepository,
             ItineraryRepository itineraryRepository,
             TripLikeRepository tripLikeRepository,
+            TripViewRepository tripViewRepository,
             MemberRepository memberRepository
     ) {
         this.tripRepository = tripRepository;
         this.itineraryRepository = itineraryRepository;
         this.tripLikeRepository = tripLikeRepository;
+        this.tripViewRepository = tripViewRepository;
         this.memberRepository = memberRepository;
     }
 
@@ -331,7 +336,7 @@ public class TripService {
     public TripDetailResponse getPublicTrip(Long tripId, Long currentUserId) {
         Trip trip = tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
                 .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
-        trip.increaseViewCount();
+        recordPublicTripViewIfNeeded(trip, currentUserId);
         List<ItineraryResponse> itineraries = itineraryRepository
                 .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
                 .stream()
@@ -546,6 +551,20 @@ public class TripService {
                 .stream()
                 .map(tripLike -> tripLike.getTrip().getTripId())
                 .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private void recordPublicTripViewIfNeeded(Trip trip, Long userId) {
+        if (userId == null) {
+            return;
+        }
+
+        LocalDate today = LocalDate.now();
+        if (tripViewRepository.existsByTrip_TripIdAndUserIdAndViewDate(trip.getTripId(), userId, today)) {
+            return;
+        }
+
+        tripViewRepository.save(TripView.create(trip, userId, today));
+        trip.increaseViewCount();
     }
 
     private Map<Long, TripAuthorResponse> findAuthorsByOwnerId(List<Trip> trips) {

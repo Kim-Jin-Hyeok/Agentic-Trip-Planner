@@ -20,6 +20,7 @@ import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
+import com.tripagent.trip.domain.TripView;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripCreateRequest;
@@ -28,6 +29,7 @@ import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripLikeRepository;
 import com.tripagent.trip.repository.TripRepository;
+import com.tripagent.trip.repository.TripViewRepository;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -58,6 +60,9 @@ class TripServiceTest {
 
     @Mock
     private TripLikeRepository tripLikeRepository;
+
+    @Mock
+    private TripViewRepository tripViewRepository;
 
     @Mock
     private MemberRepository memberRepository;
@@ -824,8 +829,8 @@ class TripServiceTest {
 
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
-        assertThat(response.viewCount()).isEqualTo(1L);
-        assertThat(trip.getViewCount()).isEqualTo(1L);
+        assertThat(response.viewCount()).isZero();
+        assertThat(trip.getViewCount()).isZero();
         assertThat(response.itineraries()).hasSize(3);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.placeId())
                 .containsExactly(10L, 20L, 30L);
@@ -837,6 +842,7 @@ class TripServiceTest {
                 .containsExactly(1, 2, 1);
         assertThat(response.liked()).isFalse();
         verify(itineraryRepository).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
+        verify(tripViewRepository, never()).save(any(TripView.class));
     }
 
     @Test
@@ -847,6 +853,8 @@ class TripServiceTest {
         when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
         when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
         when(tripLikeRepository.existsByTrip_TripIdAndUserId(1L, 100L)).thenReturn(true);
+        when(tripViewRepository.existsByTrip_TripIdAndUserIdAndViewDate(1L, 100L, LocalDate.now()))
+                .thenReturn(false);
         when(memberRepository.findById(100L)).thenReturn(Optional.of(author));
 
         TripDetailResponse response = tripService.getPublicTrip(1L, 100L);
@@ -857,6 +865,23 @@ class TripServiceTest {
         assertThat(trip.getViewCount()).isEqualTo(1L);
         assertThat(response.author().memberId()).isEqualTo(100L);
         assertThat(response.author().nickname()).isEqualTo("trip-author");
+        verify(tripViewRepository).save(any(TripView.class));
+    }
+
+    @Test
+    void getPublicTripDoesNotIncreaseViewCountWhenUserAlreadyViewedToday() {
+        Trip trip = trip(1L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
+        when(tripViewRepository.existsByTrip_TripIdAndUserIdAndViewDate(1L, 100L, LocalDate.now()))
+                .thenReturn(true);
+
+        TripDetailResponse response = tripService.getPublicTrip(1L, 100L);
+
+        assertThat(response.viewCount()).isZero();
+        assertThat(trip.getViewCount()).isZero();
+        verify(tripViewRepository, never()).save(any(TripView.class));
     }
 
     @Test
