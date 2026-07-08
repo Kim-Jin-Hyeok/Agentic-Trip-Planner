@@ -51,6 +51,7 @@ public class TripService {
     private static final int DEFAULT_PUBLIC_TRIP_PAGE = 0;
     private static final int DEFAULT_PUBLIC_TRIP_PAGE_SIZE = 20;
     private static final int MAX_PUBLIC_TRIP_PAGE_SIZE = 50;
+    private static final int REPRESENTATIVE_PLACE_LIMIT = 3;
 
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
@@ -626,7 +627,7 @@ public class TripService {
                         Trip::getTripId,
                         trip -> itinerariesByTripId.getOrDefault(trip.getTripId(), List.<Itinerary>of())
                                 .stream()
-                                .limit(3)
+                                .limit(REPRESENTATIVE_PLACE_LIMIT)
                                 .map(itinerary -> TripPlaceSummaryResponse.from(itinerary.getPlace()))
                                 .toList()
                 ));
