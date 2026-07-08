@@ -1,5 +1,6 @@
 package com.tripagent.trip.service;
 
+import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
@@ -16,6 +17,7 @@ import com.tripagent.trip.dto.TripAuthorResponse;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
+import com.tripagent.trip.dto.TripPlaceSummaryResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripLikeRepository;
 import com.tripagent.trip.repository.TripRepository;
@@ -317,11 +319,15 @@ public class TripService {
                 );
         Set<Long> likedTripIds = findLikedTripIds(currentUserId, tripPage.getContent());
         Map<Long, TripAuthorResponse> authorsByMemberId = findAuthorsByOwnerId(tripPage.getContent());
+        Map<Long, List<TripPlaceSummaryResponse>> representativePlacesByTripId = findRepresentativePlacesByTripId(
+                tripPage.getContent()
+        );
         Page<TripResponse> responsePage = tripPage
                 .map(trip -> TripResponse.from(
                         trip,
                         likedTripIds.contains(trip.getTripId()),
-                        getAuthor(authorsByMemberId, trip.getOwnerId())
+                        getAuthor(authorsByMemberId, trip.getOwnerId()),
+                        representativePlacesByTripId.getOrDefault(trip.getTripId(), List.of())
                 ));
 
         return PageResponse.from(responsePage);
@@ -356,13 +362,26 @@ public class TripService {
                 normalizedPublicTripPageSize(size)
         );
 
-        Page<TripResponse> tripPage = tripLikeRepository.findByUserIdAndTrip_VisibilityOrderByTrip_TripIdDesc(
+        Page<TripLike> tripLikePage = tripLikeRepository.findByUserIdAndTrip_VisibilityOrderByTrip_TripIdDesc(
                         userId,
                         TripVisibility.PUBLIC,
                         pageable
-                )
+                );
+        List<Trip> trips = tripLikePage.getContent()
+                .stream()
                 .map(TripLike::getTrip)
-                .map(trip -> TripResponse.from(trip, true));
+                .toList();
+        Map<Long, List<TripPlaceSummaryResponse>> representativePlacesByTripId = findRepresentativePlacesByTripId(
+                trips
+        );
+        Page<TripResponse> tripPage = tripLikePage
+                .map(TripLike::getTrip)
+                .map(trip -> TripResponse.from(
+                        trip,
+                        true,
+                        null,
+                        representativePlacesByTripId.getOrDefault(trip.getTripId(), List.of())
+                ));
 
         return PageResponse.from(tripPage);
     }
@@ -583,6 +602,31 @@ public class TripService {
                 .collect(Collectors.toMap(
                         Member::getMemberId,
                         member -> TripAuthorResponse.from(member)
+                ));
+    }
+
+    private Map<Long, List<TripPlaceSummaryResponse>> findRepresentativePlacesByTripId(List<Trip> trips) {
+        if (trips.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> tripIds = trips.stream()
+                .map(Trip::getTripId)
+                .toList();
+
+        Map<Long, List<Itinerary>> itinerariesByTripId = itineraryRepository
+                .findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(tripIds)
+                .stream()
+                .collect(Collectors.groupingBy(itinerary -> itinerary.getTrip().getTripId()));
+
+        return trips.stream()
+                .collect(Collectors.toMap(
+                        Trip::getTripId,
+                        trip -> itinerariesByTripId.getOrDefault(trip.getTripId(), List.<Itinerary>of())
+                                .stream()
+                                .limit(3)
+                                .map(itinerary -> TripPlaceSummaryResponse.from(itinerary.getPlace()))
+                                .toList()
                 ));
     }
 

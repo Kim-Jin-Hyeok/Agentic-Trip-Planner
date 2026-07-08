@@ -26,6 +26,7 @@ import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
+import com.tripagent.trip.dto.TripPlaceSummaryResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripLikeRepository;
 import com.tripagent.trip.repository.TripRepository;
@@ -628,6 +629,12 @@ class TripServiceTest {
         Trip publicTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
         publicTrip.changeVisibility(TripVisibility.PUBLIC);
         PageRequest pageRequest = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "tripId"));
+        List<Itinerary> itineraries = List.of(
+                itinerary(publicTrip, 10L, 1, 1),
+                itinerary(publicTrip, 20L, 1, 2),
+                itinerary(publicTrip, 30L, 2, 1),
+                itinerary(publicTrip, 40L, 2, 2)
+        );
         Page<Trip> tripPage = new PageImpl<>(List.of(publicTrip), pageRequest, 1);
         when(tripRepository.searchTripsByVisibility(
                 eq(TripVisibility.PUBLIC),
@@ -640,6 +647,8 @@ class TripServiceTest {
                 isNull(),
                 eq(pageRequest)
         )).thenReturn(tripPage);
+        when(itineraryRepository.findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(List.of(2L)))
+                .thenReturn(itineraries);
 
         PageResponse<TripResponse> response = tripService.searchPublicTripPage(
                 null,
@@ -660,6 +669,11 @@ class TripServiceTest {
                 .containsExactly(false);
         assertThat(response.content()).extracting(TripResponse::viewCount)
                 .containsExactly(0L);
+        assertThat(response.content().get(0).representativePlaces()).hasSize(3);
+        assertThat(response.content().get(0).representativePlaces()).extracting(TripPlaceSummaryResponse::placeId)
+                .containsExactly(10L, 20L, 30L);
+        assertThat(response.content().get(0).representativePlaces()).extracting(TripPlaceSummaryResponse::name)
+                .containsExactly("Place 10", "Place 20", "Place 30");
         assertThat(publicTrip.getViewCount()).isZero();
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
@@ -691,6 +705,8 @@ class TripServiceTest {
         when(tripLikeRepository.findByUserIdAndTrip_TripIdIn(100L, List.of(3L, 2L)))
                 .thenReturn(List.of(TripLike.create(likedTrip, 100L)));
         when(memberRepository.findAllById(List.of(100L))).thenReturn(List.of(author));
+        when(itineraryRepository.findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(List.of(3L, 2L)))
+                .thenReturn(List.of(itinerary(likedTrip, 30L, 1, 1)));
 
         PageResponse<TripResponse> response = tripService.searchPublicTripPage(
                 null,
@@ -714,6 +730,9 @@ class TripServiceTest {
                 .containsExactly(100L, null);
         assertThat(response.content()).extracting(responseTrip -> responseTrip.author() == null ? null : responseTrip.author().nickname())
                 .containsExactly("jeju-maker", null);
+        assertThat(response.content().get(0).representativePlaces()).extracting(TripPlaceSummaryResponse::placeId)
+                .containsExactly(30L);
+        assertThat(response.content().get(1).representativePlaces()).isEmpty();
     }
 
     @Test
@@ -911,6 +930,8 @@ class TripServiceTest {
                         TripLike.create(firstTrip, 100L),
                         TripLike.create(secondTrip, 100L)
                 ), pageRequest, 2));
+        when(itineraryRepository.findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(List.of(3L, 2L)))
+                .thenReturn(List.of(itinerary(firstTrip, 30L, 1, 1)));
 
         PageResponse<TripResponse> response = tripService.searchLikedPublicTripPage(100L, null, null);
 
@@ -922,6 +943,9 @@ class TripServiceTest {
                 .containsExactly(1L, 0L);
         assertThat(response.content()).extracting(TripResponse::liked)
                 .containsExactly(true, true);
+        assertThat(response.content().get(0).representativePlaces()).extracting(TripPlaceSummaryResponse::placeId)
+                .containsExactly(30L);
+        assertThat(response.content().get(1).representativePlaces()).isEmpty();
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
         assertThat(response.totalElements()).isEqualTo(2L);

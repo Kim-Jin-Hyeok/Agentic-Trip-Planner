@@ -6,6 +6,7 @@ import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 public record TripResponse(
         Long tripId,
@@ -22,7 +23,8 @@ public record TripResponse(
         Long viewCount,
         TripVisibility visibility,
         boolean liked,
-        TripAuthorResponse author
+        TripAuthorResponse author,
+        List<TripPlaceSummaryResponse> representativePlaces
 ) {
 
     public TripResponse(
@@ -54,7 +56,8 @@ public record TripResponse(
                 0L,
                 visibility,
                 false,
-                null
+                null,
+                List.of()
         );
     }
 
@@ -88,7 +91,8 @@ public record TripResponse(
                 0L,
                 visibility,
                 liked,
-                null
+                null,
+                List.of()
         );
     }
 
@@ -123,7 +127,8 @@ public record TripResponse(
                 viewCount,
                 visibility,
                 liked,
-                null
+                null,
+                List.of()
         );
     }
 
@@ -136,6 +141,15 @@ public record TripResponse(
     }
 
     public static TripResponse from(Trip trip, boolean liked, TripAuthorResponse author) {
+        return from(trip, liked, author, List.of());
+    }
+
+    public static TripResponse from(
+            Trip trip,
+            boolean liked,
+            TripAuthorResponse author,
+            List<TripPlaceSummaryResponse> representativePlaces
+    ) {
         return new TripResponse(
                 trip.getTripId(),
                 trip.getDestination(),
@@ -151,7 +165,8 @@ public record TripResponse(
                 trip.getViewCount(),
                 trip.getVisibility(),
                 liked,
-                author
+                author,
+                representativePlaces
         );
     }
 }
