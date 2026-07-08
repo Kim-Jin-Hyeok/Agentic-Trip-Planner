@@ -5,9 +5,9 @@ import com.tripagent.auth.service.JwtTokenProvider;
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
-import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
@@ -65,7 +65,7 @@ public class PublicTripController {
     }
 
     @GetMapping("/{tripId}")
-    public ApiResponse<TripDetailResponse> getPublicTrip(
+    public ApiResponse<PublicTripDetailResponse> getPublicTrip(
             @PathVariable Long tripId,
             @RequestHeader(value = "Authorization", required = false) String authorization
     ) {

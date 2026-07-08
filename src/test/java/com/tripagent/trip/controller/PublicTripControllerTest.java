@@ -17,9 +17,9 @@ import com.tripagent.place.dto.PlaceSummaryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
+import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
-import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
@@ -127,7 +127,7 @@ class PublicTripControllerTest {
     @Test
     void getPublicTripReturnsCommonSuccessResponse() throws Exception {
         when(jwtTokenProvider.getMemberId("access-token")).thenReturn(100L);
-        when(tripService.getPublicTrip(1L, 100L)).thenReturn(new TripDetailResponse(
+        when(tripService.getPublicTrip(1L, 100L)).thenReturn(new PublicTripDetailResponse(
                 1L,
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
@@ -139,8 +139,10 @@ class PublicTripControllerTest {
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
                 3L,
+                0L,
                 TripVisibility.PUBLIC,
                 true,
+                null,
                 List.of(new ItineraryResponse(
                         10L,
                         1L,

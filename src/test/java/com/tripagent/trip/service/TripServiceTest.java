@@ -22,6 +22,7 @@ import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripView;
 import com.tripagent.trip.domain.TripVisibility;
+import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripCreateRequest;
@@ -845,7 +846,7 @@ class TripServiceTest {
         when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
         when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(itineraries);
 
-        TripDetailResponse response = tripService.getPublicTrip(1L);
+        PublicTripDetailResponse response = tripService.getPublicTrip(1L);
 
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
@@ -877,7 +878,7 @@ class TripServiceTest {
                 .thenReturn(false);
         when(memberRepository.findById(100L)).thenReturn(Optional.of(author));
 
-        TripDetailResponse response = tripService.getPublicTrip(1L, 100L);
+        PublicTripDetailResponse response = tripService.getPublicTrip(1L, 100L);
 
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.liked()).isTrue();
@@ -897,7 +898,7 @@ class TripServiceTest {
         when(tripViewRepository.existsByTrip_TripIdAndUserIdAndViewDate(1L, 100L, LocalDate.now()))
                 .thenReturn(true);
 
-        TripDetailResponse response = tripService.getPublicTrip(1L, 100L);
+        PublicTripDetailResponse response = tripService.getPublicTrip(1L, 100L);
 
         assertThat(response.viewCount()).isZero();
         assertThat(trip.getViewCount()).isZero();

@@ -12,6 +12,7 @@ import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripView;
 import com.tripagent.trip.domain.TripVisibility;
+import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.TripAuthorResponse;
@@ -335,12 +336,12 @@ public class TripService {
     }
 
     @Transactional
-    public TripDetailResponse getPublicTrip(Long tripId) {
+    public PublicTripDetailResponse getPublicTrip(Long tripId) {
         return getPublicTrip(tripId, null);
     }
 
     @Transactional
-    public TripDetailResponse getPublicTrip(Long tripId, Long currentUserId) {
+    public PublicTripDetailResponse getPublicTrip(Long tripId, Long currentUserId) {
         Trip trip = tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
                 .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
         recordPublicTripViewIfNeeded(trip, currentUserId);
@@ -353,7 +354,7 @@ public class TripService {
                 && tripLikeRepository.existsByTrip_TripIdAndUserId(tripId, currentUserId);
         TripAuthorResponse author = findAuthorByOwnerId(trip.getOwnerId());
 
-        return TripDetailResponse.from(trip, itineraries, liked, author);
+        return PublicTripDetailResponse.from(trip, itineraries, liked, author);
     }
 
     public PageResponse<PublicTripResponse> searchLikedPublicTripPage(Long userId, Integer page, Integer size) {

@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
-public record TripDetailResponse(
+public record PublicTripDetailResponse(
         Long tripId,
         String destination,
         LocalDate startDate,
@@ -23,44 +23,18 @@ public record TripDetailResponse(
         Long likeCount,
         Long viewCount,
         TripVisibility visibility,
+        boolean liked,
+        TripAuthorResponse author,
         List<ItineraryResponse> itineraries
 ) {
 
-    public TripDetailResponse(
-            Long tripId,
-            String destination,
-            LocalDate startDate,
-            LocalDate endDate,
-            Integer nights,
-            LocalTime dailyStartTime,
-            LocalTime dailyEndTime,
-            TripConcept concept,
-            Transportation transportation,
-            String lastAccommodationArea,
-            Long likeCount,
-            TripVisibility visibility,
-            List<ItineraryResponse> itineraries
+    public static PublicTripDetailResponse from(
+            Trip trip,
+            List<ItineraryResponse> itineraries,
+            boolean liked,
+            TripAuthorResponse author
     ) {
-        this(
-                tripId,
-                destination,
-                startDate,
-                endDate,
-                nights,
-                dailyStartTime,
-                dailyEndTime,
-                concept,
-                transportation,
-                lastAccommodationArea,
-                likeCount,
-                0L,
-                visibility,
-                itineraries
-        );
-    }
-
-    public static TripDetailResponse from(Trip trip, List<ItineraryResponse> itineraries) {
-        return new TripDetailResponse(
+        return new PublicTripDetailResponse(
                 trip.getTripId(),
                 trip.getDestination(),
                 trip.getStartDate(),
@@ -74,6 +48,8 @@ public record TripDetailResponse(
                 trip.getLikeCount(),
                 trip.getViewCount(),
                 trip.getVisibility(),
+                liked,
+                author,
                 itineraries
         );
     }

@@ -135,6 +135,8 @@ class TripControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.tripId").value(1L))
                 .andExpect(jsonPath("$.data.visibility").value("PRIVATE"))
+                .andExpect(jsonPath("$.data.liked").doesNotExist())
+                .andExpect(jsonPath("$.data.author").doesNotExist())
                 .andExpect(jsonPath("$.data.itineraries").isArray());
     }
 
