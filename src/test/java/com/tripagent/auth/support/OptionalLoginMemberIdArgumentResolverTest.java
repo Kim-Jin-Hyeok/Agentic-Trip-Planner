@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tripagent.auth.service.JwtTokenProvider;
+import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.common.response.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ class OptionalLoginMemberIdArgumentResolverTest {
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new TestController())
                 .setCustomArgumentResolvers(argumentResolver)
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
 
@@ -74,6 +76,19 @@ class OptionalLoginMemberIdArgumentResolverTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(jwtTokenProvider, never()).getMemberId(any());
+    }
+
+    @Test
+    void returnsUnauthorizedWhenBearerTokenIsInvalid() throws Exception {
+        when(jwtTokenProvider.getMemberId("invalid-token"))
+                .thenThrow(new AuthenticationException("Access token is invalid."));
+
+        mockMvc.perform(get("/test/optional-me")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("Access token is invalid."));
     }
 
     @RestController
