@@ -932,8 +932,11 @@ class TripServiceTest {
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.orderNo())
                 .containsExactly(1, 2, 1);
         assertThat(response.liked()).isFalse();
+        assertThat(response.author()).isNull();
         verify(itineraryRepository).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
         verify(tripViewRepository, never()).save(any(TripView.class));
+        verify(tripLikeRepository, never()).existsByTrip_TripIdAndUserId(any(), any());
+        verify(memberRepository, never()).findById(any());
     }
 
     @Test
