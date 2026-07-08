@@ -321,7 +321,7 @@ public class TripService {
                         pageable
                 );
         if (tripPage.isEmpty()) {
-            return PageResponse.from(tripPage.map(trip -> PublicTripResponse.from(trip, false, null, List.of())));
+            return PageResponse.empty(tripPage);
         }
 
         Set<Long> likedTripIds = findLikedTripIds(currentUserId, tripPage.getContent());
@@ -375,12 +375,7 @@ public class TripService {
                         pageable
                 );
         if (tripLikePage.isEmpty()) {
-            return PageResponse.from(tripLikePage.map(tripLike -> PublicTripResponse.from(
-                    tripLike.getTrip(),
-                    true,
-                    null,
-                    List.of()
-            )));
+            return PageResponse.empty(tripLikePage);
         }
 
         List<Trip> trips = tripLikePage.getContent()

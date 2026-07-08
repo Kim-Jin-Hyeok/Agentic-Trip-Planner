@@ -24,4 +24,16 @@ public record PageResponse<T>(
                 page.isLast()
         );
     }
+
+    public static <T> PageResponse<T> empty(Page<?> page) {
+        return new PageResponse<>(
+                List.of(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.isFirst(),
+                page.isLast()
+        );
+    }
 }
