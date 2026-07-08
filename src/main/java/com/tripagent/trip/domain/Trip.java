@@ -64,6 +64,9 @@ public class Trip {
     @Column(nullable = false)
     private Long likeCount;
 
+    @Column(nullable = false)
+    private Long viewCount;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private TripVisibility visibility;
@@ -93,6 +96,7 @@ public class Trip {
         this.lastAccommodationArea = lastAccommodationArea;
         this.ownerId = ownerId;
         this.likeCount = 0L;
+        this.viewCount = 0L;
         this.visibility = TripVisibility.PRIVATE;
     }
 
@@ -191,6 +195,10 @@ public class Trip {
         return likeCount;
     }
 
+    public Long getViewCount() {
+        return viewCount;
+    }
+
     public void increaseLikeCount() {
         likeCount++;
     }
@@ -200,6 +208,10 @@ public class Trip {
             throw new IllegalStateException("Trip likeCount cannot be negative.");
         }
         likeCount--;
+    }
+
+    public void increaseViewCount() {
+        viewCount++;
     }
 
     public TripVisibility getVisibility() {

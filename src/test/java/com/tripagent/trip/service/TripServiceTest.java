@@ -89,6 +89,7 @@ class TripServiceTest {
         assertThat(response.transportation()).isEqualTo(Transportation.RENT_CAR);
         assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
         assertThat(response.likeCount()).isZero();
+        assertThat(response.viewCount()).isZero();
         verify(tripRepository).save(any(Trip.class));
     }
 
@@ -645,6 +646,9 @@ class TripServiceTest {
                 .containsExactly(2L);
         assertThat(response.content()).extracting(TripResponse::liked)
                 .containsExactly(false);
+        assertThat(response.content()).extracting(TripResponse::viewCount)
+                .containsExactly(0L);
+        assertThat(publicTrip.getViewCount()).isZero();
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
         assertThat(response.totalElements()).isEqualTo(1L);
@@ -809,6 +813,8 @@ class TripServiceTest {
 
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
+        assertThat(response.viewCount()).isEqualTo(1L);
+        assertThat(trip.getViewCount()).isEqualTo(1L);
         assertThat(response.itineraries()).hasSize(3);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.placeId())
                 .containsExactly(10L, 20L, 30L);
@@ -836,6 +842,8 @@ class TripServiceTest {
 
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.liked()).isTrue();
+        assertThat(response.viewCount()).isEqualTo(1L);
+        assertThat(trip.getViewCount()).isEqualTo(1L);
         assertThat(response.author().memberId()).isEqualTo(100L);
         assertThat(response.author().nickname()).isEqualTo("trip-author");
     }

@@ -76,6 +76,7 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.content[0].tripId").value(2L))
                 .andExpect(jsonPath("$.data.content[0].visibility").value("PUBLIC"))
                 .andExpect(jsonPath("$.data.content[0].liked").value(false))
+                .andExpect(jsonPath("$.data.content[0].viewCount").value(0L))
                 .andExpect(jsonPath("$.data.page").value(0))
                 .andExpect(jsonPath("$.data.size").value(20))
                 .andExpect(jsonPath("$.data.totalElements").value(1L))
@@ -118,6 +119,7 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.content[0].tripId").value(3L))
                 .andExpect(jsonPath("$.data.content[0].concept").value("FOOD"))
                 .andExpect(jsonPath("$.data.content[0].liked").value(true))
+                .andExpect(jsonPath("$.data.content[0].viewCount").value(0L))
                 .andExpect(jsonPath("$.data.page").value(1))
                 .andExpect(jsonPath("$.data.size").value(10));
     }
@@ -169,6 +171,7 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.tripId").value(1L))
                 .andExpect(jsonPath("$.data.visibility").value("PUBLIC"))
                 .andExpect(jsonPath("$.data.liked").value(true))
+                .andExpect(jsonPath("$.data.viewCount").value(0L))
                 .andExpect(jsonPath("$.data.itineraries").isArray())
                 .andExpect(jsonPath("$.data.itineraries[0].placeId").value(100L))
                 .andExpect(jsonPath("$.data.itineraries[0].place.name").value("Seongsan Sunrise Peak"))

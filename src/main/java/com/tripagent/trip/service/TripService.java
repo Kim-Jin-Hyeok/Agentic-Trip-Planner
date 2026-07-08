@@ -322,13 +322,16 @@ public class TripService {
         return PageResponse.from(responsePage);
     }
 
+    @Transactional
     public TripDetailResponse getPublicTrip(Long tripId) {
         return getPublicTrip(tripId, null);
     }
 
+    @Transactional
     public TripDetailResponse getPublicTrip(Long tripId, Long currentUserId) {
         Trip trip = tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
                 .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
+        trip.increaseViewCount();
         List<ItineraryResponse> itineraries = itineraryRepository
                 .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
                 .stream()

@@ -19,6 +19,7 @@ public record TripResponse(
         Transportation transportation,
         String lastAccommodationArea,
         Long likeCount,
+        Long viewCount,
         TripVisibility visibility,
         boolean liked,
         TripAuthorResponse author
@@ -50,6 +51,7 @@ public record TripResponse(
                 transportation,
                 lastAccommodationArea,
                 likeCount,
+                0L,
                 visibility,
                 false,
                 null
@@ -83,6 +85,42 @@ public record TripResponse(
                 transportation,
                 lastAccommodationArea,
                 likeCount,
+                0L,
+                visibility,
+                liked,
+                null
+        );
+    }
+
+    public TripResponse(
+            Long tripId,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            Integer nights,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long likeCount,
+            Long viewCount,
+            TripVisibility visibility,
+            boolean liked
+    ) {
+        this(
+                tripId,
+                destination,
+                startDate,
+                endDate,
+                nights,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                transportation,
+                lastAccommodationArea,
+                likeCount,
+                viewCount,
                 visibility,
                 liked,
                 null
@@ -110,6 +148,7 @@ public record TripResponse(
                 trip.getTransportation(),
                 trip.getLastAccommodationArea(),
                 trip.getLikeCount(),
+                trip.getViewCount(),
                 trip.getVisibility(),
                 liked,
                 author
