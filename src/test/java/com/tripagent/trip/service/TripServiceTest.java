@@ -819,12 +819,16 @@ class TripServiceTest {
                 2,
                 PublicTripSort.POPULAR,
                 1,
-                10
+                10,
+                100L
         );
 
         assertThat(response.page()).isEqualTo(1);
         assertThat(response.size()).isEqualTo(10);
         assertThat(response.totalElements()).isZero();
+        verify(tripLikeRepository, never()).findByUserIdAndTrip_TripIdIn(any(), any());
+        verify(memberRepository, never()).findAllById(any());
+        verify(itineraryRepository, never()).findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(any());
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(tripRepository).searchTripsByVisibility(
@@ -1058,6 +1062,8 @@ class TripServiceTest {
         assertThat(response.page()).isEqualTo(1);
         assertThat(response.size()).isEqualTo(10);
         assertThat(response.totalElements()).isZero();
+        verify(memberRepository, never()).findAllById(any());
+        verify(itineraryRepository, never()).findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(any());
     }
 
     @Test

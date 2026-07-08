@@ -320,6 +320,10 @@ public class TripService {
                         nights,
                         pageable
                 );
+        if (tripPage.isEmpty()) {
+            return PageResponse.from(tripPage.map(trip -> PublicTripResponse.from(trip, false, null, List.of())));
+        }
+
         Set<Long> likedTripIds = findLikedTripIds(currentUserId, tripPage.getContent());
         Map<Long, TripAuthorResponse> authorsByMemberId = findAuthorsByOwnerId(tripPage.getContent());
         Map<Long, List<TripPlaceSummaryResponse>> representativePlacesByTripId = findRepresentativePlacesByTripId(
@@ -370,6 +374,15 @@ public class TripService {
                         TripVisibility.PUBLIC,
                         pageable
                 );
+        if (tripLikePage.isEmpty()) {
+            return PageResponse.from(tripLikePage.map(tripLike -> PublicTripResponse.from(
+                    tripLike.getTrip(),
+                    true,
+                    null,
+                    List.of()
+            )));
+        }
+
         List<Trip> trips = tripLikePage.getContent()
                 .stream()
                 .map(TripLike::getTrip)
