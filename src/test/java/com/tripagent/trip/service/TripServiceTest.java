@@ -1007,7 +1007,14 @@ class TripServiceTest {
                         TripLike.create(secondTrip, 100L)
                 ), pageRequest, 2));
         when(itineraryRepository.findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(List.of(3L, 2L)))
-                .thenReturn(List.of(itinerary(firstTrip, 30L, 1, 1)));
+                .thenReturn(List.of(
+                        itinerary(firstTrip, 31L, 1, 1),
+                        itinerary(firstTrip, 32L, 1, 2),
+                        itinerary(firstTrip, 33L, 2, 1),
+                        itinerary(firstTrip, 34L, 2, 2),
+                        itinerary(secondTrip, 21L, 1, 1),
+                        itinerary(secondTrip, 22L, 2, 1)
+                ));
         when(memberRepository.findAllById(List.of(200L))).thenReturn(List.of(author));
 
         PageResponse<PublicTripResponse> response = tripService.searchLikedPublicTripPage(100L, null, null);
@@ -1025,8 +1032,9 @@ class TripServiceTest {
         assertThat(response.content()).extracting(responseTrip -> responseTrip.author() == null ? null : responseTrip.author().nickname())
                 .containsExactly("liked-author", null);
         assertThat(response.content().get(0).representativePlaces()).extracting(TripPlaceSummaryResponse::placeId)
-                .containsExactly(30L);
-        assertThat(response.content().get(1).representativePlaces()).isEmpty();
+                .containsExactly(31L, 32L, 33L);
+        assertThat(response.content().get(1).representativePlaces()).extracting(TripPlaceSummaryResponse::placeId)
+                .containsExactly(21L, 22L);
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
         assertThat(response.totalElements()).isEqualTo(2L);
