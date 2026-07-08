@@ -940,6 +940,26 @@ class TripServiceTest {
     }
 
     @Test
+    void getPublicTripReturnsAuthorForGuestWhenTripHasOwner() {
+        Trip trip = trip(1L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3), 100L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        Member author = member(100L, "guest-visible-author");
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
+        when(memberRepository.findById(100L)).thenReturn(Optional.of(author));
+
+        PublicTripDetailResponse response = tripService.getPublicTrip(1L);
+
+        assertThat(response.liked()).isFalse();
+        assertThat(response.author().memberId()).isEqualTo(100L);
+        assertThat(response.author().nickname()).isEqualTo("guest-visible-author");
+        assertThat(trip.getViewCount()).isZero();
+        verify(tripViewRepository, never()).save(any(TripView.class));
+        verify(tripLikeRepository, never()).existsByTrip_TripIdAndUserId(any(), any());
+        verify(memberRepository).findById(100L);
+    }
+
+    @Test
     void getPublicTripMarksLikedWhenCurrentUserLikedTrip() {
         Trip trip = trip(1L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3), 100L);
         trip.changeVisibility(TripVisibility.PUBLIC);
