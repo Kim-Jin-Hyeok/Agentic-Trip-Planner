@@ -377,12 +377,13 @@ public class TripService {
         Map<Long, List<TripPlaceSummaryResponse>> representativePlacesByTripId = findRepresentativePlacesByTripId(
                 trips
         );
+        Map<Long, TripAuthorResponse> authorsByMemberId = findAuthorsByOwnerId(trips);
         Page<PublicTripResponse> tripPage = tripLikePage
                 .map(TripLike::getTrip)
                 .map(trip -> PublicTripResponse.from(
                         trip,
                         true,
-                        null,
+                        getAuthor(authorsByMemberId, trip.getOwnerId()),
                         representativePlacesByTripId.getOrDefault(trip.getTripId(), List.of())
                 ));
 

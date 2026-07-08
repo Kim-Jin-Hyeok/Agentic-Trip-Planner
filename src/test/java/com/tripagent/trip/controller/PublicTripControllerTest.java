@@ -20,6 +20,7 @@ import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
+import com.tripagent.trip.dto.TripAuthorResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
@@ -199,7 +200,7 @@ class PublicTripControllerTest {
                                 0L,
                                 TripVisibility.PUBLIC,
                                 true,
-                                null,
+                                new TripAuthorResponse(200L, "liked-author"),
                                 List.of()
                         )),
                         1,
@@ -219,6 +220,8 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.content[0].visibility").value("PUBLIC"))
                 .andExpect(jsonPath("$.data.content[0].likeCount").value(5L))
                 .andExpect(jsonPath("$.data.content[0].liked").value(true))
+                .andExpect(jsonPath("$.data.content[0].author.memberId").value(200L))
+                .andExpect(jsonPath("$.data.content[0].author.nickname").value("liked-author"))
                 .andExpect(jsonPath("$.data.page").value(1))
                 .andExpect(jsonPath("$.data.size").value(10))
                 .andExpect(jsonPath("$.data.totalElements").value(11L))

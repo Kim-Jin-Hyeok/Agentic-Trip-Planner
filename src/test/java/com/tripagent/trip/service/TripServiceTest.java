@@ -983,11 +983,19 @@ class TripServiceTest {
 
     @Test
     void searchLikedPublicTripPageReturnsUserLikedPublicTripsByTripIdDesc() {
-        Trip firstTrip = trip(3L);
+        Trip firstTrip = trip(
+                3L,
+                "JEJU",
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                200L
+        );
         firstTrip.changeVisibility(TripVisibility.PUBLIC);
         firstTrip.increaseLikeCount();
         Trip secondTrip = trip(2L);
         secondTrip.changeVisibility(TripVisibility.PUBLIC);
+        Member author = member(200L, "liked-author");
         PageRequest pageRequest = PageRequest.of(0, 20);
         when(tripLikeRepository.findByUserIdAndTrip_VisibilityOrderByTrip_TripIdDesc(
                 100L,
@@ -1000,6 +1008,7 @@ class TripServiceTest {
                 ), pageRequest, 2));
         when(itineraryRepository.findByTrip_TripIdInOrderByTrip_TripIdAscDayNoAscOrderNoAsc(List.of(3L, 2L)))
                 .thenReturn(List.of(itinerary(firstTrip, 30L, 1, 1)));
+        when(memberRepository.findAllById(List.of(200L))).thenReturn(List.of(author));
 
         PageResponse<PublicTripResponse> response = tripService.searchLikedPublicTripPage(100L, null, null);
 
@@ -1011,6 +1020,10 @@ class TripServiceTest {
                 .containsExactly(1L, 0L);
         assertThat(response.content()).extracting(PublicTripResponse::liked)
                 .containsExactly(true, true);
+        assertThat(response.content()).extracting(responseTrip -> responseTrip.author() == null ? null : responseTrip.author().memberId())
+                .containsExactly(200L, null);
+        assertThat(response.content()).extracting(responseTrip -> responseTrip.author() == null ? null : responseTrip.author().nickname())
+                .containsExactly("liked-author", null);
         assertThat(response.content().get(0).representativePlaces()).extracting(TripPlaceSummaryResponse::placeId)
                 .containsExactly(30L);
         assertThat(response.content().get(1).representativePlaces()).isEmpty();
