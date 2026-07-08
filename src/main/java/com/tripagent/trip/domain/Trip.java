@@ -18,7 +18,10 @@ import java.time.temporal.ChronoUnit;
         name = "trips",
         indexes = {
                 @Index(name = "idx_trips_visibility_trip_id", columnList = "visibility, tripId"),
-                @Index(name = "idx_trips_visibility_like_count_trip_id", columnList = "visibility, likeCount, tripId"),
+                @Index(
+                        name = "idx_trips_visibility_like_count_view_count_trip_id",
+                        columnList = "visibility, likeCount, viewCount, tripId"
+                ),
                 @Index(name = "idx_trips_visibility_concept_nights", columnList = "visibility, concept, nights"),
                 @Index(name = "idx_trips_visibility_destination", columnList = "visibility, destination")
         }

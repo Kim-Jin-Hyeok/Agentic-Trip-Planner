@@ -604,7 +604,11 @@ public class TripService {
         PublicTripSort normalizedSort = publicTripSort == null ? PublicTripSort.LATEST : publicTripSort;
         return switch (normalizedSort) {
             case LATEST -> Sort.by(Sort.Direction.DESC, "tripId");
-            case POPULAR -> Sort.by(Sort.Order.desc("likeCount"), Sort.Order.desc("tripId"));
+            case POPULAR -> Sort.by(
+                    Sort.Order.desc("likeCount"),
+                    Sort.Order.desc("viewCount"),
+                    Sort.Order.desc("tripId")
+            );
         };
     }
 

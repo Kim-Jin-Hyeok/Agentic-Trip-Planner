@@ -534,7 +534,12 @@ class TripServiceTest {
         Trip popularTrip = trip(3L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
         popularTrip.changeVisibility(TripVisibility.PUBLIC);
         popularTrip.increaseLikeCount();
-        Sort popularSort = Sort.by(Sort.Order.desc("likeCount"), Sort.Order.desc("tripId"));
+        popularTrip.increaseViewCount();
+        Sort popularSort = Sort.by(
+                Sort.Order.desc("likeCount"),
+                Sort.Order.desc("viewCount"),
+                Sort.Order.desc("tripId")
+        );
         when(tripRepository.searchTripsByVisibility(
                 eq(TripVisibility.PUBLIC),
                 isNull(),
@@ -560,6 +565,8 @@ class TripServiceTest {
         assertThat(responses).extracting(TripResponse::tripId)
                 .containsExactly(3L);
         assertThat(responses).extracting(TripResponse::likeCount)
+                .containsExactly(1L);
+        assertThat(responses).extracting(TripResponse::viewCount)
                 .containsExactly(1L);
     }
 
@@ -706,7 +713,11 @@ class TripServiceTest {
 
     @Test
     void searchPublicTripPageUsesRequestedPageSizeAndPopularSort() {
-        Sort popularSort = Sort.by(Sort.Order.desc("likeCount"), Sort.Order.desc("tripId"));
+        Sort popularSort = Sort.by(
+                Sort.Order.desc("likeCount"),
+                Sort.Order.desc("viewCount"),
+                Sort.Order.desc("tripId")
+        );
         PageRequest pageRequest = PageRequest.of(1, 10, popularSort);
         when(tripRepository.searchTripsByVisibility(
                 eq(TripVisibility.PUBLIC),
