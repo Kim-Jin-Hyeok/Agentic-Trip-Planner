@@ -185,6 +185,38 @@ class PublicTripControllerTest {
     }
 
     @Test
+    void getPublicTripReturnsAuthorForGuest() throws Exception {
+        when(tripService.getPublicTrip(1L, null)).thenReturn(new PublicTripDetailResponse(
+                1L,
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                2,
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                3L,
+                0L,
+                TripVisibility.PUBLIC,
+                false,
+                new TripAuthorResponse(100L, "trip-author"),
+                List.of()
+        ));
+
+        mockMvc.perform(get("/api/public/trips/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.tripId").value(1L))
+                .andExpect(jsonPath("$.data.liked").value(false))
+                .andExpect(jsonPath("$.data.author.memberId").value(100L))
+                .andExpect(jsonPath("$.data.author.nickname").value("trip-author"));
+
+        verify(tripService).getPublicTrip(1L, null);
+    }
+
+    @Test
     void searchLikedPublicTripsReturnsCommonSuccessResponse() throws Exception {
         when(tripService.searchLikedPublicTripPage(100L, 1, 10))
                 .thenReturn(new PageResponse<>(List.of(new PublicTripResponse(
