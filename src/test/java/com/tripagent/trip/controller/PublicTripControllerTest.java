@@ -2,6 +2,8 @@ package com.tripagent.trip.controller;
 
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -126,6 +128,82 @@ class PublicTripControllerTest {
     }
 
     @Test
+    void searchPublicTripsTreatsInvalidAuthorizationHeaderAsGuest() throws Exception {
+        when(tripService.searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                null,
+                null,
+                null
+        ))
+                .thenReturn(new PageResponse<>(List.of(trip(2L)), 0, 20, 1, 1, true, true));
+
+        mockMvc.perform(get("/api/public/trips")
+                        .header("Authorization", "Token access-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].liked").value(false));
+
+        verify(tripService).searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                null,
+                null,
+                null
+        );
+        verify(jwtTokenProvider, never()).getMemberId(any());
+    }
+
+    @Test
+    void searchPublicTripsTreatsBlankBearerTokenAsGuest() throws Exception {
+        when(tripService.searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                null,
+                null,
+                null
+        ))
+                .thenReturn(new PageResponse<>(List.of(trip(2L)), 0, 20, 1, 1, true, true));
+
+        mockMvc.perform(get("/api/public/trips")
+                        .header("Authorization", "Bearer   "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].liked").value(false));
+
+        verify(tripService).searchPublicTripPage(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                PublicTripSort.LATEST,
+                null,
+                null,
+                null
+        );
+        verify(jwtTokenProvider, never()).getMemberId(any());
+    }
+
+    @Test
     void getPublicTripReturnsCommonSuccessResponse() throws Exception {
         when(jwtTokenProvider.getMemberId("access-token")).thenReturn(100L);
         when(tripService.getPublicTrip(1L, 100L)).thenReturn(new PublicTripDetailResponse(
@@ -214,6 +292,37 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.author.nickname").value("trip-author"));
 
         verify(tripService).getPublicTrip(1L, null);
+    }
+
+    @Test
+    void getPublicTripTreatsInvalidAuthorizationHeaderAsGuest() throws Exception {
+        when(tripService.getPublicTrip(1L, null)).thenReturn(new PublicTripDetailResponse(
+                1L,
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                2,
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                3L,
+                0L,
+                TripVisibility.PUBLIC,
+                false,
+                new TripAuthorResponse(100L, "trip-author"),
+                List.of()
+        ));
+
+        mockMvc.perform(get("/api/public/trips/1")
+                        .header("Authorization", "Token access-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.liked").value(false))
+                .andExpect(jsonPath("$.data.author.memberId").value(100L));
+
+        verify(tripService).getPublicTrip(1L, null);
+        verify(jwtTokenProvider, never()).getMemberId(any());
     }
 
     @Test
