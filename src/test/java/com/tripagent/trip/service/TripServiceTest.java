@@ -960,6 +960,20 @@ class TripServiceTest {
     }
 
     @Test
+    void getPublicTripReturnsNullAuthorWhenAuthorMemberIsMissing() {
+        Trip trip = trip(1L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3), 100L);
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
+        when(memberRepository.findById(100L)).thenReturn(Optional.empty());
+
+        PublicTripDetailResponse response = tripService.getPublicTrip(1L);
+
+        assertThat(response.author()).isNull();
+        verify(memberRepository).findById(100L);
+    }
+
+    @Test
     void getPublicTripDoesNotIncreaseViewCountWhenUserAlreadyViewedToday() {
         Trip trip = trip(1L);
         trip.changeVisibility(TripVisibility.PUBLIC);

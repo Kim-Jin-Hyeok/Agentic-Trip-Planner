@@ -143,7 +143,7 @@ class PublicTripControllerTest {
                 0L,
                 TripVisibility.PUBLIC,
                 true,
-                null,
+                new TripAuthorResponse(100L, "trip-author"),
                 List.of(new ItineraryResponse(
                         10L,
                         1L,
@@ -175,6 +175,8 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.visibility").value("PUBLIC"))
                 .andExpect(jsonPath("$.data.liked").value(true))
                 .andExpect(jsonPath("$.data.viewCount").value(0L))
+                .andExpect(jsonPath("$.data.author.memberId").value(100L))
+                .andExpect(jsonPath("$.data.author.nickname").value("trip-author"))
                 .andExpect(jsonPath("$.data.itineraries").isArray())
                 .andExpect(jsonPath("$.data.itineraries[0].placeId").value(100L))
                 .andExpect(jsonPath("$.data.itineraries[0].place.name").value("Seongsan Sunrise Peak"))
