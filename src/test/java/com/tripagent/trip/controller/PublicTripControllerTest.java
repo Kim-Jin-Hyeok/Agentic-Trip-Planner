@@ -17,10 +17,10 @@ import com.tripagent.place.dto.PlaceSummaryResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
+import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
-import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -182,7 +182,7 @@ class PublicTripControllerTest {
     @Test
     void searchLikedPublicTripsReturnsCommonSuccessResponse() throws Exception {
         when(tripService.searchLikedPublicTripPage(100L, 1, 10))
-                .thenReturn(new PageResponse<>(List.of(new TripResponse(
+                .thenReturn(new PageResponse<>(List.of(new PublicTripResponse(
                                 3L,
                                 "JEJU",
                                 LocalDate.of(2026, 7, 1),
@@ -194,8 +194,11 @@ class PublicTripControllerTest {
                                 Transportation.RENT_CAR,
                                 "SEOGWIPO",
                                 5L,
+                                0L,
                                 TripVisibility.PUBLIC,
-                                true
+                                true,
+                                null,
+                                List.of()
                         )),
                         1,
                         10,
@@ -268,16 +271,16 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.message").value("Public trip not found. tripId=999"));
     }
 
-    private TripResponse trip(Long tripId) {
+    private PublicTripResponse trip(Long tripId) {
         return trip(tripId, TripConcept.HEALING, false);
     }
 
-    private TripResponse trip(Long tripId, TripConcept concept) {
+    private PublicTripResponse trip(Long tripId, TripConcept concept) {
         return trip(tripId, concept, false);
     }
 
-    private TripResponse trip(Long tripId, TripConcept concept, boolean liked) {
-        return new TripResponse(
+    private PublicTripResponse trip(Long tripId, TripConcept concept, boolean liked) {
+        return new PublicTripResponse(
                 tripId,
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
@@ -289,8 +292,11 @@ class PublicTripControllerTest {
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
                 0L,
+                0L,
                 TripVisibility.PUBLIC,
-                liked
+                liked,
+                null,
+                List.of()
         );
     }
 

@@ -6,8 +6,9 @@ import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
-public record TripResponse(
+public record PublicTripResponse(
         Long tripId,
         String destination,
         LocalDate startDate,
@@ -20,42 +21,19 @@ public record TripResponse(
         String lastAccommodationArea,
         Long likeCount,
         Long viewCount,
-        TripVisibility visibility
+        TripVisibility visibility,
+        boolean liked,
+        TripAuthorResponse author,
+        List<TripPlaceSummaryResponse> representativePlaces
 ) {
 
-    public TripResponse(
-            Long tripId,
-            String destination,
-            LocalDate startDate,
-            LocalDate endDate,
-            Integer nights,
-            LocalTime dailyStartTime,
-            LocalTime dailyEndTime,
-            TripConcept concept,
-            Transportation transportation,
-            String lastAccommodationArea,
-            Long likeCount,
-            TripVisibility visibility
+    public static PublicTripResponse from(
+            Trip trip,
+            boolean liked,
+            TripAuthorResponse author,
+            List<TripPlaceSummaryResponse> representativePlaces
     ) {
-        this(
-                tripId,
-                destination,
-                startDate,
-                endDate,
-                nights,
-                dailyStartTime,
-                dailyEndTime,
-                concept,
-                transportation,
-                lastAccommodationArea,
-                likeCount,
-                0L,
-                visibility
-        );
-    }
-
-    public static TripResponse from(Trip trip) {
-        return new TripResponse(
+        return new PublicTripResponse(
                 trip.getTripId(),
                 trip.getDestination(),
                 trip.getStartDate(),
@@ -68,7 +46,10 @@ public record TripResponse(
                 trip.getLastAccommodationArea(),
                 trip.getLikeCount(),
                 trip.getViewCount(),
-                trip.getVisibility()
+                trip.getVisibility(),
+                liked,
+                author,
+                representativePlaces
         );
     }
 }

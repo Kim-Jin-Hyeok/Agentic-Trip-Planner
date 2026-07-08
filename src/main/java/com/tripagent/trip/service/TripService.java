@@ -13,6 +13,7 @@ import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripView;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.PublicTripSort;
+import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.TripAuthorResponse;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
@@ -255,7 +256,7 @@ public class TripService {
                 .toList();
     }
 
-    public PageResponse<TripResponse> searchPublicTripPage(
+    public PageResponse<PublicTripResponse> searchPublicTripPage(
             String destination,
             TripConcept concept,
             LocalDate startDateFrom,
@@ -282,7 +283,7 @@ public class TripService {
         );
     }
 
-    public PageResponse<TripResponse> searchPublicTripPage(
+    public PageResponse<PublicTripResponse> searchPublicTripPage(
             String destination,
             TripConcept concept,
             LocalDate startDateFrom,
@@ -322,8 +323,8 @@ public class TripService {
         Map<Long, List<TripPlaceSummaryResponse>> representativePlacesByTripId = findRepresentativePlacesByTripId(
                 tripPage.getContent()
         );
-        Page<TripResponse> responsePage = tripPage
-                .map(trip -> TripResponse.from(
+        Page<PublicTripResponse> responsePage = tripPage
+                .map(trip -> PublicTripResponse.from(
                         trip,
                         likedTripIds.contains(trip.getTripId()),
                         getAuthor(authorsByMemberId, trip.getOwnerId()),
@@ -355,7 +356,7 @@ public class TripService {
         return TripDetailResponse.from(trip, itineraries, liked, author);
     }
 
-    public PageResponse<TripResponse> searchLikedPublicTripPage(Long userId, Integer page, Integer size) {
+    public PageResponse<PublicTripResponse> searchLikedPublicTripPage(Long userId, Integer page, Integer size) {
         validateLikeUserId(userId);
         Pageable pageable = PageRequest.of(
                 normalizedPublicTripPage(page),
@@ -374,9 +375,9 @@ public class TripService {
         Map<Long, List<TripPlaceSummaryResponse>> representativePlacesByTripId = findRepresentativePlacesByTripId(
                 trips
         );
-        Page<TripResponse> tripPage = tripLikePage
+        Page<PublicTripResponse> tripPage = tripLikePage
                 .map(TripLike::getTrip)
-                .map(trip -> TripResponse.from(
+                .map(trip -> PublicTripResponse.from(
                         trip,
                         true,
                         null,

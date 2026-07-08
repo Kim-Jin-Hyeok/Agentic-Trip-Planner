@@ -5,10 +5,10 @@ import com.tripagent.auth.service.JwtTokenProvider;
 import com.tripagent.common.response.ApiResponse;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
-import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -36,7 +36,7 @@ public class PublicTripController {
     }
 
     @GetMapping
-    public ApiResponse<PageResponse<TripResponse>> searchPublicTrips(
+    public ApiResponse<PageResponse<PublicTripResponse>> searchPublicTrips(
             @RequestParam(required = false) String destination,
             @RequestParam(required = false) TripConcept concept,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDateFrom,
@@ -73,7 +73,7 @@ public class PublicTripController {
     }
 
     @GetMapping("/likes")
-    public ApiResponse<PageResponse<TripResponse>> searchLikedPublicTrips(
+    public ApiResponse<PageResponse<PublicTripResponse>> searchLikedPublicTrips(
             @LoginMemberId Long memberId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size
