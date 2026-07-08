@@ -2,6 +2,8 @@ package com.tripagent.trip.controller;
 
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,6 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.auth.support.OptionalLoginMemberId;
+import com.tripagent.auth.support.OptionalLoginMemberIdArgumentResolver;
+import com.tripagent.auth.support.BearerTokenExtractor;
+import com.tripagent.auth.support.AuthenticationException;
+import com.tripagent.auth.service.JwtTokenProvider;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
@@ -40,11 +46,13 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 class PublicTripControllerTest {
 
     private TripService tripService;
+    private JwtTokenProvider jwtTokenProvider;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         tripService = org.mockito.Mockito.mock(TripService.class);
+        jwtTokenProvider = org.mockito.Mockito.mock(JwtTokenProvider.class);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new PublicTripController(tripService))
                 .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver(), new TestOptionalLoginMemberIdArgumentResolver())
@@ -314,6 +322,29 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.author.memberId").value(100L));
 
         verify(tripService).getPublicTrip(1L, null);
+    }
+
+    @Test
+    void getPublicTripReturnsUnauthorizedWhenBearerTokenIsInvalid() throws Exception {
+        MockMvc authMockMvc = MockMvcBuilders
+                .standaloneSetup(new PublicTripController(tripService))
+                .setCustomArgumentResolvers(
+                        new TestLoginMemberIdArgumentResolver(),
+                        new OptionalLoginMemberIdArgumentResolver(jwtTokenProvider, new BearerTokenExtractor())
+                )
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+        when(jwtTokenProvider.getMemberId("invalid-token"))
+                .thenThrow(new AuthenticationException("Access token is invalid."));
+
+        authMockMvc.perform(get("/api/public/trips/1")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("Access token is invalid."));
+
+        verify(tripService, never()).getPublicTrip(any(), any());
     }
 
     @Test
