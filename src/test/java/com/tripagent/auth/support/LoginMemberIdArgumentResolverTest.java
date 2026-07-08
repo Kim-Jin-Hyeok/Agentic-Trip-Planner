@@ -23,7 +23,10 @@ class LoginMemberIdArgumentResolverTest {
     @BeforeEach
     void setUp() {
         jwtTokenProvider = org.mockito.Mockito.mock(JwtTokenProvider.class);
-        LoginMemberIdArgumentResolver argumentResolver = new LoginMemberIdArgumentResolver(jwtTokenProvider);
+        LoginMemberIdArgumentResolver argumentResolver = new LoginMemberIdArgumentResolver(
+                jwtTokenProvider,
+                new BearerTokenExtractor()
+        );
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new TestController())
                 .setCustomArgumentResolvers(argumentResolver)

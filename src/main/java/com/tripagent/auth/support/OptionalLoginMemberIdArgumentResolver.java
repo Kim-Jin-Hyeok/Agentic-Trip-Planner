@@ -12,13 +12,15 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 @Component
 public class OptionalLoginMemberIdArgumentResolver implements HandlerMethodArgumentResolver {
 
-    private static final String AUTHORIZATION_HEADER = "Authorization";
-    private static final String BEARER_PREFIX = "Bearer ";
-
     private final JwtTokenProvider jwtTokenProvider;
+    private final BearerTokenExtractor bearerTokenExtractor;
 
-    public OptionalLoginMemberIdArgumentResolver(JwtTokenProvider jwtTokenProvider) {
+    public OptionalLoginMemberIdArgumentResolver(
+            JwtTokenProvider jwtTokenProvider,
+            BearerTokenExtractor bearerTokenExtractor
+    ) {
         this.jwtTokenProvider = jwtTokenProvider;
+        this.bearerTokenExtractor = bearerTokenExtractor;
     }
 
     @Override
@@ -35,17 +37,8 @@ public class OptionalLoginMemberIdArgumentResolver implements HandlerMethodArgum
             WebDataBinderFactory binderFactory
     ) {
         HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
-        if (request == null) {
-            return null;
-        }
-
-        String authorization = request.getHeader(AUTHORIZATION_HEADER);
-        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
-            return null;
-        }
-
-        String accessToken = authorization.substring(BEARER_PREFIX.length()).trim();
-        if (accessToken.isBlank()) {
+        String accessToken = bearerTokenExtractor.extractOrNull(request);
+        if (accessToken == null) {
             return null;
         }
 

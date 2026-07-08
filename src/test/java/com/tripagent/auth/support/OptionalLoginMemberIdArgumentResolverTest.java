@@ -26,7 +26,7 @@ class OptionalLoginMemberIdArgumentResolverTest {
     void setUp() {
         jwtTokenProvider = org.mockito.Mockito.mock(JwtTokenProvider.class);
         OptionalLoginMemberIdArgumentResolver argumentResolver =
-                new OptionalLoginMemberIdArgumentResolver(jwtTokenProvider);
+                new OptionalLoginMemberIdArgumentResolver(jwtTokenProvider, new BearerTokenExtractor());
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new TestController())
                 .setCustomArgumentResolvers(argumentResolver)
