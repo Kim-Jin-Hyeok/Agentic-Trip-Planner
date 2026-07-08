@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.member.domain.Member;
+import com.tripagent.member.repository.MemberRepository;
 import com.tripagent.place.domain.Place;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
@@ -56,6 +58,9 @@ class TripServiceTest {
 
     @Mock
     private TripLikeRepository tripLikeRepository;
+
+    @Mock
+    private MemberRepository memberRepository;
 
     @InjectMocks
     private TripService tripService;
@@ -650,10 +655,11 @@ class TripServiceTest {
 
     @Test
     void searchPublicTripPageMarksLikedTripsForCurrentUser() {
-        Trip likedTrip = trip(3L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        Trip likedTrip = trip(3L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3), 100L);
         likedTrip.changeVisibility(TripVisibility.PUBLIC);
         Trip notLikedTrip = trip(2L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
         notLikedTrip.changeVisibility(TripVisibility.PUBLIC);
+        Member author = member(100L, "jeju-maker");
         PageRequest pageRequest = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "tripId"));
         when(tripRepository.searchTripsByVisibility(
                 eq(TripVisibility.PUBLIC),
@@ -668,6 +674,7 @@ class TripServiceTest {
         )).thenReturn(new PageImpl<>(List.of(likedTrip, notLikedTrip), pageRequest, 2));
         when(tripLikeRepository.findByUserIdAndTrip_TripIdIn(100L, List.of(3L, 2L)))
                 .thenReturn(List.of(TripLike.create(likedTrip, 100L)));
+        when(memberRepository.findAllById(List.of(100L))).thenReturn(List.of(author));
 
         PageResponse<TripResponse> response = tripService.searchPublicTripPage(
                 null,
@@ -687,6 +694,10 @@ class TripServiceTest {
                 .containsExactly(3L, 2L);
         assertThat(response.content()).extracting(TripResponse::liked)
                 .containsExactly(true, false);
+        assertThat(response.content()).extracting(responseTrip -> responseTrip.author() == null ? null : responseTrip.author().memberId())
+                .containsExactly(100L, null);
+        assertThat(response.content()).extracting(responseTrip -> responseTrip.author() == null ? null : responseTrip.author().nickname())
+                .containsExactly("jeju-maker", null);
     }
 
     @Test
@@ -813,16 +824,20 @@ class TripServiceTest {
 
     @Test
     void getPublicTripMarksLikedWhenCurrentUserLikedTrip() {
-        Trip trip = trip(1L);
+        Trip trip = trip(1L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3), 100L);
         trip.changeVisibility(TripVisibility.PUBLIC);
+        Member author = member(100L, "trip-author");
         when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(trip));
         when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L)).thenReturn(List.of());
         when(tripLikeRepository.existsByTrip_TripIdAndUserId(1L, 100L)).thenReturn(true);
+        when(memberRepository.findById(100L)).thenReturn(Optional.of(author));
 
         TripDetailResponse response = tripService.getPublicTrip(1L, 100L);
 
         assertThat(response.tripId()).isEqualTo(1L);
         assertThat(response.liked()).isTrue();
+        assertThat(response.author().memberId()).isEqualTo(100L);
+        assertThat(response.author().nickname()).isEqualTo("trip-author");
     }
 
     @Test
@@ -1277,6 +1292,12 @@ class TripServiceTest {
         );
         setId(place, "placeId", placeId);
         return place;
+    }
+
+    private Member member(Long memberId, String nickname) {
+        Member member = Member.create("member" + memberId + "@example.com", nickname, "password-hash");
+        setId(member, "memberId", memberId);
+        return member;
     }
 
     private List<Itinerary> publishableItineraries(Trip trip) {

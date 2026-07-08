@@ -3,12 +3,15 @@ package com.tripagent.trip.service;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.member.domain.Member;
+import com.tripagent.member.repository.MemberRepository;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.PublicTripSort;
+import com.tripagent.trip.dto.TripAuthorResponse;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
@@ -21,8 +24,11 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -43,15 +49,18 @@ public class TripService {
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
     private final TripLikeRepository tripLikeRepository;
+    private final MemberRepository memberRepository;
 
     public TripService(
             TripRepository tripRepository,
             ItineraryRepository itineraryRepository,
-            TripLikeRepository tripLikeRepository
+            TripLikeRepository tripLikeRepository,
+            MemberRepository memberRepository
     ) {
         this.tripRepository = tripRepository;
         this.itineraryRepository = itineraryRepository;
         this.tripLikeRepository = tripLikeRepository;
+        this.memberRepository = memberRepository;
     }
 
     @Transactional
@@ -302,8 +311,13 @@ public class TripService {
                         pageable
                 );
         Set<Long> likedTripIds = findLikedTripIds(currentUserId, tripPage.getContent());
+        Map<Long, TripAuthorResponse> authorsByMemberId = findAuthorsByOwnerId(tripPage.getContent());
         Page<TripResponse> responsePage = tripPage
-                .map(trip -> TripResponse.from(trip, likedTripIds.contains(trip.getTripId())));
+                .map(trip -> TripResponse.from(
+                        trip,
+                        likedTripIds.contains(trip.getTripId()),
+                        getAuthor(authorsByMemberId, trip.getOwnerId())
+                ));
 
         return PageResponse.from(responsePage);
     }
@@ -322,8 +336,9 @@ public class TripService {
                 .toList();
         boolean liked = currentUserId != null
                 && tripLikeRepository.existsByTrip_TripIdAndUserId(tripId, currentUserId);
+        TripAuthorResponse author = findAuthorByOwnerId(trip.getOwnerId());
 
-        return TripDetailResponse.from(trip, itineraries, liked);
+        return TripDetailResponse.from(trip, itineraries, liked, author);
     }
 
     public PageResponse<TripResponse> searchLikedPublicTripPage(Long userId, Integer page, Integer size) {
@@ -527,7 +542,44 @@ public class TripService {
         return tripLikeRepository.findByUserIdAndTrip_TripIdIn(userId, tripIds)
                 .stream()
                 .map(tripLike -> tripLike.getTrip().getTripId())
-                .collect(java.util.stream.Collectors.toCollection(HashSet::new));
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private Map<Long, TripAuthorResponse> findAuthorsByOwnerId(List<Trip> trips) {
+        List<Long> ownerIds = trips.stream()
+                .map(Trip::getOwnerId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (ownerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return memberRepository.findAllById(ownerIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        Member::getMemberId,
+                        member -> TripAuthorResponse.from(member)
+                ));
+    }
+
+    private TripAuthorResponse findAuthorByOwnerId(Long ownerId) {
+        if (ownerId == null) {
+            return null;
+        }
+
+        return memberRepository.findById(ownerId)
+                .map(TripAuthorResponse::from)
+                .orElse(null);
+    }
+
+    private TripAuthorResponse getAuthor(Map<Long, TripAuthorResponse> authorsByMemberId, Long ownerId) {
+        if (ownerId == null) {
+            return null;
+        }
+
+        return authorsByMemberId.get(ownerId);
     }
 
     private void validateDateRange(String fieldName, LocalDate from, LocalDate to) {

@@ -23,6 +23,7 @@ public record TripDetailResponse(
         Long likeCount,
         TripVisibility visibility,
         boolean liked,
+        TripAuthorResponse author,
         List<ItineraryResponse> itineraries
 ) {
 
@@ -55,15 +56,60 @@ public record TripDetailResponse(
                 likeCount,
                 visibility,
                 false,
+                null,
+                itineraries
+        );
+    }
+
+    public TripDetailResponse(
+            Long tripId,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            Integer nights,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long likeCount,
+            TripVisibility visibility,
+            boolean liked,
+            List<ItineraryResponse> itineraries
+    ) {
+        this(
+                tripId,
+                destination,
+                startDate,
+                endDate,
+                nights,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                transportation,
+                lastAccommodationArea,
+                likeCount,
+                visibility,
+                liked,
+                null,
                 itineraries
         );
     }
 
     public static TripDetailResponse from(Trip trip, List<ItineraryResponse> itineraries) {
-        return from(trip, itineraries, false);
+        return from(trip, itineraries, false, null);
     }
 
     public static TripDetailResponse from(Trip trip, List<ItineraryResponse> itineraries, boolean liked) {
+        return from(trip, itineraries, liked, null);
+    }
+
+    public static TripDetailResponse from(
+            Trip trip,
+            List<ItineraryResponse> itineraries,
+            boolean liked,
+            TripAuthorResponse author
+    ) {
         return new TripDetailResponse(
                 trip.getTripId(),
                 trip.getDestination(),
@@ -78,6 +124,7 @@ public record TripDetailResponse(
                 trip.getLikeCount(),
                 trip.getVisibility(),
                 liked,
+                author,
                 itineraries
         );
     }

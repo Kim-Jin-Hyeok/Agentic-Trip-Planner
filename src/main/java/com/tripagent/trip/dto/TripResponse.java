@@ -20,7 +20,8 @@ public record TripResponse(
         String lastAccommodationArea,
         Long likeCount,
         TripVisibility visibility,
-        boolean liked
+        boolean liked,
+        TripAuthorResponse author
 ) {
 
     public TripResponse(
@@ -50,15 +51,53 @@ public record TripResponse(
                 lastAccommodationArea,
                 likeCount,
                 visibility,
-                false
+                false,
+                null
+        );
+    }
+
+    public TripResponse(
+            Long tripId,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            Integer nights,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long likeCount,
+            TripVisibility visibility,
+            boolean liked
+    ) {
+        this(
+                tripId,
+                destination,
+                startDate,
+                endDate,
+                nights,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                transportation,
+                lastAccommodationArea,
+                likeCount,
+                visibility,
+                liked,
+                null
         );
     }
 
     public static TripResponse from(Trip trip) {
-        return from(trip, false);
+        return from(trip, false, null);
     }
 
     public static TripResponse from(Trip trip, boolean liked) {
+        return from(trip, liked, null);
+    }
+
+    public static TripResponse from(Trip trip, boolean liked, TripAuthorResponse author) {
         return new TripResponse(
                 trip.getTripId(),
                 trip.getDestination(),
@@ -72,7 +111,8 @@ public record TripResponse(
                 trip.getLastAccommodationArea(),
                 trip.getLikeCount(),
                 trip.getVisibility(),
-                liked
+                liked,
+                author
         );
     }
 }
