@@ -2,8 +2,6 @@ package com.tripagent.trip.controller;
 
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.never;
-import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tripagent.auth.support.LoginMemberId;
-import com.tripagent.auth.service.JwtTokenProvider;
+import com.tripagent.auth.support.OptionalLoginMemberId;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
@@ -42,16 +40,14 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 class PublicTripControllerTest {
 
     private TripService tripService;
-    private JwtTokenProvider jwtTokenProvider;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         tripService = org.mockito.Mockito.mock(TripService.class);
-        jwtTokenProvider = org.mockito.Mockito.mock(JwtTokenProvider.class);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new PublicTripController(tripService, jwtTokenProvider))
-                .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver())
+                .standaloneSetup(new PublicTripController(tripService))
+                .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver(), new TestOptionalLoginMemberIdArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -92,7 +88,6 @@ class PublicTripControllerTest {
     void searchPublicTripsPassesFilters() throws Exception {
         LocalDate startDateFrom = LocalDate.of(2026, 7, 1);
         LocalDate startDateTo = LocalDate.of(2026, 7, 10);
-        when(jwtTokenProvider.getMemberId("access-token")).thenReturn(100L);
         when(tripService.searchPublicTripPage(
                 "JE",
                 TripConcept.FOOD,
@@ -162,7 +157,6 @@ class PublicTripControllerTest {
                 null,
                 null
         );
-        verify(jwtTokenProvider, never()).getMemberId(any());
     }
 
     @Test
@@ -200,12 +194,10 @@ class PublicTripControllerTest {
                 null,
                 null
         );
-        verify(jwtTokenProvider, never()).getMemberId(any());
     }
 
     @Test
     void getPublicTripReturnsCommonSuccessResponse() throws Exception {
-        when(jwtTokenProvider.getMemberId("access-token")).thenReturn(100L);
         when(tripService.getPublicTrip(1L, 100L)).thenReturn(new PublicTripDetailResponse(
                 1L,
                 "JEJU",
@@ -322,7 +314,6 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.author.memberId").value(100L));
 
         verify(tripService).getPublicTrip(1L, null);
-        verify(jwtTokenProvider, never()).getMemberId(any());
     }
 
     @Test
@@ -463,6 +454,29 @@ class PublicTripControllerTest {
                 WebDataBinderFactory binderFactory
         ) {
             return 100L;
+        }
+    }
+
+    private static class TestOptionalLoginMemberIdArgumentResolver implements HandlerMethodArgumentResolver {
+
+        @Override
+        public boolean supportsParameter(MethodParameter parameter) {
+            return parameter.hasParameterAnnotation(OptionalLoginMemberId.class);
+        }
+
+        @Override
+        public Object resolveArgument(
+                MethodParameter parameter,
+                ModelAndViewContainer mavContainer,
+                NativeWebRequest webRequest,
+                WebDataBinderFactory binderFactory
+        ) {
+            String authorization = webRequest.getHeader("Authorization");
+            if ("Bearer access-token".equals(authorization)) {
+                return 100L;
+            }
+
+            return null;
         }
     }
 }
