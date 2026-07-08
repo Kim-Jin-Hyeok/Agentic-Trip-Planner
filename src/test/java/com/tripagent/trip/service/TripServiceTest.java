@@ -538,16 +538,11 @@ class TripServiceTest {
     }
 
     @Test
-    void searchPublicTripsSortsByLikeCountWhenPopularSortIsRequested() {
+    void searchPublicTripsUsesLikeCountViewCountAndTripIdForPopularSort() {
         Trip popularTrip = trip(3L, "JEJU", TripConcept.HEALING, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
         popularTrip.changeVisibility(TripVisibility.PUBLIC);
         popularTrip.increaseLikeCount();
         popularTrip.increaseViewCount();
-        Sort popularSort = Sort.by(
-                Sort.Order.desc("likeCount"),
-                Sort.Order.desc("viewCount"),
-                Sort.Order.desc("tripId")
-        );
         when(tripRepository.searchTripsByVisibility(
                 eq(TripVisibility.PUBLIC),
                 isNull(),
@@ -557,7 +552,7 @@ class TripServiceTest {
                 isNull(),
                 isNull(),
                 isNull(),
-                eq(popularSort)
+                any(Sort.class)
         )).thenReturn(List.of(popularTrip));
 
         List<TripResponse> responses = tripService.searchPublicTrips(
@@ -576,6 +571,20 @@ class TripServiceTest {
                 .containsExactly(1L);
         assertThat(responses).extracting(TripResponse::viewCount)
                 .containsExactly(1L);
+
+        ArgumentCaptor<Sort> sortCaptor = ArgumentCaptor.forClass(Sort.class);
+        verify(tripRepository).searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                sortCaptor.capture()
+        );
+        assertPopularSort(sortCaptor.getValue());
     }
 
     @Test
@@ -738,13 +747,7 @@ class TripServiceTest {
     }
 
     @Test
-    void searchPublicTripPageUsesRequestedPageSizeAndPopularSort() {
-        Sort popularSort = Sort.by(
-                Sort.Order.desc("likeCount"),
-                Sort.Order.desc("viewCount"),
-                Sort.Order.desc("tripId")
-        );
-        PageRequest pageRequest = PageRequest.of(1, 10, popularSort);
+    void searchPublicTripPageUsesLikeCountViewCountAndTripIdForPopularSort() {
         when(tripRepository.searchTripsByVisibility(
                 eq(TripVisibility.PUBLIC),
                 eq("jeju"),
@@ -754,8 +757,8 @@ class TripServiceTest {
                 isNull(),
                 isNull(),
                 eq(2),
-                eq(pageRequest)
-        )).thenReturn(Page.empty(pageRequest));
+                any(Pageable.class)
+        )).thenAnswer(invocation -> Page.empty(invocation.getArgument(8)));
 
         PageResponse<PublicTripResponse> response = tripService.searchPublicTripPage(
                 " JeJu ",
@@ -773,6 +776,20 @@ class TripServiceTest {
         assertThat(response.page()).isEqualTo(1);
         assertThat(response.size()).isEqualTo(10);
         assertThat(response.totalElements()).isZero();
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(tripRepository).searchTripsByVisibility(
+                eq(TripVisibility.PUBLIC),
+                eq("jeju"),
+                eq(TripConcept.FOOD),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(2),
+                pageableCaptor.capture()
+        );
+        assertPopularSort(pageableCaptor.getValue().getSort());
     }
 
     @Test
@@ -1389,6 +1406,13 @@ class TripServiceTest {
                 orderNo == 1 ? 0 : 30,
                 "reason"
         );
+    }
+
+    private void assertPopularSort(Sort sort) {
+        assertThat(sort.stream().map(Sort.Order::getProperty).toList())
+                .containsExactly("likeCount", "viewCount", "tripId");
+        assertThat(sort.stream().map(Sort.Order::getDirection).toList())
+                .containsExactly(Sort.Direction.DESC, Sort.Direction.DESC, Sort.Direction.DESC);
     }
 
     private void setId(Object target, String fieldName, Long id) {
