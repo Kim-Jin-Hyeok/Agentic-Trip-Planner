@@ -1,4 +1,4 @@
-import type { ItineraryGenerateRequest, ItineraryPace, PlaceResponse } from '../types/trip';
+import type { ItineraryGenerateRequest, ItineraryPace, PlaceCategory, PlaceResponse } from '../types/trip';
 
 type ItineraryGenerateOptionsProps = {
   options: ItineraryGenerateRequest;
@@ -12,6 +12,16 @@ const paceOptions: Array<{ value: ItineraryPace; label: string }> = [
   { value: 'RELAXED', label: '여유' },
   { value: 'NORMAL', label: '보통' },
   { value: 'BUSY', label: '빡빡' }
+];
+
+const categoryOptions: Array<{ value: PlaceCategory; label: string }> = [
+  { value: 'NATURE', label: '자연' },
+  { value: 'FOOD', label: '음식' },
+  { value: 'CAFE', label: '카페' },
+  { value: 'GARDEN', label: '정원' },
+  { value: 'BEACH', label: '해변' },
+  { value: 'FAMILY', label: '가족' },
+  { value: 'MUSEUM', label: '박물관' }
 ];
 
 export function ItineraryGenerateOptions({
@@ -30,6 +40,30 @@ export function ItineraryGenerateOptions({
       ...options,
       [field]: isSelected ? selectedIds.filter((selectedId) => selectedId !== placeId) : [...selectedIds, placeId],
       [otherField]: options[otherField].filter((selectedId) => selectedId !== placeId)
+    });
+  }
+
+  function toggleCategory(category: PlaceCategory) {
+    const selectedCategories = options.preferredCategories;
+    onChange({
+      ...options,
+      preferredCategories: selectedCategories.includes(category)
+        ? selectedCategories.filter((selectedCategory) => selectedCategory !== category)
+        : [...selectedCategories, category]
+    });
+  }
+
+  function updateDayTimeWindow(dayNo: number, key: 'startTime' | 'endTime', value: string) {
+    onChange({
+      ...options,
+      dayTimeWindows: options.dayTimeWindows.map((timeWindow) =>
+        timeWindow.dayNo === dayNo
+          ? {
+              ...timeWindow,
+              [key]: value
+            }
+          : timeWindow
+      )
     });
   }
 
@@ -65,6 +99,45 @@ export function ItineraryGenerateOptions({
           우천 모드
         </label>
       </div>
+
+      <div className="category-option-list">
+        {categoryOptions.map((category) => (
+          <label className="checkbox-label" key={category.value}>
+            <input
+              type="checkbox"
+              checked={options.preferredCategories.includes(category.value)}
+              onChange={() => toggleCategory(category.value)}
+            />
+            {category.label}
+          </label>
+        ))}
+      </div>
+
+      {options.dayTimeWindows.length > 0 && (
+        <div className="time-window-list">
+          {options.dayTimeWindows.map((timeWindow) => (
+            <div className="time-window-item" key={timeWindow.dayNo}>
+              <strong>Day {timeWindow.dayNo}</strong>
+              <label>
+                시작
+                <input
+                  type="time"
+                  value={timeWindow.startTime}
+                  onChange={(event) => updateDayTimeWindow(timeWindow.dayNo, 'startTime', event.target.value)}
+                />
+              </label>
+              <label>
+                종료
+                <input
+                  type="time"
+                  value={timeWindow.endTime}
+                  onChange={(event) => updateDayTimeWindow(timeWindow.dayNo, 'endTime', event.target.value)}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
 
       {candidatePlaces.length === 0 ? (
         <div className="compact-empty">후보 장소를 조회하면 필수 방문/제외 장소를 선택할 수 있습니다.</div>

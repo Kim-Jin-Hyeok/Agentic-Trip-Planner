@@ -54,6 +54,8 @@ const initialGenerateOptions: ItineraryGenerateRequest = {
   mustVisitPlaceIds: [],
   excludedPlaceIds: [],
   pace: 'NORMAL',
+  preferredCategories: [],
+  dayTimeWindows: [],
   rainyDayMode: false
 };
 
@@ -191,7 +193,7 @@ export function TripCreatePage() {
       setItineraries(detail.itineraries);
       setEditingItems({});
       setCandidatePlaces([]);
-      setGenerateOptions(initialGenerateOptions);
+      setGenerateOptions(createDefaultGenerateOptions(detail));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '여행 상세 조회에 실패했습니다.');
     } finally {
@@ -250,7 +252,7 @@ export function TripCreatePage() {
       setItineraries(detail.itineraries);
       setEditingItems({});
       setCandidatePlaces([]);
-      setGenerateOptions(initialGenerateOptions);
+      setGenerateOptions(createDefaultGenerateOptions(detail));
       await loadTrips();
       setMessage('여행 조건이 저장되었습니다.');
     } catch (error) {
@@ -599,4 +601,15 @@ export function TripCreatePage() {
       </section>
     </main>
   );
+}
+
+function createDefaultGenerateOptions(trip: TripDetail): ItineraryGenerateRequest {
+  return {
+    ...initialGenerateOptions,
+    dayTimeWindows: Array.from({ length: trip.nights + 1 }, (_, index) => ({
+      dayNo: index + 1,
+      startTime: trip.dailyStartTime,
+      endTime: trip.dailyEndTime
+    }))
+  };
 }

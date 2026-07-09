@@ -49,10 +49,20 @@ export type PlaceResponse = PlaceSummary & {
 
 export type ItineraryPace = 'RELAXED' | 'NORMAL' | 'BUSY';
 
+export type PlaceCategory = 'NATURE' | 'FOOD' | 'CAFE' | 'GARDEN' | 'BEACH' | 'FAMILY' | 'MUSEUM';
+
+export type ItineraryDayTimeWindowRequest = {
+  dayNo: number;
+  startTime: string;
+  endTime: string;
+};
+
 export type ItineraryGenerateRequest = {
   mustVisitPlaceIds: number[];
   excludedPlaceIds: number[];
   pace: ItineraryPace;
+  preferredCategories: PlaceCategory[];
+  dayTimeWindows: ItineraryDayTimeWindowRequest[];
   rainyDayMode: boolean;
 };
 
