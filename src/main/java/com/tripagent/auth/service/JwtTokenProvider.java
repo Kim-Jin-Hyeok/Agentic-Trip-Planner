@@ -14,6 +14,7 @@ import java.util.Base64;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -28,6 +29,7 @@ public class JwtTokenProvider {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    @Autowired
     public JwtTokenProvider(JwtProperties jwtProperties, ObjectMapper objectMapper) {
         this(jwtProperties, objectMapper, Clock.systemUTC());
     }
