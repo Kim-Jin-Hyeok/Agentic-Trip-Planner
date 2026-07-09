@@ -348,6 +348,81 @@ textarea {
   padding: 6px 10px;
 }
 
+.generate-options {
+  border: 1px solid #e2ded8;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  padding: 16px;
+}
+
+.generate-options-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.generate-options-header p {
+  color: #6f7d6f;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.generate-options-header h3 {
+  margin: 0;
+}
+
+.option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.checkbox-label {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.checkbox-label input {
+  min-height: auto;
+  width: auto;
+}
+
+.candidate-place-list {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.candidate-place-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  border: 1px solid #e7e2dc;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.candidate-place-item span {
+  color: #69736f;
+  display: block;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .status-message {
   border: 1px solid #cddfd9;
   border-radius: 6px;
@@ -480,7 +555,9 @@ textarea {
 
   .result-header,
   .day-section li,
-  .edit-grid {
+  .edit-grid,
+  .option-row,
+  .candidate-place-item {
     grid-template-columns: 1fr;
   }
 

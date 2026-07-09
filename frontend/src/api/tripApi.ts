@@ -1,6 +1,7 @@
 import { apiRequest } from './client';
 import type {
   Itinerary,
+  ItineraryGenerateRequest,
   ItineraryReorderRequest,
   ItineraryUpdateRequest,
   PageResponse,
@@ -26,10 +27,10 @@ export function createTrip(request: TripCreateRequest): Promise<TripResponse> {
   });
 }
 
-export function generateItinerary(tripId: number): Promise<Itinerary[]> {
+export function generateItinerary(tripId: number, request: ItineraryGenerateRequest): Promise<Itinerary[]> {
   return apiRequest<Itinerary[]>(`/api/trips/${tripId}/generate`, {
     method: 'POST',
-    body: JSON.stringify({})
+    body: JSON.stringify(request)
   });
 }
 

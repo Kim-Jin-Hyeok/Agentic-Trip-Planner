@@ -1,4 +1,12 @@
-import type { Itinerary, PublicTripDetail, PublicTripResponse, TripDetail, TripVisibility } from '../types/trip';
+import type {
+  Itinerary,
+  ItineraryGenerateRequest,
+  PlaceResponse,
+  PublicTripDetail,
+  PublicTripResponse,
+  TripDetail,
+  TripVisibility
+} from '../types/trip';
 import {
   selectedTripStats,
   selectedTripTitle,
@@ -7,6 +15,7 @@ import {
   type ViewMode
 } from '../utils/tripDisplay';
 import { ItineraryDaySection } from './ItineraryDaySection';
+import { ItineraryGenerateOptions } from './ItineraryGenerateOptions';
 
 type TripDetailPanelProps = {
   viewMode: ViewMode;
@@ -17,9 +26,14 @@ type TripDetailPanelProps = {
   pendingItineraryId: number | null;
   message: string;
   isGenerating: boolean;
+  isLoadingCandidatePlaces: boolean;
   isUpdatingVisibility: boolean;
   isUpdatingLike: boolean;
+  generateOptions: ItineraryGenerateRequest;
+  candidatePlaces: PlaceResponse[];
   onGenerate: () => void;
+  onGenerateOptionsChange: (options: ItineraryGenerateRequest) => void;
+  onLoadCandidatePlaces: () => void;
   onUpdateVisibility: (visibility: TripVisibility) => void;
   onToggleLike: (trip: PublicTripResponse | PublicTripDetail) => void;
   onUpdateItineraryForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
@@ -37,9 +51,14 @@ export function TripDetailPanel({
   pendingItineraryId,
   message,
   isGenerating,
+  isLoadingCandidatePlaces,
   isUpdatingVisibility,
   isUpdatingLike,
+  generateOptions,
+  candidatePlaces,
   onGenerate,
+  onGenerateOptionsChange,
+  onLoadCandidatePlaces,
   onUpdateVisibility,
   onToggleLike,
   onUpdateItineraryForm,
@@ -93,6 +112,16 @@ export function TripDetailPanel({
       )}
 
       {message.length > 0 && <p className="status-message">{message}</p>}
+
+      {viewMode === 'mine' && trip != null && (
+        <ItineraryGenerateOptions
+          options={generateOptions}
+          candidatePlaces={candidatePlaces}
+          isLoadingPlaces={isLoadingCandidatePlaces}
+          onChange={onGenerateOptionsChange}
+          onLoadPlaces={onLoadCandidatePlaces}
+        />
+      )}
 
       {Object.keys(itinerariesByDay).length === 0 ? (
         <div className="empty-state">여행을 선택하거나 새 여행을 생성한 뒤 일정 생성 버튼을 눌러 날짜별 일정을 확인하세요.</div>

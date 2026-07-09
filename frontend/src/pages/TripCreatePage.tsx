@@ -15,6 +15,7 @@ import {
   updateTripVisibility
 } from '../api/tripApi';
 import { getStoredAuthSession } from '../api/authStorage';
+import { getRecommendedPlaces } from '../api/placeApi';
 import { AuthPanel } from '../components/AuthPanel';
 import { MyTripList } from '../components/MyTripList';
 import { PublicTripList } from '../components/PublicTripList';
@@ -23,7 +24,9 @@ import { TripDetailPanel } from '../components/TripDetailPanel';
 import type { AuthSession } from '../types/auth';
 import type {
   Itinerary,
+  ItineraryGenerateRequest,
   PageResponse,
+  PlaceResponse,
   PublicTripDetail,
   PublicTripResponse,
   PublicTripSearchParams,
@@ -47,6 +50,12 @@ const initialForm: TripCreateRequest = {
 };
 
 const publicTripPageSize = 10;
+const initialGenerateOptions: ItineraryGenerateRequest = {
+  mustVisitPlaceIds: [],
+  excludedPlaceIds: [],
+  pace: 'NORMAL',
+  rainyDayMode: false
+};
 
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
@@ -64,12 +73,15 @@ export function TripCreatePage() {
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingCandidatePlaces, setIsLoadingCandidatePlaces] = useState(false);
   const [isLoadingTrips, setIsLoadingTrips] = useState(false);
   const [isLoadingPublicTrips, setIsLoadingPublicTrips] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [isUpdatingLike, setIsUpdatingLike] = useState(false);
   const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
+  const [generateOptions, setGenerateOptions] = useState<ItineraryGenerateRequest>(initialGenerateOptions);
+  const [candidatePlaces, setCandidatePlaces] = useState<PlaceResponse[]>([]);
   const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
 
@@ -178,6 +190,8 @@ export function TripCreatePage() {
       setPublicTrip(null);
       setItineraries(detail.itineraries);
       setEditingItems({});
+      setCandidatePlaces([]);
+      setGenerateOptions(initialGenerateOptions);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '여행 상세 조회에 실패했습니다.');
     } finally {
@@ -235,6 +249,8 @@ export function TripCreatePage() {
       setPublicTrip(null);
       setItineraries(detail.itineraries);
       setEditingItems({});
+      setCandidatePlaces([]);
+      setGenerateOptions(initialGenerateOptions);
       await loadTrips();
       setMessage('여행 조건이 저장되었습니다.');
     } catch (error) {
@@ -253,7 +269,7 @@ export function TripCreatePage() {
     setIsGenerating(true);
 
     try {
-      const generatedItineraries = await generateItinerary(trip.tripId);
+      const generatedItineraries = await generateItinerary(trip.tripId, generateOptions);
       setItineraries(generatedItineraries);
       setTrip({
         ...trip,
@@ -265,6 +281,23 @@ export function TripCreatePage() {
       setMessage(error instanceof Error ? error.message : '일정 생성에 실패했습니다.');
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleLoadCandidatePlaces() {
+    if (trip == null) {
+      return;
+    }
+
+    setIsLoadingCandidatePlaces(true);
+    setMessage('');
+
+    try {
+      setCandidatePlaces(await getRecommendedPlaces(trip.concept));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '후보 장소 조회에 실패했습니다.');
+    } finally {
+      setIsLoadingCandidatePlaces(false);
     }
   }
 
@@ -548,9 +581,14 @@ export function TripCreatePage() {
           pendingItineraryId={pendingItineraryId}
           message={message}
           isGenerating={isGenerating}
+          isLoadingCandidatePlaces={isLoadingCandidatePlaces}
           isUpdatingVisibility={isUpdatingVisibility}
           isUpdatingLike={isUpdatingLike}
+          generateOptions={generateOptions}
+          candidatePlaces={candidatePlaces}
           onGenerate={() => void handleGenerateItinerary()}
+          onGenerateOptionsChange={setGenerateOptions}
+          onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
           onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
           onUpdateItineraryForm={updateItineraryForm}

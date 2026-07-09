@@ -34,6 +34,28 @@ export type PlaceSummary = {
   description: string;
 };
 
+export type PlaceResponse = PlaceSummary & {
+  avgStayMinutes: number;
+  indoorYn: boolean;
+  parkingYn: boolean;
+  rainyDayScore: number;
+  healingScore: number;
+  foodScore: number;
+  cafeScore: number;
+  photoScore: number;
+  coupleScore: number;
+  familyScore: number;
+};
+
+export type ItineraryPace = 'RELAXED' | 'NORMAL' | 'BUSY';
+
+export type ItineraryGenerateRequest = {
+  mustVisitPlaceIds: number[];
+  excludedPlaceIds: number[];
+  pace: ItineraryPace;
+  rainyDayMode: boolean;
+};
+
 export type Itinerary = {
   itineraryId: number;
   tripId: number;
