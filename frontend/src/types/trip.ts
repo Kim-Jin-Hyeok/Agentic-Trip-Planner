@@ -2,6 +2,8 @@ export type TripConcept = 'HEALING' | 'FOOD' | 'CAFE' | 'PHOTO' | 'COUPLE' | 'FA
 
 export type Transportation = 'RENT_CAR';
 
+export type TripVisibility = 'PRIVATE' | 'PUBLIC';
+
 export type TripCreateRequest = {
   destination: string;
   startDate: string;
@@ -18,7 +20,7 @@ export type TripResponse = TripCreateRequest & {
   nights: number;
   likeCount: number;
   viewCount: number;
-  visibility: 'PRIVATE' | 'PUBLIC';
+  visibility: TripVisibility;
 };
 
 export type PlaceSummary = {
@@ -63,5 +65,41 @@ export type ItineraryReorderRequest = {
 };
 
 export type TripDetail = TripResponse & {
+  itineraries: Itinerary[];
+};
+
+export type TripAuthor = {
+  memberId: number;
+  nickname: string;
+};
+
+export type TripPlaceSummary = {
+  placeId: number;
+  name: string;
+  category: string;
+  region: string;
+};
+
+export type PageResponse<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+};
+
+export type PublicTripSort = 'LATEST' | 'POPULAR';
+
+export type PublicTripResponse = TripResponse & {
+  liked: boolean;
+  author: TripAuthor;
+  representativePlaces: TripPlaceSummary[];
+};
+
+export type PublicTripDetail = TripResponse & {
+  liked: boolean;
+  author: TripAuthor;
   itineraries: Itinerary[];
 };

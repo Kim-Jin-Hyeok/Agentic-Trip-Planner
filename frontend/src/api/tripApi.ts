@@ -3,9 +3,14 @@ import type {
   Itinerary,
   ItineraryReorderRequest,
   ItineraryUpdateRequest,
+  PageResponse,
+  PublicTripDetail,
+  PublicTripResponse,
+  PublicTripSort,
   TripCreateRequest,
   TripDetail,
-  TripResponse
+  TripResponse,
+  TripVisibility
 } from '../types/trip';
 
 export function getTrips(): Promise<TripResponse[]> {
@@ -28,6 +33,27 @@ export function generateItinerary(tripId: number): Promise<Itinerary[]> {
 
 export function getTrip(tripId: number): Promise<TripDetail> {
   return apiRequest<TripDetail>(`/api/trips/${tripId}`);
+}
+
+export function updateTripVisibility(tripId: number, visibility: TripVisibility): Promise<TripResponse> {
+  return apiRequest<TripResponse>(`/api/trips/${tripId}/visibility`, {
+    method: 'PATCH',
+    body: JSON.stringify({ visibility })
+  });
+}
+
+export function getPublicTrips(sort: PublicTripSort = 'LATEST'): Promise<PageResponse<PublicTripResponse>> {
+  const searchParams = new URLSearchParams({
+    sort,
+    page: '0',
+    size: '20'
+  });
+
+  return apiRequest<PageResponse<PublicTripResponse>>(`/api/public/trips?${searchParams.toString()}`);
+}
+
+export function getPublicTrip(tripId: number): Promise<PublicTripDetail> {
+  return apiRequest<PublicTripDetail>(`/api/public/trips/${tripId}`);
 }
 
 export function updateItinerary(

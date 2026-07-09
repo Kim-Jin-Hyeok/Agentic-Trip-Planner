@@ -116,6 +116,13 @@ button:disabled {
   gap: 8px;
 }
 
+.view-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
 .tab-button,
 .secondary-button {
   background: #e9eee9;
@@ -158,6 +165,10 @@ button:disabled {
   font-size: 20px;
   line-height: 1.25;
   margin: 0;
+}
+
+.section-title-row select {
+  max-width: 128px;
 }
 
 .compact-empty {
@@ -242,6 +253,30 @@ textarea {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.detail-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.detail-summary span {
+  border: 1px solid #dde6e1;
+  border-radius: 999px;
+  background: #f7fbf9;
+  color: #38433f;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
 }
 
 .status-message {
@@ -381,5 +416,9 @@ textarea {
 
   .result-header {
     align-items: stretch;
+  }
+
+  .result-actions {
+    justify-content: stretch;
   }
 }

@@ -3,15 +3,29 @@ import {
   createTrip,
   deleteItinerary,
   generateItinerary,
+  getPublicTrip,
+  getPublicTrips,
   getTrip,
   getTrips,
   reorderItineraries,
+  updateTripVisibility,
   updateItinerary
 } from '../api/tripApi';
 import { getStoredAuthSession } from '../api/authStorage';
 import { AuthPanel } from '../components/AuthPanel';
 import type { AuthSession } from '../types/auth';
-import type { Itinerary, ItineraryUpdateRequest, TripConcept, TripCreateRequest, TripDetail, TripResponse } from '../types/trip';
+import type {
+  Itinerary,
+  ItineraryUpdateRequest,
+  PublicTripDetail,
+  PublicTripResponse,
+  PublicTripSort,
+  TripConcept,
+  TripCreateRequest,
+  TripDetail,
+  TripResponse,
+  TripVisibility
+} from '../types/trip';
 
 const conceptOptions: Array<{ value: TripConcept; label: string }> = [
   { value: 'HEALING', label: '힐링' },
@@ -34,17 +48,24 @@ const initialForm: TripCreateRequest = {
 };
 
 type ItineraryEditForm = ItineraryUpdateRequest;
+type ViewMode = 'mine' | 'public';
 
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
   const [session, setSession] = useState<AuthSession | null>(() => getStoredAuthSession());
+  const [viewMode, setViewMode] = useState<ViewMode>('mine');
   const [trips, setTrips] = useState<TripResponse[]>([]);
+  const [publicTrips, setPublicTrips] = useState<PublicTripResponse[]>([]);
+  const [publicSort, setPublicSort] = useState<PublicTripSort>('LATEST');
   const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [publicTrip, setPublicTrip] = useState<PublicTripDetail | null>(null);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingTrips, setIsLoadingTrips] = useState(false);
+  const [isLoadingPublicTrips, setIsLoadingPublicTrips] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
   const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
@@ -66,6 +87,14 @@ export function TripCreatePage() {
 
     void loadTrips();
   }, []);
+
+  useEffect(() => {
+    if (viewMode !== 'public') {
+      return;
+    }
+
+    void loadPublicTrips(publicSort);
+  }, [viewMode, publicSort]);
 
   function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
     setForm((current) => ({
@@ -101,6 +130,19 @@ export function TripCreatePage() {
     }
   }
 
+  async function loadPublicTrips(sort: PublicTripSort = publicSort) {
+    setIsLoadingPublicTrips(true);
+
+    try {
+      const page = await getPublicTrips(sort);
+      setPublicTrips(page.content);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '공개 여행 목록 조회에 실패했습니다.');
+    } finally {
+      setIsLoadingPublicTrips(false);
+    }
+  }
+
   async function loadTripDetail(tripId: number) {
     setMessage('');
     setIsLoadingDetail(true);
@@ -108,6 +150,7 @@ export function TripCreatePage() {
     try {
       const detail = await getTrip(tripId);
       setTrip(detail);
+      setPublicTrip(null);
       setItineraries(detail.itineraries);
       setEditingItems({});
     } catch (error) {
@@ -117,9 +160,27 @@ export function TripCreatePage() {
     }
   }
 
+  async function loadPublicTripDetail(tripId: number) {
+    setMessage('');
+    setIsLoadingDetail(true);
+
+    try {
+      const detail = await getPublicTrip(tripId);
+      setPublicTrip(detail);
+      setTrip(null);
+      setItineraries(detail.itineraries);
+      setEditingItems({});
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '공개 여행 상세 조회에 실패했습니다.');
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  }
+
   async function handleLogin(session: AuthSession) {
     setSession(session);
     setTrip(null);
+    setPublicTrip(null);
     setItineraries([]);
     await loadTrips();
   }
@@ -138,6 +199,7 @@ export function TripCreatePage() {
       const createdTrip = await createTrip(form);
       const detail = await getTrip(createdTrip.tripId);
       setTrip(detail);
+      setPublicTrip(null);
       setItineraries(detail.itineraries);
       setEditingItems({});
       await loadTrips();
@@ -170,6 +232,34 @@ export function TripCreatePage() {
       setMessage(error instanceof Error ? error.message : '일정 생성에 실패했습니다.');
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleUpdateVisibility(visibility: TripVisibility) {
+    if (trip == null) {
+      return;
+    }
+
+    setIsUpdatingVisibility(true);
+    setMessage('');
+
+    try {
+      const updatedTrip = await updateTripVisibility(trip.tripId, visibility);
+      setTrip({
+        ...trip,
+        visibility: updatedTrip.visibility,
+        likeCount: updatedTrip.likeCount,
+        viewCount: updatedTrip.viewCount
+      });
+      await loadTrips();
+      if (viewMode === 'public') {
+        await loadPublicTrips();
+      }
+      setMessage(visibility === 'PUBLIC' ? '여행이 공개되었습니다.' : '여행이 비공개로 변경되었습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '공개 상태 변경에 실패했습니다.');
+    } finally {
+      setIsUpdatingVisibility(false);
     }
   }
 
@@ -274,12 +364,40 @@ export function TripCreatePage() {
               setSession(null);
               setTrips([]);
               setTrip(null);
+              setPublicTrip(null);
               setItineraries([]);
             }}
             onMessage={setMessage}
           />
 
-          <form className="trip-form" onSubmit={handleCreateTrip}>
+          <div className="view-tabs" role="tablist" aria-label="여행 보기 방식">
+            <button
+              type="button"
+              className={viewMode === 'mine' ? 'tab-button active' : 'tab-button'}
+              onClick={() => {
+                setViewMode('mine');
+                setPublicTrip(null);
+                setItineraries(trip?.itineraries ?? []);
+              }}
+            >
+              내 여행
+            </button>
+            <button
+              type="button"
+              className={viewMode === 'public' ? 'tab-button active' : 'tab-button'}
+              onClick={() => {
+                setViewMode('public');
+                setTrip(null);
+                setItineraries(publicTrip?.itineraries ?? []);
+              }}
+            >
+              공개 여행
+            </button>
+          </div>
+
+          {viewMode === 'mine' && (
+          <>
+            <form className="trip-form" onSubmit={handleCreateTrip}>
             <div className="field-grid">
               <label>
                 여행지
@@ -361,9 +479,9 @@ export function TripCreatePage() {
             <button type="submit" disabled={session == null || isCreating}>
               {isCreating ? '저장 중' : '여행 생성'}
             </button>
-          </form>
+            </form>
 
-          <section className="trip-list-section">
+            <section className="trip-list-section">
             <div className="section-title-row">
               <div>
                 <p>My trips</p>
@@ -396,19 +514,91 @@ export function TripCreatePage() {
                 ))}
               </div>
             )}
-          </section>
+            </section>
+          </>
+          )}
+
+          {viewMode === 'public' && (
+            <section className="trip-list-section public-list-section">
+              <div className="section-title-row">
+                <div>
+                  <p>Public trips</p>
+                  <h2>공개 여행</h2>
+                </div>
+                <select
+                  value={publicSort}
+                  onChange={(event) => setPublicSort(event.target.value as PublicTripSort)}
+                  aria-label="공개 여행 정렬"
+                >
+                  <option value="LATEST">최신순</option>
+                  <option value="POPULAR">인기순</option>
+                </select>
+              </div>
+
+              {publicTrips.length === 0 ? (
+                <div className="compact-empty">
+                  {isLoadingPublicTrips ? '공개 여행을 조회 중입니다.' : '공개된 여행이 없습니다.'}
+                </div>
+              ) : (
+                <div className="trip-list">
+                  {publicTrips.map((publicTripItem) => (
+                    <button
+                      type="button"
+                      className={
+                        publicTrip?.tripId === publicTripItem.tripId ? 'trip-list-item active' : 'trip-list-item'
+                      }
+                      key={publicTripItem.tripId}
+                      onClick={() => void loadPublicTripDetail(publicTripItem.tripId)}
+                      disabled={isLoadingDetail}
+                    >
+                      <strong>{publicTripItem.destination}</strong>
+                      <span>
+                        {publicTripItem.startDate} - {publicTripItem.endDate} · {publicTripItem.nights}박 ·{' '}
+                        {conceptLabel(publicTripItem.concept)}
+                      </span>
+                      <span>
+                        {publicTripItem.author.nickname} · 조회 {publicTripItem.viewCount} · 좋아요{' '}
+                        {publicTripItem.likeCount}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </div>
 
         <div className="result-panel">
           <div className="result-header">
             <div>
               <p>Trip detail</p>
-              <h2>{trip == null ? '선택된 여행이 없습니다' : `${trip.destination} ${trip.nights}박 일정`}</h2>
+              <h2>{selectedTripTitle(trip, publicTrip)}</h2>
             </div>
-            <button type="button" onClick={handleGenerateItinerary} disabled={trip == null || isGenerating}>
-              {isGenerating ? '생성 중' : '일정 생성'}
-            </button>
+            {viewMode === 'mine' && (
+              <div className="result-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void handleUpdateVisibility(trip?.visibility === 'PUBLIC' ? 'PRIVATE' : 'PUBLIC')}
+                  disabled={trip == null || isUpdatingVisibility}
+                >
+                  {trip?.visibility === 'PUBLIC' ? '비공개 전환' : '공개 전환'}
+                </button>
+                <button type="button" onClick={handleGenerateItinerary} disabled={trip == null || isGenerating}>
+                  {isGenerating ? '생성 중' : '일정 생성'}
+                </button>
+              </div>
+            )}
           </div>
+
+          {(trip != null || publicTrip != null) && (
+            <div className="detail-summary">
+              <span>{viewMode === 'public' && publicTrip != null ? publicTrip.author.nickname : '내 여행'}</span>
+              <span>{selectedTripVisibility(trip, publicTrip)}</span>
+              <span>조회 {selectedTripStats(trip, publicTrip).viewCount}</span>
+              <span>좋아요 {selectedTripStats(trip, publicTrip).likeCount}</span>
+            </div>
+          )}
 
           {message.length > 0 && <p className="status-message">{message}</p>}
 
@@ -432,6 +622,7 @@ export function TripCreatePage() {
                         <div className="itinerary-content">
                           <div className="itinerary-title-row">
                             <strong>{itinerary.place.name}</strong>
+                            {viewMode === 'mine' && (
                             <div className="itinerary-actions">
                               <button
                                 type="button"
@@ -462,10 +653,13 @@ export function TripCreatePage() {
                                 삭제
                               </button>
                             </div>
+                            )}
                           </div>
                           <span>
                             {itinerary.place.region} · {itinerary.place.category}
                           </span>
+                          {viewMode === 'mine' ? (
+                            <>
                           <div className="edit-grid">
                             <label>
                               시작
@@ -509,6 +703,10 @@ export function TripCreatePage() {
                           <button type="button" className="secondary-button" onClick={() => void handleUpdateItinerary(itinerary)} disabled={isPending}>
                             {isPending ? '저장 중' : '수정 저장'}
                           </button>
+                            </>
+                          ) : (
+                            <p>{itinerary.reason}</p>
+                          )}
                         </div>
                       </li>
                       );
@@ -526,6 +724,31 @@ export function TripCreatePage() {
 
 function conceptLabel(concept: TripConcept): string {
   return conceptOptions.find((option) => option.value === concept)?.label ?? concept;
+}
+
+function selectedTripTitle(trip: TripDetail | null, publicTrip: PublicTripDetail | null): string {
+  const selectedTrip = trip ?? publicTrip;
+  if (selectedTrip == null) {
+    return '선택된 여행이 없습니다';
+  }
+
+  return `${selectedTrip.destination} ${selectedTrip.nights}박 일정`;
+}
+
+function selectedTripVisibility(trip: TripDetail | null, publicTrip: PublicTripDetail | null): string {
+  const visibility = (trip ?? publicTrip)?.visibility;
+  return visibility === 'PUBLIC' ? '공개' : '비공개';
+}
+
+function selectedTripStats(
+  trip: TripDetail | null,
+  publicTrip: PublicTripDetail | null
+): { likeCount: number; viewCount: number } {
+  const selectedTrip = trip ?? publicTrip;
+  return {
+    likeCount: selectedTrip?.likeCount ?? 0,
+    viewCount: selectedTrip?.viewCount ?? 0
+  };
 }
 
 function itineraryForm(
