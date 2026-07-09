@@ -7,6 +7,7 @@ import type {
   PublicTripDetail,
   PublicTripResponse,
   PublicTripSort,
+  TripLikeResponse,
   TripCreateRequest,
   TripDetail,
   TripResponse,
@@ -54,6 +55,18 @@ export function getPublicTrips(sort: PublicTripSort = 'LATEST'): Promise<PageRes
 
 export function getPublicTrip(tripId: number): Promise<PublicTripDetail> {
   return apiRequest<PublicTripDetail>(`/api/public/trips/${tripId}`);
+}
+
+export function likePublicTrip(tripId: number): Promise<TripLikeResponse> {
+  return apiRequest<TripLikeResponse>(`/api/public/trips/${tripId}/likes`, {
+    method: 'POST'
+  });
+}
+
+export function unlikePublicTrip(tripId: number): Promise<TripLikeResponse> {
+  return apiRequest<TripLikeResponse>(`/api/public/trips/${tripId}/likes`, {
+    method: 'DELETE'
+  });
 }
 
 export function updateItinerary(

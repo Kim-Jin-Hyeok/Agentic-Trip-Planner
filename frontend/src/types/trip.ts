@@ -103,3 +103,10 @@ export type PublicTripDetail = TripResponse & {
   author: TripAuthor;
   itineraries: Itinerary[];
 };
+
+export type TripLikeResponse = {
+  tripId: number;
+  userId: number;
+  likeCount: number;
+  liked: boolean;
+};

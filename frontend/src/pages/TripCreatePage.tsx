@@ -7,7 +7,9 @@ import {
   getPublicTrips,
   getTrip,
   getTrips,
+  likePublicTrip,
   reorderItineraries,
+  unlikePublicTrip,
   updateTripVisibility,
   updateItinerary
 } from '../api/tripApi';
@@ -66,6 +68,7 @@ export function TripCreatePage() {
   const [isLoadingPublicTrips, setIsLoadingPublicTrips] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  const [isUpdatingLike, setIsUpdatingLike] = useState(false);
   const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
   const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
@@ -261,6 +264,52 @@ export function TripCreatePage() {
     } finally {
       setIsUpdatingVisibility(false);
     }
+  }
+
+  async function handleToggleLike(targetTrip: PublicTripResponse | PublicTripDetail) {
+    if (session == null) {
+      setMessage('로그인 후 좋아요를 누를 수 있습니다.');
+      return;
+    }
+
+    setIsUpdatingLike(true);
+    setMessage('');
+
+    try {
+      const likeResponse = targetTrip.liked
+        ? await unlikePublicTrip(targetTrip.tripId)
+        : await likePublicTrip(targetTrip.tripId);
+      applyLikeResponse(likeResponse.tripId, likeResponse.likeCount, likeResponse.liked);
+      setMessage(likeResponse.liked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '좋아요 처리에 실패했습니다.');
+    } finally {
+      setIsUpdatingLike(false);
+    }
+  }
+
+  function applyLikeResponse(tripId: number, likeCount: number, liked: boolean) {
+    setPublicTrips((currentTrips) =>
+      currentTrips.map((publicTripItem) =>
+        publicTripItem.tripId === tripId
+          ? {
+              ...publicTripItem,
+              likeCount,
+              liked
+            }
+          : publicTripItem
+      )
+    );
+
+    setPublicTrip((currentPublicTrip) =>
+      currentPublicTrip?.tripId === tripId
+        ? {
+            ...currentPublicTrip,
+            likeCount,
+            liked
+          }
+        : currentPublicTrip
+    );
   }
 
   async function handleUpdateItinerary(itinerary: Itinerary) {
@@ -542,25 +591,37 @@ export function TripCreatePage() {
               ) : (
                 <div className="trip-list">
                   {publicTrips.map((publicTripItem) => (
-                    <button
-                      type="button"
+                    <div
                       className={
                         publicTrip?.tripId === publicTripItem.tripId ? 'trip-list-item active' : 'trip-list-item'
                       }
                       key={publicTripItem.tripId}
-                      onClick={() => void loadPublicTripDetail(publicTripItem.tripId)}
-                      disabled={isLoadingDetail}
                     >
-                      <strong>{publicTripItem.destination}</strong>
-                      <span>
-                        {publicTripItem.startDate} - {publicTripItem.endDate} · {publicTripItem.nights}박 ·{' '}
-                        {conceptLabel(publicTripItem.concept)}
-                      </span>
-                      <span>
-                        {publicTripItem.author.nickname} · 조회 {publicTripItem.viewCount} · 좋아요{' '}
-                        {publicTripItem.likeCount}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        className="trip-list-main-button"
+                        onClick={() => void loadPublicTripDetail(publicTripItem.tripId)}
+                        disabled={isLoadingDetail}
+                      >
+                        <strong>{publicTripItem.destination}</strong>
+                        <span>
+                          {publicTripItem.startDate} - {publicTripItem.endDate} · {publicTripItem.nights}박 ·{' '}
+                          {conceptLabel(publicTripItem.concept)}
+                        </span>
+                        <span>
+                          {publicTripItem.author.nickname} · 조회 {publicTripItem.viewCount} · 좋아요{' '}
+                          {publicTripItem.likeCount}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={publicTripItem.liked ? 'like-button active' : 'like-button'}
+                        onClick={() => void handleToggleLike(publicTripItem)}
+                        disabled={isUpdatingLike}
+                      >
+                        {publicTripItem.liked ? '좋아요 취소' : '좋아요'}
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -586,6 +647,18 @@ export function TripCreatePage() {
                 </button>
                 <button type="button" onClick={handleGenerateItinerary} disabled={trip == null || isGenerating}>
                   {isGenerating ? '생성 중' : '일정 생성'}
+                </button>
+              </div>
+            )}
+            {viewMode === 'public' && publicTrip != null && (
+              <div className="result-actions">
+                <button
+                  type="button"
+                  className={publicTrip.liked ? 'like-button active' : 'like-button'}
+                  onClick={() => void handleToggleLike(publicTrip)}
+                  disabled={isUpdatingLike}
+                >
+                  {publicTrip.liked ? '좋아요 취소' : '좋아요'}
                 </button>
               </div>
             )}

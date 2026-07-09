@@ -189,6 +189,7 @@ button:disabled {
   gap: 5px;
   min-height: auto;
   border: 1px solid #e2ded8;
+  border-radius: 6px;
   background: #fff;
   color: #202124;
   padding: 14px;
@@ -205,6 +206,36 @@ button:disabled {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.4;
+}
+
+.trip-list-main-button {
+  display: grid;
+  gap: 5px;
+  min-height: auto;
+  background: transparent;
+  color: #202124;
+  padding: 0;
+  text-align: left;
+}
+
+.trip-list-main-button span {
+  color: #69736f;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.like-button {
+  justify-self: start;
+  min-height: 34px;
+  background: #e9eee9;
+  color: #26332f;
+  padding: 0 12px;
+}
+
+.like-button.active {
+  background: #a64032;
+  color: #fff;
 }
 
 .field-grid {
