@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   createTrip,
   deleteItinerary,
@@ -8,6 +8,7 @@ import {
   reorderItineraries,
   updateItinerary
 } from '../api/tripApi';
+import { getStoredAuthSession } from '../api/authStorage';
 import { AuthPanel } from '../components/AuthPanel';
 import type { AuthSession } from '../types/auth';
 import type { Itinerary, ItineraryUpdateRequest, TripConcept, TripCreateRequest, TripDetail, TripResponse } from '../types/trip';
@@ -36,7 +37,7 @@ type ItineraryEditForm = ItineraryUpdateRequest;
 
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(() => getStoredAuthSession());
   const [trips, setTrips] = useState<TripResponse[]>([]);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
@@ -57,6 +58,14 @@ export function TripCreatePage() {
       };
     }, {});
   }, [itineraries]);
+
+  useEffect(() => {
+    if (session == null) {
+      return;
+    }
+
+    void loadTrips();
+  }, []);
 
   function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
     setForm((current) => ({

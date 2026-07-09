@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { createMember, login } from '../api/authApi';
-import { clearAccessToken, storeAccessToken } from '../api/client';
+import { clearStoredAuthSession, storeAuthSession } from '../api/authStorage';
 import type { AuthSession, MemberCreateRequest } from '../types/auth';
 
 type AuthPanelProps = {
@@ -43,12 +43,13 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
         password: form.password
       });
 
-      storeAccessToken(loginResponse.accessToken);
-      onLogin({
+      const session = {
         memberId: loginResponse.memberId,
         email: loginResponse.email,
         nickname: loginResponse.nickname
-      });
+      };
+      storeAuthSession(loginResponse.accessToken, session);
+      onLogin(session);
       onMessage(mode === 'signup' ? '회원가입 후 로그인되었습니다.' : '로그인되었습니다.');
     } catch (error) {
       onMessage(error instanceof Error ? error.message : '인증 처리에 실패했습니다.');
@@ -58,7 +59,7 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
   }
 
   function handleLogout() {
-    clearAccessToken();
+    clearStoredAuthSession();
     onLogout();
     onMessage('로그아웃되었습니다.');
   }
