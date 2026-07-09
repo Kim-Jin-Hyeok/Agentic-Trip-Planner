@@ -26,7 +26,9 @@ export const initialPublicFilters: PublicTripSearchParams = {
   concept: '',
   nights: '',
   startDateFrom: '',
-  startDateTo: ''
+  startDateTo: '',
+  endDateFrom: '',
+  endDateTo: ''
 };
 
 export function conceptLabel(concept: TripConcept): string {

@@ -62,6 +62,8 @@ export function getPublicTrips(
     appendIfPresent(searchParams, 'nights', filters.nights);
     appendIfPresent(searchParams, 'startDateFrom', filters.startDateFrom);
     appendIfPresent(searchParams, 'startDateTo', filters.startDateTo);
+    appendIfPresent(searchParams, 'endDateFrom', filters.endDateFrom);
+    appendIfPresent(searchParams, 'endDateTo', filters.endDateTo);
   }
 
   return apiRequest<PageResponse<PublicTripResponse>>(`/api/public/trips?${searchParams.toString()}`);

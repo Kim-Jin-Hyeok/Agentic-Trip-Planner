@@ -118,6 +118,14 @@ export function PublicTripList({
             시작일 To
             <input type="date" value={publicFilters.startDateTo} onChange={(event) => onFilterChange('startDateTo', event.target.value)} />
           </label>
+          <label>
+            종료일 From
+            <input type="date" value={publicFilters.endDateFrom} onChange={(event) => onFilterChange('endDateFrom', event.target.value)} />
+          </label>
+          <label>
+            종료일 To
+            <input type="date" value={publicFilters.endDateTo} onChange={(event) => onFilterChange('endDateTo', event.target.value)} />
+          </label>
           <div className="filter-actions">
             <button type="submit">필터 적용</button>
             <button type="button" className="secondary-button" onClick={onResetFilters}>

@@ -98,6 +98,8 @@ export type PublicTripSearchParams = {
   nights: string;
   startDateFrom: string;
   startDateTo: string;
+  endDateFrom: string;
+  endDateTo: string;
 };
 
 export type PublicTripResponse = TripResponse & {
