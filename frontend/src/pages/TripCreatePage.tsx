@@ -3,43 +3,37 @@ import {
   createTrip,
   deleteItinerary,
   generateItinerary,
+  getLikedPublicTrips,
   getPublicTrip,
   getPublicTrips,
-  getLikedPublicTrips,
   getTrip,
   getTrips,
   likePublicTrip,
   reorderItineraries,
   unlikePublicTrip,
-  updateTripVisibility,
-  updateItinerary
+  updateItinerary,
+  updateTripVisibility
 } from '../api/tripApi';
 import { getStoredAuthSession } from '../api/authStorage';
 import { AuthPanel } from '../components/AuthPanel';
+import { MyTripList } from '../components/MyTripList';
+import { PublicTripList } from '../components/PublicTripList';
+import { TripCreateForm } from '../components/TripCreateForm';
+import { TripDetailPanel } from '../components/TripDetailPanel';
 import type { AuthSession } from '../types/auth';
 import type {
   Itinerary,
-  ItineraryUpdateRequest,
   PageResponse,
   PublicTripDetail,
   PublicTripResponse,
   PublicTripSearchParams,
   PublicTripSort,
-  TripConcept,
   TripCreateRequest,
   TripDetail,
   TripResponse,
   TripVisibility
 } from '../types/trip';
-
-const conceptOptions: Array<{ value: TripConcept; label: string }> = [
-  { value: 'HEALING', label: '힐링' },
-  { value: 'FOOD', label: '맛집' },
-  { value: 'CAFE', label: '카페' },
-  { value: 'PHOTO', label: '사진' },
-  { value: 'COUPLE', label: '커플' },
-  { value: 'FAMILY', label: '가족' }
-];
+import { initialPublicFilters, itineraryForm, type ItineraryEditForm, type PublicListMode, type ViewMode } from '../utils/tripDisplay';
 
 const initialForm: TripCreateRequest = {
   destination: '제주',
@@ -52,18 +46,7 @@ const initialForm: TripCreateRequest = {
   lastAccommodationArea: ''
 };
 
-type ItineraryEditForm = ItineraryUpdateRequest;
-type ViewMode = 'mine' | 'public';
-type PublicListMode = 'all' | 'liked';
 const publicTripPageSize = 10;
-
-const initialPublicFilters: PublicTripSearchParams = {
-  destination: '',
-  concept: '',
-  nights: '',
-  startDateFrom: '',
-  startDateTo: ''
-};
 
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
@@ -125,10 +108,7 @@ export function TripCreatePage() {
     }));
   }
 
-  function updatePublicFilter<K extends keyof PublicTripSearchParams>(
-    key: K,
-    value: PublicTripSearchParams[K]
-  ) {
+  function updatePublicFilter<K extends keyof PublicTripSearchParams>(key: K, value: PublicTripSearchParams[K]) {
     setPublicFilters((current) => ({
       ...current,
       [key]: value
@@ -153,8 +133,7 @@ export function TripCreatePage() {
     setIsLoadingTrips(true);
 
     try {
-      const myTrips = await getTrips();
-      setTrips(myTrips);
+      setTrips(await getTrips());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '내 여행 목록 조회에 실패했습니다.');
     } finally {
@@ -223,12 +202,20 @@ export function TripCreatePage() {
     }
   }
 
-  async function handleLogin(session: AuthSession) {
-    setSession(session);
+  async function handleLogin(loggedInSession: AuthSession) {
+    setSession(loggedInSession);
     setTrip(null);
     setPublicTrip(null);
     setItineraries([]);
     await loadTrips();
+  }
+
+  function handleLogout() {
+    setSession(null);
+    setTrips([]);
+    setTrip(null);
+    setPublicTrip(null);
+    setItineraries([]);
   }
 
   async function handleCreateTrip(event: FormEvent<HTMLFormElement>) {
@@ -472,13 +459,7 @@ export function TripCreatePage() {
             onLogin={(loggedInSession) => {
               void handleLogin(loggedInSession);
             }}
-            onLogout={() => {
-              setSession(null);
-              setTrips([]);
-              setTrip(null);
-              setPublicTrip(null);
-              setItineraries([]);
-            }}
+            onLogout={handleLogout}
             onMessage={setMessage}
           />
 
@@ -509,523 +490,75 @@ export function TripCreatePage() {
           </div>
 
           {viewMode === 'mine' && (
-          <>
-            <form className="trip-form" onSubmit={handleCreateTrip}>
-            <div className="field-grid">
-              <label>
-                여행지
-                <input
-                  value={form.destination}
-                  onChange={(event) => updateForm('destination', event.target.value)}
-                  required
-                />
-              </label>
-
-              <label>
-                여행 컨셉
-                <select
-                  value={form.concept}
-                  onChange={(event) => updateForm('concept', event.target.value as TripConcept)}
-                >
-                  {conceptOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="field-grid">
-              <label>
-                시작일
-                <input
-                  type="date"
-                  value={form.startDate}
-                  onChange={(event) => updateForm('startDate', event.target.value)}
-                  required
-                />
-              </label>
-
-              <label>
-                종료일
-                <input
-                  type="date"
-                  value={form.endDate}
-                  onChange={(event) => updateForm('endDate', event.target.value)}
-                  required
-                />
-              </label>
-            </div>
-
-            <div className="field-grid">
-              <label>
-                하루 시작 시간
-                <input
-                  type="time"
-                  value={form.dailyStartTime}
-                  onChange={(event) => updateForm('dailyStartTime', event.target.value)}
-                  required
-                />
-              </label>
-
-              <label>
-                하루 종료 시간
-                <input
-                  type="time"
-                  value={form.dailyEndTime}
-                  onChange={(event) => updateForm('dailyEndTime', event.target.value)}
-                  required
-                />
-              </label>
-            </div>
-
-            <label>
-              마지막 숙소 지역
-              <input
-                value={form.lastAccommodationArea}
-                onChange={(event) => updateForm('lastAccommodationArea', event.target.value)}
-                placeholder="예: 제주시, 서귀포시"
+            <>
+              <TripCreateForm
+                form={form}
+                isCreating={isCreating}
+                disabled={session == null}
+                onChange={updateForm}
+                onSubmit={handleCreateTrip}
               />
-            </label>
-
-            <button type="submit" disabled={session == null || isCreating}>
-              {isCreating ? '저장 중' : '여행 생성'}
-            </button>
-            </form>
-
-            <section className="trip-list-section">
-            <div className="section-title-row">
-              <div>
-                <p>My trips</p>
-                <h2>내 여행</h2>
-              </div>
-              <button type="button" className="secondary-button" onClick={() => void loadTrips()} disabled={session == null || isLoadingTrips}>
-                {isLoadingTrips ? '조회 중' : '새로고침'}
-              </button>
-            </div>
-
-            {session == null ? (
-              <div className="compact-empty">로그인하면 생성한 여행을 볼 수 있습니다.</div>
-            ) : trips.length === 0 ? (
-              <div className="compact-empty">아직 생성한 여행이 없습니다.</div>
-            ) : (
-              <div className="trip-list">
-                {trips.map((myTrip) => (
-                  <button
-                    type="button"
-                    className={trip?.tripId === myTrip.tripId ? 'trip-list-item active' : 'trip-list-item'}
-                    key={myTrip.tripId}
-                    onClick={() => void loadTripDetail(myTrip.tripId)}
-                    disabled={isLoadingDetail}
-                  >
-                    <strong>{myTrip.destination}</strong>
-                    <span>
-                      {myTrip.startDate} - {myTrip.endDate} · {myTrip.nights}박 · {conceptLabel(myTrip.concept)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-            </section>
-          </>
+              <MyTripList
+                session={session}
+                trips={trips}
+                selectedTripId={trip?.tripId}
+                isLoadingTrips={isLoadingTrips}
+                isLoadingDetail={isLoadingDetail}
+                onRefresh={() => void loadTrips()}
+                onSelect={(tripId) => void loadTripDetail(tripId)}
+              />
+            </>
           )}
 
           {viewMode === 'public' && (
-            <section className="trip-list-section public-list-section">
-              <div className="section-title-row">
-                <div>
-                  <p>Public trips</p>
-                  <h2>{publicListMode === 'liked' ? '좋아요한 여행' : '공개 여행'}</h2>
-                </div>
-                {publicListMode === 'all' && (
-                  <select
-                    value={publicSort}
-                    onChange={(event) => {
-                      setPublicSort(event.target.value as PublicTripSort);
-                      setPublicPage(0);
-                    }}
-                    aria-label="공개 여행 정렬"
-                  >
-                    <option value="LATEST">최신순</option>
-                    <option value="POPULAR">인기순</option>
-                  </select>
-                )}
-              </div>
-
-              <div className="sub-tabs" role="tablist" aria-label="공개 여행 목록 방식">
-                <button
-                  type="button"
-                  className={publicListMode === 'all' ? 'tab-button active' : 'tab-button'}
-                  onClick={() => {
-                    setPublicListMode('all');
-                    setPublicPage(0);
-                  }}
-                >
-                  전체
-                </button>
-                <button
-                  type="button"
-                  className={publicListMode === 'liked' ? 'tab-button active' : 'tab-button'}
-                  onClick={() => {
-                    setPublicListMode('liked');
-                    setPublicPage(0);
-                  }}
-                >
-                  좋아요
-                </button>
-              </div>
-
-              {publicListMode === 'all' && (
-                <form className="public-filter-form" onSubmit={handleApplyPublicFilters}>
-                  <label>
-                    여행지
-                    <input
-                      value={publicFilters.destination}
-                      onChange={(event) => updatePublicFilter('destination', event.target.value)}
-                      placeholder="예: 제주"
-                    />
-                  </label>
-                  <label>
-                    컨셉
-                    <select
-                      value={publicFilters.concept}
-                      onChange={(event) => updatePublicFilter('concept', event.target.value as PublicTripSearchParams['concept'])}
-                    >
-                      <option value="">전체</option>
-                      {conceptOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    박수
-                    <input
-                      type="number"
-                      min="1"
-                      value={publicFilters.nights}
-                      onChange={(event) => updatePublicFilter('nights', event.target.value)}
-                      placeholder="예: 2"
-                    />
-                  </label>
-                  <label>
-                    시작일 From
-                    <input
-                      type="date"
-                      value={publicFilters.startDateFrom}
-                      onChange={(event) => updatePublicFilter('startDateFrom', event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    시작일 To
-                    <input
-                      type="date"
-                      value={publicFilters.startDateTo}
-                      onChange={(event) => updatePublicFilter('startDateTo', event.target.value)}
-                    />
-                  </label>
-                  <div className="filter-actions">
-                    <button type="submit">필터 적용</button>
-                    <button type="button" className="secondary-button" onClick={handleResetPublicFilters}>
-                      초기화
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {(publicTripPage?.content.length ?? 0) === 0 ? (
-                <div className="compact-empty">
-                  {publicEmptyMessage(isLoadingPublicTrips, publicListMode, session)}
-                </div>
-              ) : (
-                <>
-                <div className="trip-list">
-                  {publicTripPage?.content.map((publicTripItem) => (
-                    <div
-                      className={
-                        publicTrip?.tripId === publicTripItem.tripId ? 'trip-list-item active' : 'trip-list-item'
-                      }
-                      key={publicTripItem.tripId}
-                    >
-                      <button
-                        type="button"
-                        className="trip-list-main-button"
-                        onClick={() => void loadPublicTripDetail(publicTripItem.tripId)}
-                        disabled={isLoadingDetail}
-                      >
-                        <strong>{publicTripItem.destination}</strong>
-                        <span>
-                          {publicTripItem.startDate} - {publicTripItem.endDate} · {publicTripItem.nights}박 ·{' '}
-                          {conceptLabel(publicTripItem.concept)}
-                        </span>
-                        <span>
-                          {publicTripItem.author.nickname} · 조회 {publicTripItem.viewCount} · 좋아요{' '}
-                          {publicTripItem.likeCount}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className={publicTripItem.liked ? 'like-button active' : 'like-button'}
-                        onClick={() => void handleToggleLike(publicTripItem)}
-                        disabled={isUpdatingLike}
-                      >
-                        {publicTripItem.liked ? '좋아요 취소' : '좋아요'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="pagination-row">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setPublicPage((currentPage) => Math.max(currentPage - 1, 0))}
-                    disabled={isLoadingPublicTrips || publicTripPage?.first}
-                  >
-                    이전
-                  </button>
-                  <span>
-                    {(publicTripPage?.page ?? 0) + 1} / {Math.max(publicTripPage?.totalPages ?? 1, 1)}
-                  </span>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setPublicPage((currentPage) => currentPage + 1)}
-                    disabled={isLoadingPublicTrips || publicTripPage?.last}
-                  >
-                    다음
-                  </button>
-                </div>
-                </>
-              )}
-            </section>
+            <PublicTripList
+              session={session}
+              publicTripPage={publicTripPage}
+              selectedPublicTrip={publicTrip}
+              publicSort={publicSort}
+              publicListMode={publicListMode}
+              publicFilters={publicFilters}
+              isLoadingPublicTrips={isLoadingPublicTrips}
+              isLoadingDetail={isLoadingDetail}
+              isUpdatingLike={isUpdatingLike}
+              onSortChange={(sort) => {
+                setPublicSort(sort);
+                setPublicPage(0);
+              }}
+              onListModeChange={(mode) => {
+                setPublicListMode(mode);
+                setPublicPage(0);
+              }}
+              onFilterChange={updatePublicFilter}
+              onApplyFilters={handleApplyPublicFilters}
+              onResetFilters={handleResetPublicFilters}
+              onSelect={(tripId) => void loadPublicTripDetail(tripId)}
+              onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
+              onPageChange={setPublicPage}
+            />
           )}
         </div>
 
-        <div className="result-panel">
-          <div className="result-header">
-            <div>
-              <p>Trip detail</p>
-              <h2>{selectedTripTitle(trip, publicTrip)}</h2>
-            </div>
-            {viewMode === 'mine' && (
-              <div className="result-actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => void handleUpdateVisibility(trip?.visibility === 'PUBLIC' ? 'PRIVATE' : 'PUBLIC')}
-                  disabled={trip == null || isUpdatingVisibility}
-                >
-                  {trip?.visibility === 'PUBLIC' ? '비공개 전환' : '공개 전환'}
-                </button>
-                <button type="button" onClick={handleGenerateItinerary} disabled={trip == null || isGenerating}>
-                  {isGenerating ? '생성 중' : '일정 생성'}
-                </button>
-              </div>
-            )}
-            {viewMode === 'public' && publicTrip != null && (
-              <div className="result-actions">
-                <button
-                  type="button"
-                  className={publicTrip.liked ? 'like-button active' : 'like-button'}
-                  onClick={() => void handleToggleLike(publicTrip)}
-                  disabled={isUpdatingLike}
-                >
-                  {publicTrip.liked ? '좋아요 취소' : '좋아요'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {(trip != null || publicTrip != null) && (
-            <div className="detail-summary">
-              <span>{viewMode === 'public' && publicTrip != null ? publicTrip.author.nickname : '내 여행'}</span>
-              <span>{selectedTripVisibility(trip, publicTrip)}</span>
-              <span>조회 {selectedTripStats(trip, publicTrip).viewCount}</span>
-              <span>좋아요 {selectedTripStats(trip, publicTrip).likeCount}</span>
-            </div>
-          )}
-
-          {message.length > 0 && <p className="status-message">{message}</p>}
-
-          {Object.keys(itinerariesByDay).length === 0 ? (
-            <div className="empty-state">여행을 선택하거나 새 여행을 생성한 뒤 일정 생성 버튼을 눌러 날짜별 일정을 확인하세요.</div>
-          ) : (
-            <div className="day-list">
-              {Object.entries(itinerariesByDay).map(([dayNo, dayItineraries]) => (
-                <section className="day-section" key={dayNo}>
-                  <h3>Day {dayNo}</h3>
-                  <ol>
-                    {dayItineraries.map((itinerary, index) => {
-                      const editForm = itineraryForm(itinerary, editingItems);
-                      const isPending = pendingItineraryId === itinerary.itineraryId;
-
-                      return (
-                      <li key={itinerary.itineraryId}>
-                        <div className="time-range">
-                          {itinerary.startTime} - {itinerary.endTime}
-                        </div>
-                        <div className="itinerary-content">
-                          <div className="itinerary-title-row">
-                            <strong>{itinerary.place.name}</strong>
-                            {viewMode === 'mine' && (
-                            <div className="itinerary-actions">
-                              <button
-                                type="button"
-                                className="icon-button"
-                                onClick={() => void handleMoveItinerary(dayItineraries, index, 'up')}
-                                disabled={index === 0 || isPending}
-                                aria-label="일정 위로 이동"
-                                title="위로 이동"
-                              >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                className="icon-button"
-                                onClick={() => void handleMoveItinerary(dayItineraries, index, 'down')}
-                                disabled={index === dayItineraries.length - 1 || isPending}
-                                aria-label="일정 아래로 이동"
-                                title="아래로 이동"
-                              >
-                                ↓
-                              </button>
-                              <button
-                                type="button"
-                                className="danger-button"
-                                onClick={() => void handleDeleteItinerary(itinerary.itineraryId)}
-                                disabled={isPending}
-                              >
-                                삭제
-                              </button>
-                            </div>
-                            )}
-                          </div>
-                          <span>
-                            {itinerary.place.region} · {itinerary.place.category}
-                          </span>
-                          {viewMode === 'mine' ? (
-                            <>
-                          <div className="edit-grid">
-                            <label>
-                              시작
-                              <input
-                                type="time"
-                                value={editForm.startTime}
-                                onChange={(event) => updateItineraryForm(itinerary, 'startTime', event.target.value)}
-                              />
-                            </label>
-                            <label>
-                              종료
-                              <input
-                                type="time"
-                                value={editForm.endTime}
-                                onChange={(event) => updateItineraryForm(itinerary, 'endTime', event.target.value)}
-                              />
-                            </label>
-                            <label>
-                              이동
-                              <input
-                                type="number"
-                                min="0"
-                                value={editForm.travelMinutesFromPrevious}
-                                onChange={(event) =>
-                                  updateItineraryForm(
-                                    itinerary,
-                                    'travelMinutesFromPrevious',
-                                    Number(event.target.value)
-                                  )
-                                }
-                              />
-                            </label>
-                          </div>
-                          <label className="reason-field">
-                            사유
-                            <textarea
-                              value={editForm.reason}
-                              onChange={(event) => updateItineraryForm(itinerary, 'reason', event.target.value)}
-                            />
-                          </label>
-                          <button type="button" className="secondary-button" onClick={() => void handleUpdateItinerary(itinerary)} disabled={isPending}>
-                            {isPending ? '저장 중' : '수정 저장'}
-                          </button>
-                            </>
-                          ) : (
-                            <p>{itinerary.reason}</p>
-                          )}
-                        </div>
-                      </li>
-                      );
-                    })}
-                  </ol>
-                </section>
-              ))}
-            </div>
-          )}
-        </div>
+        <TripDetailPanel
+          viewMode={viewMode}
+          trip={trip}
+          publicTrip={publicTrip}
+          itinerariesByDay={itinerariesByDay}
+          editingItems={editingItems}
+          pendingItineraryId={pendingItineraryId}
+          message={message}
+          isGenerating={isGenerating}
+          isUpdatingVisibility={isUpdatingVisibility}
+          isUpdatingLike={isUpdatingLike}
+          onGenerate={() => void handleGenerateItinerary()}
+          onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
+          onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
+          onUpdateItineraryForm={updateItineraryForm}
+          onMoveItinerary={(dayItineraries, index, direction) => void handleMoveItinerary(dayItineraries, index, direction)}
+          onDeleteItinerary={(itineraryId) => void handleDeleteItinerary(itineraryId)}
+          onUpdateItinerary={(itinerary) => void handleUpdateItinerary(itinerary)}
+        />
       </section>
     </main>
-  );
-}
-
-function conceptLabel(concept: TripConcept): string {
-  return conceptOptions.find((option) => option.value === concept)?.label ?? concept;
-}
-
-function selectedTripTitle(trip: TripDetail | null, publicTrip: PublicTripDetail | null): string {
-  const selectedTrip = trip ?? publicTrip;
-  if (selectedTrip == null) {
-    return '선택된 여행이 없습니다';
-  }
-
-  return `${selectedTrip.destination} ${selectedTrip.nights}박 일정`;
-}
-
-function selectedTripVisibility(trip: TripDetail | null, publicTrip: PublicTripDetail | null): string {
-  const visibility = (trip ?? publicTrip)?.visibility;
-  return visibility === 'PUBLIC' ? '공개' : '비공개';
-}
-
-function selectedTripStats(
-  trip: TripDetail | null,
-  publicTrip: PublicTripDetail | null
-): { likeCount: number; viewCount: number } {
-  const selectedTrip = trip ?? publicTrip;
-  return {
-    likeCount: selectedTrip?.likeCount ?? 0,
-    viewCount: selectedTrip?.viewCount ?? 0
-  };
-}
-
-function publicEmptyMessage(
-  isLoadingPublicTrips: boolean,
-  publicListMode: PublicListMode,
-  session: AuthSession | null
-): string {
-  if (isLoadingPublicTrips) {
-    return '공개 여행을 조회 중입니다.';
-  }
-  if (publicListMode === 'liked' && session == null) {
-    return '로그인하면 좋아요한 여행을 볼 수 있습니다.';
-  }
-  if (publicListMode === 'liked') {
-    return '좋아요한 여행이 없습니다.';
-  }
-
-  return '공개된 여행이 없습니다.';
-}
-
-function itineraryForm(
-  itinerary: Itinerary,
-  editingItems: Record<number, ItineraryEditForm>
-): ItineraryEditForm {
-  return (
-    editingItems[itinerary.itineraryId] ?? {
-      startTime: itinerary.startTime,
-      endTime: itinerary.endTime,
-      travelMinutesFromPrevious: itinerary.travelMinutesFromPrevious,
-      reason: itinerary.reason
-    }
   );
 }
