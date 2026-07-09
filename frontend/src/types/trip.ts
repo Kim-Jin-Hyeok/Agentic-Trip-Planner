@@ -92,6 +92,14 @@ export type PageResponse<T> = {
 
 export type PublicTripSort = 'LATEST' | 'POPULAR';
 
+export type PublicTripSearchParams = {
+  destination: string;
+  concept: '' | TripConcept;
+  nights: string;
+  startDateFrom: string;
+  startDateTo: string;
+};
+
 export type PublicTripResponse = TripResponse & {
   liked: boolean;
   author: TripAuthor;

@@ -23,6 +23,7 @@ import type {
   PageResponse,
   PublicTripDetail,
   PublicTripResponse,
+  PublicTripSearchParams,
   PublicTripSort,
   TripConcept,
   TripCreateRequest,
@@ -56,6 +57,14 @@ type ViewMode = 'mine' | 'public';
 type PublicListMode = 'all' | 'liked';
 const publicTripPageSize = 10;
 
+const initialPublicFilters: PublicTripSearchParams = {
+  destination: '',
+  concept: '',
+  nights: '',
+  startDateFrom: '',
+  startDateTo: ''
+};
+
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
   const [session, setSession] = useState<AuthSession | null>(() => getStoredAuthSession());
@@ -65,6 +74,8 @@ export function TripCreatePage() {
   const [publicSort, setPublicSort] = useState<PublicTripSort>('LATEST');
   const [publicPage, setPublicPage] = useState(0);
   const [publicListMode, setPublicListMode] = useState<PublicListMode>('all');
+  const [publicFilters, setPublicFilters] = useState<PublicTripSearchParams>(initialPublicFilters);
+  const [appliedPublicFilters, setAppliedPublicFilters] = useState<PublicTripSearchParams>(initialPublicFilters);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [publicTrip, setPublicTrip] = useState<PublicTripDetail | null>(null);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
@@ -104,11 +115,21 @@ export function TripCreatePage() {
 
     setPublicTrip(null);
     setItineraries([]);
-    void loadPublicTrips(publicSort, publicPage, publicListMode);
-  }, [viewMode, publicSort, publicPage, publicListMode]);
+    void loadPublicTrips(publicSort, publicPage, publicListMode, appliedPublicFilters);
+  }, [viewMode, publicSort, publicPage, publicListMode, appliedPublicFilters]);
 
   function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
     setForm((current) => ({
+      ...current,
+      [key]: value
+    }));
+  }
+
+  function updatePublicFilter<K extends keyof PublicTripSearchParams>(
+    key: K,
+    value: PublicTripSearchParams[K]
+  ) {
+    setPublicFilters((current) => ({
       ...current,
       [key]: value
     }));
@@ -144,7 +165,8 @@ export function TripCreatePage() {
   async function loadPublicTrips(
     sort: PublicTripSort = publicSort,
     pageNumber = publicPage,
-    listMode: PublicListMode = publicListMode
+    listMode: PublicListMode = publicListMode,
+    filters: PublicTripSearchParams = appliedPublicFilters
   ) {
     if (listMode === 'liked' && session == null) {
       setPublicTripPage(null);
@@ -158,7 +180,7 @@ export function TripCreatePage() {
       const page =
         listMode === 'liked'
           ? await getLikedPublicTrips(pageNumber, publicTripPageSize)
-          : await getPublicTrips(sort, pageNumber, publicTripPageSize);
+          : await getPublicTrips(sort, pageNumber, publicTripPageSize, filters);
       setPublicTripPage(page);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '공개 여행 목록 조회에 실패했습니다.');
@@ -277,7 +299,7 @@ export function TripCreatePage() {
       });
       await loadTrips();
       if (viewMode === 'public') {
-        await loadPublicTrips(publicSort, publicPage, publicListMode);
+        await loadPublicTrips(publicSort, publicPage, publicListMode, appliedPublicFilters);
       }
       setMessage(visibility === 'PUBLIC' ? '여행이 공개되었습니다.' : '여행이 비공개로 변경되었습니다.');
     } catch (error) {
@@ -302,7 +324,7 @@ export function TripCreatePage() {
         : await likePublicTrip(targetTrip.tripId);
       applyLikeResponse(likeResponse.tripId, likeResponse.likeCount, likeResponse.liked);
       if (publicListMode === 'liked' && !likeResponse.liked) {
-        await loadPublicTrips(publicSort, publicPage, publicListMode);
+        await loadPublicTrips(publicSort, publicPage, publicListMode, appliedPublicFilters);
       }
       setMessage(likeResponse.liked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.');
     } catch (error) {
@@ -310,6 +332,18 @@ export function TripCreatePage() {
     } finally {
       setIsUpdatingLike(false);
     }
+  }
+
+  function handleApplyPublicFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPublicPage(0);
+    setAppliedPublicFilters(publicFilters);
+  }
+
+  function handleResetPublicFilters() {
+    setPublicFilters(initialPublicFilters);
+    setAppliedPublicFilters(initialPublicFilters);
+    setPublicPage(0);
   }
 
   function applyLikeResponse(tripId: number, likeCount: number, liked: boolean) {
@@ -641,6 +675,65 @@ export function TripCreatePage() {
                   좋아요
                 </button>
               </div>
+
+              {publicListMode === 'all' && (
+                <form className="public-filter-form" onSubmit={handleApplyPublicFilters}>
+                  <label>
+                    여행지
+                    <input
+                      value={publicFilters.destination}
+                      onChange={(event) => updatePublicFilter('destination', event.target.value)}
+                      placeholder="예: 제주"
+                    />
+                  </label>
+                  <label>
+                    컨셉
+                    <select
+                      value={publicFilters.concept}
+                      onChange={(event) => updatePublicFilter('concept', event.target.value as PublicTripSearchParams['concept'])}
+                    >
+                      <option value="">전체</option>
+                      {conceptOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    박수
+                    <input
+                      type="number"
+                      min="1"
+                      value={publicFilters.nights}
+                      onChange={(event) => updatePublicFilter('nights', event.target.value)}
+                      placeholder="예: 2"
+                    />
+                  </label>
+                  <label>
+                    시작일 From
+                    <input
+                      type="date"
+                      value={publicFilters.startDateFrom}
+                      onChange={(event) => updatePublicFilter('startDateFrom', event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    시작일 To
+                    <input
+                      type="date"
+                      value={publicFilters.startDateTo}
+                      onChange={(event) => updatePublicFilter('startDateTo', event.target.value)}
+                    />
+                  </label>
+                  <div className="filter-actions">
+                    <button type="submit">필터 적용</button>
+                    <button type="button" className="secondary-button" onClick={handleResetPublicFilters}>
+                      초기화
+                    </button>
+                  </div>
+                </form>
+              )}
 
               {(publicTripPage?.content.length ?? 0) === 0 ? (
                 <div className="compact-empty">

@@ -130,6 +130,22 @@ button:disabled {
   margin-bottom: 14px;
 }
 
+.public-filter-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border: 1px solid #e2ded8;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.filter-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .tab-button,
 .secondary-button {
   background: #e9eee9;
@@ -457,7 +473,8 @@ textarea {
   }
 
   .workspace,
-  .field-grid {
+  .field-grid,
+  .public-filter-form {
     grid-template-columns: 1fr;
   }
 

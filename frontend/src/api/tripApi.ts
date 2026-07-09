@@ -6,6 +6,7 @@ import type {
   PageResponse,
   PublicTripDetail,
   PublicTripResponse,
+  PublicTripSearchParams,
   PublicTripSort,
   TripLikeResponse,
   TripCreateRequest,
@@ -46,13 +47,22 @@ export function updateTripVisibility(tripId: number, visibility: TripVisibility)
 export function getPublicTrips(
   sort: PublicTripSort = 'LATEST',
   page = 0,
-  size = 20
+  size = 20,
+  filters?: PublicTripSearchParams
 ): Promise<PageResponse<PublicTripResponse>> {
   const searchParams = new URLSearchParams({
     sort,
     page: String(page),
     size: String(size)
   });
+
+  if (filters != null) {
+    appendIfPresent(searchParams, 'destination', filters.destination);
+    appendIfPresent(searchParams, 'concept', filters.concept);
+    appendIfPresent(searchParams, 'nights', filters.nights);
+    appendIfPresent(searchParams, 'startDateFrom', filters.startDateFrom);
+    appendIfPresent(searchParams, 'startDateTo', filters.startDateTo);
+  }
 
   return apiRequest<PageResponse<PublicTripResponse>>(`/api/public/trips?${searchParams.toString()}`);
 }
@@ -104,4 +114,13 @@ export function reorderItineraries(tripId: number, request: ItineraryReorderRequ
     method: 'PATCH',
     body: JSON.stringify(request)
   });
+}
+
+function appendIfPresent(searchParams: URLSearchParams, key: string, value: string): void {
+  const trimmedValue = value.trim();
+  if (trimmedValue.length === 0) {
+    return;
+  }
+
+  searchParams.set(key, trimmedValue);
 }
