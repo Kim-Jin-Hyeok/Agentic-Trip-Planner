@@ -15,7 +15,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -210,14 +211,25 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
-  min-height: 42px;
   border: 1px solid #cfc8bf;
   border-radius: 6px;
   background: #fff;
   color: #202124;
   padding: 0 12px;
+}
+
+input,
+select {
+  min-height: 42px;
+}
+
+textarea {
+  min-height: 76px;
+  padding: 10px 12px;
+  resize: vertical;
 }
 
 .result-panel {
@@ -283,6 +295,51 @@ select {
   padding: 14px;
 }
 
+.itinerary-content {
+  display: grid;
+  gap: 10px;
+}
+
+.itinerary-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.itinerary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.icon-button,
+.danger-button {
+  min-height: 32px;
+  border-radius: 6px;
+  padding: 0 10px;
+}
+
+.icon-button {
+  background: #e9eee9;
+  color: #26332f;
+}
+
+.danger-button {
+  background: #a64032;
+}
+
+.edit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reason-field {
+  font-weight: 700;
+}
+
 .time-range {
   color: #1e6f5c;
   font-size: 14px;
@@ -317,7 +374,8 @@ select {
   }
 
   .result-header,
-  .day-section li {
+  .day-section li,
+  .edit-grid {
     grid-template-columns: 1fr;
   }
 

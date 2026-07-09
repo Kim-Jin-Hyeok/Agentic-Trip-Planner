@@ -45,6 +45,23 @@ export type Itinerary = {
   reason: string;
 };
 
+export type ItineraryUpdateRequest = {
+  startTime: string;
+  endTime: string;
+  travelMinutesFromPrevious: number;
+  reason: string;
+};
+
+export type ItineraryReorderRequestItem = {
+  itineraryId: number;
+  dayNo: number;
+  orderNo: number;
+};
+
+export type ItineraryReorderRequest = {
+  items: ItineraryReorderRequestItem[];
+};
+
 export type TripDetail = TripResponse & {
   itineraries: Itinerary[];
 };

@@ -1,8 +1,16 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { createTrip, generateItinerary, getTrip, getTrips } from '../api/tripApi';
+import {
+  createTrip,
+  deleteItinerary,
+  generateItinerary,
+  getTrip,
+  getTrips,
+  reorderItineraries,
+  updateItinerary
+} from '../api/tripApi';
 import { AuthPanel } from '../components/AuthPanel';
 import type { AuthSession } from '../types/auth';
-import type { Itinerary, TripConcept, TripCreateRequest, TripDetail, TripResponse } from '../types/trip';
+import type { Itinerary, ItineraryUpdateRequest, TripConcept, TripCreateRequest, TripDetail, TripResponse } from '../types/trip';
 
 const conceptOptions: Array<{ value: TripConcept; label: string }> = [
   { value: 'HEALING', label: '힐링' },
@@ -24,6 +32,8 @@ const initialForm: TripCreateRequest = {
   lastAccommodationArea: ''
 };
 
+type ItineraryEditForm = ItineraryUpdateRequest;
+
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -34,6 +44,8 @@ export function TripCreatePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingTrips, setIsLoadingTrips] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
+  const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
 
   const itinerariesByDay = useMemo(() => {
@@ -50,6 +62,20 @@ export function TripCreatePage() {
     setForm((current) => ({
       ...current,
       [key]: value
+    }));
+  }
+
+  function updateItineraryForm<K extends keyof ItineraryEditForm>(
+    itinerary: Itinerary,
+    key: K,
+    value: ItineraryEditForm[K]
+  ) {
+    setEditingItems((current) => ({
+      ...current,
+      [itinerary.itineraryId]: {
+        ...itineraryForm(itinerary, current),
+        [key]: value
+      }
     }));
   }
 
@@ -74,6 +100,7 @@ export function TripCreatePage() {
       const detail = await getTrip(tripId);
       setTrip(detail);
       setItineraries(detail.itineraries);
+      setEditingItems({});
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '여행 상세 조회에 실패했습니다.');
     } finally {
@@ -103,6 +130,7 @@ export function TripCreatePage() {
       const detail = await getTrip(createdTrip.tripId);
       setTrip(detail);
       setItineraries(detail.itineraries);
+      setEditingItems({});
       await loadTrips();
       setMessage('여행 조건이 저장되었습니다.');
     } catch (error) {
@@ -127,11 +155,95 @@ export function TripCreatePage() {
         ...trip,
         itineraries: generatedItineraries
       });
+      setEditingItems({});
       setMessage('일정이 생성되었습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '일정 생성에 실패했습니다.');
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleUpdateItinerary(itinerary: Itinerary) {
+    if (trip == null) {
+      return;
+    }
+
+    setPendingItineraryId(itinerary.itineraryId);
+    setMessage('');
+
+    try {
+      await updateItinerary(trip.tripId, itinerary.itineraryId, itineraryForm(itinerary, editingItems));
+      await loadTripDetail(trip.tripId);
+      setMessage('일정이 수정되었습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '일정 수정에 실패했습니다.');
+    } finally {
+      setPendingItineraryId(null);
+    }
+  }
+
+  async function handleDeleteItinerary(itineraryId: number) {
+    if (trip == null) {
+      return;
+    }
+
+    setPendingItineraryId(itineraryId);
+    setMessage('');
+
+    try {
+      await deleteItinerary(trip.tripId, itineraryId);
+      await loadTripDetail(trip.tripId);
+      setMessage('일정이 삭제되었습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '일정 삭제에 실패했습니다.');
+    } finally {
+      setPendingItineraryId(null);
+    }
+  }
+
+  async function handleMoveItinerary(dayItineraries: Itinerary[], index: number, direction: 'up' | 'down') {
+    if (trip == null) {
+      return;
+    }
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    const current = dayItineraries[index];
+    const target = dayItineraries[targetIndex];
+
+    if (current == null || target == null) {
+      return;
+    }
+
+    setPendingItineraryId(current.itineraryId);
+    setMessage('');
+
+    try {
+      const reordered = await reorderItineraries(trip.tripId, {
+        items: [
+          {
+            itineraryId: current.itineraryId,
+            dayNo: current.dayNo,
+            orderNo: target.orderNo
+          },
+          {
+            itineraryId: target.itineraryId,
+            dayNo: target.dayNo,
+            orderNo: current.orderNo
+          }
+        ]
+      });
+      setItineraries(reordered);
+      setTrip({
+        ...trip,
+        itineraries: reordered
+      });
+      setEditingItems({});
+      setMessage('일정 순서가 변경되었습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '일정 순서 변경에 실패했습니다.');
+    } finally {
+      setPendingItineraryId(null);
     }
   }
 
@@ -299,20 +411,99 @@ export function TripCreatePage() {
                 <section className="day-section" key={dayNo}>
                   <h3>Day {dayNo}</h3>
                   <ol>
-                    {dayItineraries.map((itinerary) => (
+                    {dayItineraries.map((itinerary, index) => {
+                      const editForm = itineraryForm(itinerary, editingItems);
+                      const isPending = pendingItineraryId === itinerary.itineraryId;
+
+                      return (
                       <li key={itinerary.itineraryId}>
                         <div className="time-range">
                           {itinerary.startTime} - {itinerary.endTime}
                         </div>
-                        <div>
-                          <strong>{itinerary.place.name}</strong>
+                        <div className="itinerary-content">
+                          <div className="itinerary-title-row">
+                            <strong>{itinerary.place.name}</strong>
+                            <div className="itinerary-actions">
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => void handleMoveItinerary(dayItineraries, index, 'up')}
+                                disabled={index === 0 || isPending}
+                                aria-label="일정 위로 이동"
+                                title="위로 이동"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => void handleMoveItinerary(dayItineraries, index, 'down')}
+                                disabled={index === dayItineraries.length - 1 || isPending}
+                                aria-label="일정 아래로 이동"
+                                title="아래로 이동"
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                className="danger-button"
+                                onClick={() => void handleDeleteItinerary(itinerary.itineraryId)}
+                                disabled={isPending}
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
                           <span>
                             {itinerary.place.region} · {itinerary.place.category}
                           </span>
-                          <p>{itinerary.reason}</p>
+                          <div className="edit-grid">
+                            <label>
+                              시작
+                              <input
+                                type="time"
+                                value={editForm.startTime}
+                                onChange={(event) => updateItineraryForm(itinerary, 'startTime', event.target.value)}
+                              />
+                            </label>
+                            <label>
+                              종료
+                              <input
+                                type="time"
+                                value={editForm.endTime}
+                                onChange={(event) => updateItineraryForm(itinerary, 'endTime', event.target.value)}
+                              />
+                            </label>
+                            <label>
+                              이동
+                              <input
+                                type="number"
+                                min="0"
+                                value={editForm.travelMinutesFromPrevious}
+                                onChange={(event) =>
+                                  updateItineraryForm(
+                                    itinerary,
+                                    'travelMinutesFromPrevious',
+                                    Number(event.target.value)
+                                  )
+                                }
+                              />
+                            </label>
+                          </div>
+                          <label className="reason-field">
+                            사유
+                            <textarea
+                              value={editForm.reason}
+                              onChange={(event) => updateItineraryForm(itinerary, 'reason', event.target.value)}
+                            />
+                          </label>
+                          <button type="button" className="secondary-button" onClick={() => void handleUpdateItinerary(itinerary)} disabled={isPending}>
+                            {isPending ? '저장 중' : '수정 저장'}
+                          </button>
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ol>
                 </section>
               ))}
@@ -326,4 +517,18 @@ export function TripCreatePage() {
 
 function conceptLabel(concept: TripConcept): string {
   return conceptOptions.find((option) => option.value === concept)?.label ?? concept;
+}
+
+function itineraryForm(
+  itinerary: Itinerary,
+  editingItems: Record<number, ItineraryEditForm>
+): ItineraryEditForm {
+  return (
+    editingItems[itinerary.itineraryId] ?? {
+      startTime: itinerary.startTime,
+      endTime: itinerary.endTime,
+      travelMinutesFromPrevious: itinerary.travelMinutesFromPrevious,
+      reason: itinerary.reason
+    }
+  );
 }
