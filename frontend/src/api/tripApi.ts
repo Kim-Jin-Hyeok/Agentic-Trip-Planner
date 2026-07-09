@@ -1,6 +1,10 @@
 import { apiRequest } from './client';
 import type { Itinerary, TripCreateRequest, TripDetail, TripResponse } from '../types/trip';
 
+export function getTrips(): Promise<TripResponse[]> {
+  return apiRequest<TripResponse[]>('/api/trips');
+}
+
 export function createTrip(request: TripCreateRequest): Promise<TripResponse> {
   return apiRequest<TripResponse>('/api/trips', {
     method: 'POST',

@@ -1,8 +1,8 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { createTrip, generateItinerary, getTrip } from '../api/tripApi';
+import { createTrip, generateItinerary, getTrip, getTrips } from '../api/tripApi';
 import { AuthPanel } from '../components/AuthPanel';
 import type { AuthSession } from '../types/auth';
-import type { Itinerary, TripConcept, TripCreateRequest, TripDetail } from '../types/trip';
+import type { Itinerary, TripConcept, TripCreateRequest, TripDetail, TripResponse } from '../types/trip';
 
 const conceptOptions: Array<{ value: TripConcept; label: string }> = [
   { value: 'HEALING', label: '힐링' },
@@ -27,10 +27,13 @@ const initialForm: TripCreateRequest = {
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
   const [session, setSession] = useState<AuthSession | null>(null);
+  const [trips, setTrips] = useState<TripResponse[]>([]);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingTrips, setIsLoadingTrips] = useState(false);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [message, setMessage] = useState('');
 
   const itinerariesByDay = useMemo(() => {
@@ -50,6 +53,41 @@ export function TripCreatePage() {
     }));
   }
 
+  async function loadTrips() {
+    setIsLoadingTrips(true);
+
+    try {
+      const myTrips = await getTrips();
+      setTrips(myTrips);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '내 여행 목록 조회에 실패했습니다.');
+    } finally {
+      setIsLoadingTrips(false);
+    }
+  }
+
+  async function loadTripDetail(tripId: number) {
+    setMessage('');
+    setIsLoadingDetail(true);
+
+    try {
+      const detail = await getTrip(tripId);
+      setTrip(detail);
+      setItineraries(detail.itineraries);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '여행 상세 조회에 실패했습니다.');
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  }
+
+  async function handleLogin(session: AuthSession) {
+    setSession(session);
+    setTrip(null);
+    setItineraries([]);
+    await loadTrips();
+  }
+
   async function handleCreateTrip(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (session == null) {
@@ -65,6 +103,7 @@ export function TripCreatePage() {
       const detail = await getTrip(createdTrip.tripId);
       setTrip(detail);
       setItineraries(detail.itineraries);
+      await loadTrips();
       setMessage('여행 조건이 저장되었습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '여행 생성에 실패했습니다.');
@@ -84,6 +123,10 @@ export function TripCreatePage() {
     try {
       const generatedItineraries = await generateItinerary(trip.tripId);
       setItineraries(generatedItineraries);
+      setTrip({
+        ...trip,
+        itineraries: generatedItineraries
+      });
       setMessage('일정이 생성되었습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '일정 생성에 실패했습니다.');
@@ -103,9 +146,12 @@ export function TripCreatePage() {
 
           <AuthPanel
             session={session}
-            onLogin={setSession}
+            onLogin={(loggedInSession) => {
+              void handleLogin(loggedInSession);
+            }}
             onLogout={() => {
               setSession(null);
+              setTrips([]);
               setTrip(null);
               setItineraries([]);
             }}
@@ -195,13 +241,48 @@ export function TripCreatePage() {
               {isCreating ? '저장 중' : '여행 생성'}
             </button>
           </form>
+
+          <section className="trip-list-section">
+            <div className="section-title-row">
+              <div>
+                <p>My trips</p>
+                <h2>내 여행</h2>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => void loadTrips()} disabled={session == null || isLoadingTrips}>
+                {isLoadingTrips ? '조회 중' : '새로고침'}
+              </button>
+            </div>
+
+            {session == null ? (
+              <div className="compact-empty">로그인하면 생성한 여행을 볼 수 있습니다.</div>
+            ) : trips.length === 0 ? (
+              <div className="compact-empty">아직 생성한 여행이 없습니다.</div>
+            ) : (
+              <div className="trip-list">
+                {trips.map((myTrip) => (
+                  <button
+                    type="button"
+                    className={trip?.tripId === myTrip.tripId ? 'trip-list-item active' : 'trip-list-item'}
+                    key={myTrip.tripId}
+                    onClick={() => void loadTripDetail(myTrip.tripId)}
+                    disabled={isLoadingDetail}
+                  >
+                    <strong>{myTrip.destination}</strong>
+                    <span>
+                      {myTrip.startDate} - {myTrip.endDate} · {myTrip.nights}박 · {conceptLabel(myTrip.concept)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
 
         <div className="result-panel">
           <div className="result-header">
             <div>
-              <p>Generated itinerary</p>
-              <h2>{trip == null ? '아직 생성된 여행이 없습니다' : `${trip.destination} ${trip.nights}박 일정`}</h2>
+              <p>Trip detail</p>
+              <h2>{trip == null ? '선택된 여행이 없습니다' : `${trip.destination} ${trip.nights}박 일정`}</h2>
             </div>
             <button type="button" onClick={handleGenerateItinerary} disabled={trip == null || isGenerating}>
               {isGenerating ? '생성 중' : '일정 생성'}
@@ -211,7 +292,7 @@ export function TripCreatePage() {
           {message.length > 0 && <p className="status-message">{message}</p>}
 
           {Object.keys(itinerariesByDay).length === 0 ? (
-            <div className="empty-state">여행을 생성한 뒤 일정 생성 버튼을 눌러 날짜별 일정을 확인하세요.</div>
+            <div className="empty-state">여행을 선택하거나 새 여행을 생성한 뒤 일정 생성 버튼을 눌러 날짜별 일정을 확인하세요.</div>
           ) : (
             <div className="day-list">
               {Object.entries(itinerariesByDay).map(([dayNo, dayItineraries]) => (
@@ -241,4 +322,8 @@ export function TripCreatePage() {
       </section>
     </main>
   );
+}
+
+function conceptLabel(concept: TripConcept): string {
+  return conceptOptions.find((option) => option.value === concept)?.label ?? concept;
 }

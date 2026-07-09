@@ -131,6 +131,70 @@ button:disabled {
   gap: 12px;
 }
 
+.trip-list-section {
+  border-top: 1px solid #e5e0d9;
+  margin-top: 24px;
+  padding-top: 22px;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.section-title-row p {
+  color: #6f7d6f;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.section-title-row h2 {
+  font-size: 20px;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.compact-empty {
+  border: 1px dashed #cfc8bf;
+  border-radius: 8px;
+  color: #67716e;
+  padding: 18px;
+  text-align: center;
+}
+
+.trip-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trip-list-item {
+  display: grid;
+  gap: 5px;
+  min-height: auto;
+  border: 1px solid #e2ded8;
+  background: #fff;
+  color: #202124;
+  padding: 14px;
+  text-align: left;
+}
+
+.trip-list-item.active {
+  border-color: #1e6f5c;
+  background: #eef7f3;
+}
+
+.trip-list-item span {
+  color: #69736f;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
