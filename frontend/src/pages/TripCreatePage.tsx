@@ -19,6 +19,7 @@ import type { AuthSession } from '../types/auth';
 import type {
   Itinerary,
   ItineraryUpdateRequest,
+  PageResponse,
   PublicTripDetail,
   PublicTripResponse,
   PublicTripSort,
@@ -51,14 +52,16 @@ const initialForm: TripCreateRequest = {
 
 type ItineraryEditForm = ItineraryUpdateRequest;
 type ViewMode = 'mine' | 'public';
+const publicTripPageSize = 10;
 
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
   const [session, setSession] = useState<AuthSession | null>(() => getStoredAuthSession());
   const [viewMode, setViewMode] = useState<ViewMode>('mine');
   const [trips, setTrips] = useState<TripResponse[]>([]);
-  const [publicTrips, setPublicTrips] = useState<PublicTripResponse[]>([]);
+  const [publicTripPage, setPublicTripPage] = useState<PageResponse<PublicTripResponse> | null>(null);
   const [publicSort, setPublicSort] = useState<PublicTripSort>('LATEST');
+  const [publicPage, setPublicPage] = useState(0);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [publicTrip, setPublicTrip] = useState<PublicTripDetail | null>(null);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
@@ -96,8 +99,10 @@ export function TripCreatePage() {
       return;
     }
 
-    void loadPublicTrips(publicSort);
-  }, [viewMode, publicSort]);
+    setPublicTrip(null);
+    setItineraries([]);
+    void loadPublicTrips(publicSort, publicPage);
+  }, [viewMode, publicSort, publicPage]);
 
   function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
     setForm((current) => ({
@@ -133,12 +138,12 @@ export function TripCreatePage() {
     }
   }
 
-  async function loadPublicTrips(sort: PublicTripSort = publicSort) {
+  async function loadPublicTrips(sort: PublicTripSort = publicSort, pageNumber = publicPage) {
     setIsLoadingPublicTrips(true);
 
     try {
-      const page = await getPublicTrips(sort);
-      setPublicTrips(page.content);
+      const page = await getPublicTrips(sort, pageNumber, publicTripPageSize);
+      setPublicTripPage(page);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '공개 여행 목록 조회에 실패했습니다.');
     } finally {
@@ -256,7 +261,7 @@ export function TripCreatePage() {
       });
       await loadTrips();
       if (viewMode === 'public') {
-        await loadPublicTrips();
+        await loadPublicTrips(publicSort, publicPage);
       }
       setMessage(visibility === 'PUBLIC' ? '여행이 공개되었습니다.' : '여행이 비공개로 변경되었습니다.');
     } catch (error) {
@@ -289,16 +294,21 @@ export function TripCreatePage() {
   }
 
   function applyLikeResponse(tripId: number, likeCount: number, liked: boolean) {
-    setPublicTrips((currentTrips) =>
-      currentTrips.map((publicTripItem) =>
-        publicTripItem.tripId === tripId
-          ? {
-              ...publicTripItem,
-              likeCount,
-              liked
-            }
-          : publicTripItem
-      )
+    setPublicTripPage((currentPage) =>
+      currentPage == null
+        ? currentPage
+        : {
+            ...currentPage,
+            content: currentPage.content.map((publicTripItem) =>
+              publicTripItem.tripId === tripId
+                ? {
+                    ...publicTripItem,
+                    likeCount,
+                    liked
+                  }
+                : publicTripItem
+            )
+          }
     );
 
     setPublicTrip((currentPublicTrip) =>
@@ -576,7 +586,10 @@ export function TripCreatePage() {
                 </div>
                 <select
                   value={publicSort}
-                  onChange={(event) => setPublicSort(event.target.value as PublicTripSort)}
+                  onChange={(event) => {
+                    setPublicSort(event.target.value as PublicTripSort);
+                    setPublicPage(0);
+                  }}
                   aria-label="공개 여행 정렬"
                 >
                   <option value="LATEST">최신순</option>
@@ -584,13 +597,14 @@ export function TripCreatePage() {
                 </select>
               </div>
 
-              {publicTrips.length === 0 ? (
+              {(publicTripPage?.content.length ?? 0) === 0 ? (
                 <div className="compact-empty">
                   {isLoadingPublicTrips ? '공개 여행을 조회 중입니다.' : '공개된 여행이 없습니다.'}
                 </div>
               ) : (
+                <>
                 <div className="trip-list">
-                  {publicTrips.map((publicTripItem) => (
+                  {publicTripPage?.content.map((publicTripItem) => (
                     <div
                       className={
                         publicTrip?.tripId === publicTripItem.tripId ? 'trip-list-item active' : 'trip-list-item'
@@ -624,6 +638,28 @@ export function TripCreatePage() {
                     </div>
                   ))}
                 </div>
+                <div className="pagination-row">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setPublicPage((currentPage) => Math.max(currentPage - 1, 0))}
+                    disabled={isLoadingPublicTrips || publicTripPage?.first}
+                  >
+                    이전
+                  </button>
+                  <span>
+                    {(publicTripPage?.page ?? 0) + 1} / {Math.max(publicTripPage?.totalPages ?? 1, 1)}
+                  </span>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setPublicPage((currentPage) => currentPage + 1)}
+                    disabled={isLoadingPublicTrips || publicTripPage?.last}
+                  >
+                    다음
+                  </button>
+                </div>
+                </>
               )}
             </section>
           )}

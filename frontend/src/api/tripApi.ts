@@ -43,11 +43,15 @@ export function updateTripVisibility(tripId: number, visibility: TripVisibility)
   });
 }
 
-export function getPublicTrips(sort: PublicTripSort = 'LATEST'): Promise<PageResponse<PublicTripResponse>> {
+export function getPublicTrips(
+  sort: PublicTripSort = 'LATEST',
+  page = 0,
+  size = 20
+): Promise<PageResponse<PublicTripResponse>> {
   const searchParams = new URLSearchParams({
     sort,
-    page: '0',
-    size: '20'
+    page: String(page),
+    size: String(size)
   });
 
   return apiRequest<PageResponse<PublicTripResponse>>(`/api/public/trips?${searchParams.toString()}`);

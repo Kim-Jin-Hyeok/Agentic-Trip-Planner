@@ -238,6 +238,21 @@ button:disabled {
   color: #fff;
 }
 
+.pagination-row {
+  display: grid;
+  grid-template-columns: minmax(84px, auto) 1fr minmax(84px, auto);
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.pagination-row span {
+  color: #38433f;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
