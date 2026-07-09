@@ -61,6 +61,15 @@ export function getPublicTrip(tripId: number): Promise<PublicTripDetail> {
   return apiRequest<PublicTripDetail>(`/api/public/trips/${tripId}`);
 }
 
+export function getLikedPublicTrips(page = 0, size = 20): Promise<PageResponse<PublicTripResponse>> {
+  const searchParams = new URLSearchParams({
+    page: String(page),
+    size: String(size)
+  });
+
+  return apiRequest<PageResponse<PublicTripResponse>>(`/api/public/trips/likes?${searchParams.toString()}`);
+}
+
 export function likePublicTrip(tripId: number): Promise<TripLikeResponse> {
   return apiRequest<TripLikeResponse>(`/api/public/trips/${tripId}/likes`, {
     method: 'POST'

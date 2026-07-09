@@ -5,6 +5,7 @@ import {
   generateItinerary,
   getPublicTrip,
   getPublicTrips,
+  getLikedPublicTrips,
   getTrip,
   getTrips,
   likePublicTrip,
@@ -52,6 +53,7 @@ const initialForm: TripCreateRequest = {
 
 type ItineraryEditForm = ItineraryUpdateRequest;
 type ViewMode = 'mine' | 'public';
+type PublicListMode = 'all' | 'liked';
 const publicTripPageSize = 10;
 
 export function TripCreatePage() {
@@ -62,6 +64,7 @@ export function TripCreatePage() {
   const [publicTripPage, setPublicTripPage] = useState<PageResponse<PublicTripResponse> | null>(null);
   const [publicSort, setPublicSort] = useState<PublicTripSort>('LATEST');
   const [publicPage, setPublicPage] = useState(0);
+  const [publicListMode, setPublicListMode] = useState<PublicListMode>('all');
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [publicTrip, setPublicTrip] = useState<PublicTripDetail | null>(null);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
@@ -101,8 +104,8 @@ export function TripCreatePage() {
 
     setPublicTrip(null);
     setItineraries([]);
-    void loadPublicTrips(publicSort, publicPage);
-  }, [viewMode, publicSort, publicPage]);
+    void loadPublicTrips(publicSort, publicPage, publicListMode);
+  }, [viewMode, publicSort, publicPage, publicListMode]);
 
   function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
     setForm((current) => ({
@@ -138,11 +141,24 @@ export function TripCreatePage() {
     }
   }
 
-  async function loadPublicTrips(sort: PublicTripSort = publicSort, pageNumber = publicPage) {
+  async function loadPublicTrips(
+    sort: PublicTripSort = publicSort,
+    pageNumber = publicPage,
+    listMode: PublicListMode = publicListMode
+  ) {
+    if (listMode === 'liked' && session == null) {
+      setPublicTripPage(null);
+      setMessage('로그인 후 좋아요한 여행을 볼 수 있습니다.');
+      return;
+    }
+
     setIsLoadingPublicTrips(true);
 
     try {
-      const page = await getPublicTrips(sort, pageNumber, publicTripPageSize);
+      const page =
+        listMode === 'liked'
+          ? await getLikedPublicTrips(pageNumber, publicTripPageSize)
+          : await getPublicTrips(sort, pageNumber, publicTripPageSize);
       setPublicTripPage(page);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '공개 여행 목록 조회에 실패했습니다.');
@@ -261,7 +277,7 @@ export function TripCreatePage() {
       });
       await loadTrips();
       if (viewMode === 'public') {
-        await loadPublicTrips(publicSort, publicPage);
+        await loadPublicTrips(publicSort, publicPage, publicListMode);
       }
       setMessage(visibility === 'PUBLIC' ? '여행이 공개되었습니다.' : '여행이 비공개로 변경되었습니다.');
     } catch (error) {
@@ -285,6 +301,9 @@ export function TripCreatePage() {
         ? await unlikePublicTrip(targetTrip.tripId)
         : await likePublicTrip(targetTrip.tripId);
       applyLikeResponse(likeResponse.tripId, likeResponse.likeCount, likeResponse.liked);
+      if (publicListMode === 'liked' && !likeResponse.liked) {
+        await loadPublicTrips(publicSort, publicPage, publicListMode);
+      }
       setMessage(likeResponse.liked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '좋아요 처리에 실패했습니다.');
@@ -448,6 +467,7 @@ export function TripCreatePage() {
                 setViewMode('public');
                 setTrip(null);
                 setItineraries(publicTrip?.itineraries ?? []);
+                setPublicPage(0);
               }}
             >
               공개 여행
@@ -582,24 +602,49 @@ export function TripCreatePage() {
               <div className="section-title-row">
                 <div>
                   <p>Public trips</p>
-                  <h2>공개 여행</h2>
+                  <h2>{publicListMode === 'liked' ? '좋아요한 여행' : '공개 여행'}</h2>
                 </div>
-                <select
-                  value={publicSort}
-                  onChange={(event) => {
-                    setPublicSort(event.target.value as PublicTripSort);
+                {publicListMode === 'all' && (
+                  <select
+                    value={publicSort}
+                    onChange={(event) => {
+                      setPublicSort(event.target.value as PublicTripSort);
+                      setPublicPage(0);
+                    }}
+                    aria-label="공개 여행 정렬"
+                  >
+                    <option value="LATEST">최신순</option>
+                    <option value="POPULAR">인기순</option>
+                  </select>
+                )}
+              </div>
+
+              <div className="sub-tabs" role="tablist" aria-label="공개 여행 목록 방식">
+                <button
+                  type="button"
+                  className={publicListMode === 'all' ? 'tab-button active' : 'tab-button'}
+                  onClick={() => {
+                    setPublicListMode('all');
                     setPublicPage(0);
                   }}
-                  aria-label="공개 여행 정렬"
                 >
-                  <option value="LATEST">최신순</option>
-                  <option value="POPULAR">인기순</option>
-                </select>
+                  전체
+                </button>
+                <button
+                  type="button"
+                  className={publicListMode === 'liked' ? 'tab-button active' : 'tab-button'}
+                  onClick={() => {
+                    setPublicListMode('liked');
+                    setPublicPage(0);
+                  }}
+                >
+                  좋아요
+                </button>
               </div>
 
               {(publicTripPage?.content.length ?? 0) === 0 ? (
                 <div className="compact-empty">
-                  {isLoadingPublicTrips ? '공개 여행을 조회 중입니다.' : '공개된 여행이 없습니다.'}
+                  {publicEmptyMessage(isLoadingPublicTrips, publicListMode, session)}
                 </div>
               ) : (
                 <>
@@ -858,6 +903,24 @@ function selectedTripStats(
     likeCount: selectedTrip?.likeCount ?? 0,
     viewCount: selectedTrip?.viewCount ?? 0
   };
+}
+
+function publicEmptyMessage(
+  isLoadingPublicTrips: boolean,
+  publicListMode: PublicListMode,
+  session: AuthSession | null
+): string {
+  if (isLoadingPublicTrips) {
+    return '공개 여행을 조회 중입니다.';
+  }
+  if (publicListMode === 'liked' && session == null) {
+    return '로그인하면 좋아요한 여행을 볼 수 있습니다.';
+  }
+  if (publicListMode === 'liked') {
+    return '좋아요한 여행이 없습니다.';
+  }
+
+  return '공개된 여행이 없습니다.';
 }
 
 function itineraryForm(
