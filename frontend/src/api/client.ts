@@ -20,6 +20,10 @@ export function storeAccessToken(accessToken: string): void {
   localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, trimmedToken);
 }
 
+export function clearAccessToken(): void {
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   const accessToken = getStoredAccessToken();

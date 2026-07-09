@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { createTrip, generateItinerary, getTrip } from '../api/tripApi';
-import { getStoredAccessToken, storeAccessToken } from '../api/client';
+import { AuthPanel } from '../components/AuthPanel';
+import type { AuthSession } from '../types/auth';
 import type { Itinerary, TripConcept, TripCreateRequest, TripDetail } from '../types/trip';
 
 const conceptOptions: Array<{ value: TripConcept; label: string }> = [
@@ -25,7 +26,7 @@ const initialForm: TripCreateRequest = {
 
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
-  const [accessToken, setAccessToken] = useState(getStoredAccessToken);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -51,11 +52,15 @@ export function TripCreatePage() {
 
   async function handleCreateTrip(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (session == null) {
+      setMessage('로그인 후 여행을 생성할 수 있습니다.');
+      return;
+    }
+
     setMessage('');
     setIsCreating(true);
 
     try {
-      storeAccessToken(accessToken);
       const createdTrip = await createTrip(form);
       const detail = await getTrip(createdTrip.tripId);
       setTrip(detail);
@@ -96,16 +101,18 @@ export function TripCreatePage() {
             <h1>제주 여행 일정 생성</h1>
           </header>
 
-          <form className="trip-form" onSubmit={handleCreateTrip}>
-            <label>
-              Access Token
-              <input
-                value={accessToken}
-                onChange={(event) => setAccessToken(event.target.value)}
-                placeholder="로그인 API로 발급받은 토큰"
-              />
-            </label>
+          <AuthPanel
+            session={session}
+            onLogin={setSession}
+            onLogout={() => {
+              setSession(null);
+              setTrip(null);
+              setItineraries([]);
+            }}
+            onMessage={setMessage}
+          />
 
+          <form className="trip-form" onSubmit={handleCreateTrip}>
             <div className="field-grid">
               <label>
                 여행지
@@ -184,7 +191,7 @@ export function TripCreatePage() {
               />
             </label>
 
-            <button type="submit" disabled={isCreating}>
+            <button type="submit" disabled={session == null || isCreating}>
               {isCreating ? '저장 중' : '여행 생성'}
             </button>
           </form>

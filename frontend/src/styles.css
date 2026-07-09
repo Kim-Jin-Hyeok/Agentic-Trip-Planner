@@ -80,6 +80,57 @@ button:disabled {
   gap: 16px;
 }
 
+.auth-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dde6e1;
+  border-radius: 8px;
+  background: #f7fbf9;
+  margin-bottom: 22px;
+  padding: 16px;
+}
+
+.auth-panel p {
+  color: #6f7d6f;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.auth-panel strong,
+.auth-panel span {
+  display: block;
+}
+
+.auth-panel span {
+  color: #69736f;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tab-button,
+.secondary-button {
+  background: #e9eee9;
+  color: #26332f;
+}
+
+.tab-button.active {
+  background: #1e6f5c;
+  color: #fff;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
