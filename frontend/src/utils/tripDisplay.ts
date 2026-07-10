@@ -41,7 +41,7 @@ export function selectedTripTitle(trip: TripDetail | null, publicTrip: PublicTri
     return '선택된 여행이 없습니다';
   }
 
-  return `${selectedTrip.destination} ${selectedTrip.nights}박 일정`;
+  return selectedTrip.title || `${selectedTrip.destination} 여행`;
 }
 
 export function selectedTripVisibility(trip: TripDetail | null, publicTrip: PublicTripDetail | null): string {

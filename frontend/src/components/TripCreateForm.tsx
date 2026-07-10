@@ -13,6 +13,17 @@ type TripCreateFormProps = {
 export function TripCreateForm({ form, isCreating, disabled, onChange, onSubmit }: TripCreateFormProps) {
   return (
     <form className="trip-form" onSubmit={onSubmit}>
+      <label>
+        여행 제목
+        <input
+          value={form.title}
+          onChange={(event) => onChange('title', event.target.value)}
+          placeholder="예: 부모님과 함께하는 제주 여행"
+          maxLength={100}
+          required
+        />
+      </label>
+
       <div className="field-grid">
         <label>
           여행지

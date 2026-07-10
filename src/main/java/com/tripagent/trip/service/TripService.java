@@ -83,6 +83,7 @@ public class TripService {
         validateCreateRequest(request);
 
         Trip trip = Trip.create(
+                normalizeTripTitle(request.title(), request.destination()),
                 request.destination(),
                 request.startDate(),
                 request.endDate(),
@@ -95,6 +96,17 @@ public class TripService {
         );
 
         return TripResponse.from(tripRepository.save(trip));
+    }
+
+    private String normalizeTripTitle(String title, String destination) {
+        if (title == null || title.isBlank()) {
+            return destination.trim() + " 여행";
+        }
+        String normalizedTitle = title.trim();
+        if (normalizedTitle.length() > 100) {
+            throw new IllegalArgumentException("Trip title must be less than or equal to 100 characters.");
+        }
+        return normalizedTitle;
     }
 
     public List<TripResponse> searchTripsByOwnerId(Long ownerId) {

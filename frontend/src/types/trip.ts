@@ -5,6 +5,7 @@ export type Transportation = 'RENT_CAR';
 export type TripVisibility = 'PRIVATE' | 'PUBLIC';
 
 export type TripCreateRequest = {
+  title: string;
   destination: string;
   startDate: string;
   endDate: string;

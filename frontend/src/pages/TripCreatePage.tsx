@@ -40,6 +40,7 @@ import type {
 import { initialPublicFilters, itineraryForm, type ItineraryEditForm, type PublicListMode, type ViewMode } from '../utils/tripDisplay';
 
 const initialForm: TripCreateRequest = {
+  title: '',
   destination: '제주',
   startDate: '',
   endDate: '',

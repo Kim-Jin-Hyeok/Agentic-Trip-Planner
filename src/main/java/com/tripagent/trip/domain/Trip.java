@@ -32,6 +32,9 @@ public class Trip {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long tripId;
 
+    @Column(length = 100)
+    private String title;
+
     @Column(nullable = false, length = 50)
     private String destination;
 
@@ -78,6 +81,7 @@ public class Trip {
     }
 
     private Trip(
+            String title,
             String destination,
             LocalDate startDate,
             LocalDate endDate,
@@ -88,6 +92,7 @@ public class Trip {
             String lastAccommodationArea,
             Long ownerId
     ) {
+        this.title = title;
         this.destination = destination;
         this.startDate = startDate;
         this.endDate = endDate;
@@ -114,6 +119,7 @@ public class Trip {
             String lastAccommodationArea
     ) {
         return create(
+                destination + " 여행",
                 destination,
                 startDate,
                 endDate,
@@ -137,7 +143,34 @@ public class Trip {
             String lastAccommodationArea,
             Long ownerId
     ) {
+        return create(
+                destination + " 여행",
+                destination,
+                startDate,
+                endDate,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                transportation,
+                lastAccommodationArea,
+                ownerId
+        );
+    }
+
+    public static Trip create(
+            String title,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long ownerId
+    ) {
         return new Trip(
+                title,
                 destination,
                 startDate,
                 endDate,
@@ -152,6 +185,13 @@ public class Trip {
 
     public Long getTripId() {
         return tripId;
+    }
+
+    public String getTitle() {
+        if (title == null || title.isBlank()) {
+            return destination + " 여행";
+        }
+        return title;
     }
 
     public String getDestination() {

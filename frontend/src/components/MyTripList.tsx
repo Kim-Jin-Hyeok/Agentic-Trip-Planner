@@ -47,7 +47,7 @@ export function MyTripList({
               onClick={() => onSelect(myTrip.tripId)}
               disabled={isLoadingDetail}
             >
-              <strong>{myTrip.destination}</strong>
+              <strong>{myTrip.title || `${myTrip.destination} 여행`}</strong>
               <span>
                 {myTrip.startDate} - {myTrip.endDate} · {myTrip.nights}박 · {conceptLabel(myTrip.concept)}
               </span>

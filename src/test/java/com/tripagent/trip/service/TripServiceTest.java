@@ -98,7 +98,29 @@ class TripServiceTest {
         assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
         assertThat(response.likeCount()).isZero();
         assertThat(response.viewCount()).isZero();
+        assertThat(response.title()).isEqualTo("JEJU 여행");
         verify(tripRepository).save(any(Trip.class));
+    }
+
+    @Test
+    void createTripUsesRequestedTitle() {
+        TripCreateRequest request = new TripCreateRequest(
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                null,
+                "부모님과 제주 여행"
+        );
+        when(tripRepository.save(any(Trip.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TripResponse response = tripService.createTrip(request);
+
+        assertThat(response.title()).isEqualTo("부모님과 제주 여행");
     }
 
     @Test

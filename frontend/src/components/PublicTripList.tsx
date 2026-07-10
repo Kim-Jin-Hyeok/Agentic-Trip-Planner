@@ -151,7 +151,7 @@ export function PublicTripList({
                   onClick={() => onSelect(publicTripItem.tripId)}
                   disabled={isLoadingDetail}
                 >
-                  <strong>{publicTripItem.destination}</strong>
+                  <strong>{publicTripItem.title || `${publicTripItem.destination} 여행`}</strong>
                   <span>
                     {publicTripItem.startDate} - {publicTripItem.endDate} · {publicTripItem.nights}박 · {conceptLabel(publicTripItem.concept)}
                   </span>

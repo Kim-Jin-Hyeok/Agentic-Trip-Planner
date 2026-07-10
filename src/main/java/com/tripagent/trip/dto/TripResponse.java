@@ -20,8 +20,28 @@ public record TripResponse(
         String lastAccommodationArea,
         Long likeCount,
         Long viewCount,
-        TripVisibility visibility
+        TripVisibility visibility,
+        String title
 ) {
+
+    public TripResponse(
+            Long tripId,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            Integer nights,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long likeCount,
+            Long viewCount,
+            TripVisibility visibility
+    ) {
+        this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
+                lastAccommodationArea, likeCount, viewCount, visibility, destination + " 여행");
+    }
 
     public TripResponse(
             Long tripId,
@@ -50,7 +70,8 @@ public record TripResponse(
                 lastAccommodationArea,
                 likeCount,
                 0L,
-                visibility
+                visibility,
+                destination + " 여행"
         );
     }
 
@@ -68,7 +89,8 @@ public record TripResponse(
                 trip.getLastAccommodationArea(),
                 trip.getLikeCount(),
                 trip.getViewCount(),
-                trip.getVisibility()
+                trip.getVisibility(),
+                trip.getTitle()
         );
     }
 }

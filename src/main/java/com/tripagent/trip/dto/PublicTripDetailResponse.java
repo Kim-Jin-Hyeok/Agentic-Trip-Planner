@@ -25,8 +25,20 @@ public record PublicTripDetailResponse(
         TripVisibility visibility,
         boolean liked,
         TripAuthorResponse author,
-        List<ItineraryResponse> itineraries
+        List<ItineraryResponse> itineraries,
+        String title
 ) {
+
+    public PublicTripDetailResponse(
+            Long tripId, String destination, LocalDate startDate, LocalDate endDate, Integer nights,
+            LocalTime dailyStartTime, LocalTime dailyEndTime, TripConcept concept, Transportation transportation,
+            String lastAccommodationArea, Long likeCount, Long viewCount, TripVisibility visibility, boolean liked,
+            TripAuthorResponse author, List<ItineraryResponse> itineraries
+    ) {
+        this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
+                lastAccommodationArea, likeCount, viewCount, visibility, liked, author, itineraries,
+                destination + " 여행");
+    }
 
     public static PublicTripDetailResponse from(
             Trip trip,
@@ -50,7 +62,8 @@ public record PublicTripDetailResponse(
                 trip.getVisibility(),
                 liked,
                 author,
-                itineraries
+                itineraries,
+                trip.getTitle()
         );
     }
 }
