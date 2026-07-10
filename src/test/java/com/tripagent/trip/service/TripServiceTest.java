@@ -1288,6 +1288,44 @@ class TripServiceTest {
     }
 
     @Test
+    void updateTripTitleTrimsAndReturnsTitle() {
+        Trip trip = trip(1L);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        TripResponse response = tripService.updateTripTitle(1L, null, "  친구들과 제주 여행  ");
+
+        assertThat(response.title()).isEqualTo("친구들과 제주 여행");
+        assertThat(trip.getTitle()).isEqualTo("친구들과 제주 여행");
+    }
+
+    @Test
+    void updateTripTitleRejectsBlankTitle() {
+        Trip trip = trip(1L);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> tripService.updateTripTitle(1L, null, "   "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip title is required.");
+    }
+
+    @Test
+    void updateTripTitleRejectsDifferentOwner() {
+        Trip trip = trip(
+                1L,
+                "JEJU",
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                100L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> tripService.updateTripTitle(1L, 200L, "새 제목"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip owner does not match. tripId=1");
+    }
+
+    @Test
     void likePublicTripCreatesLikeAndIncreasesCount() {
         Trip trip = trip(1L);
         trip.changeVisibility(TripVisibility.PUBLIC);

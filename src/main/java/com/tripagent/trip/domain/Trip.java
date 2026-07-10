@@ -194,6 +194,17 @@ public class Trip {
         return title;
     }
 
+    public void changeTitle(String title) {
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("Trip title is required.");
+        }
+        String normalizedTitle = title.trim();
+        if (normalizedTitle.length() > 100) {
+            throw new IllegalArgumentException("Trip title must be less than or equal to 100 characters.");
+        }
+        this.title = normalizedTitle;
+    }
+
     public String getDestination() {
         return destination;
     }

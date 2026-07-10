@@ -444,6 +444,15 @@ public class TripService {
     }
 
     @Transactional
+    public TripResponse updateTripTitle(Long tripId, Long ownerId, String title) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        validateTripOwner(trip, ownerId);
+        trip.changeTitle(title);
+        return TripResponse.from(trip);
+    }
+
+    @Transactional
     public TripResponse updateTripVisibility(Long tripId, Long ownerId, TripVisibility visibility) {
         if (visibility == null) {
             throw new IllegalArgumentException("Trip visibility is required.");

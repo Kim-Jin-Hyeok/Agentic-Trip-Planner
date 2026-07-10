@@ -8,6 +8,7 @@ import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
+import com.tripagent.trip.dto.TripTitleUpdateRequest;
 import com.tripagent.trip.dto.TripVisibilityUpdateRequest;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.service.TripService;
@@ -96,6 +97,15 @@ public class TripController {
             @Valid @RequestBody TripVisibilityUpdateRequest request
     ) {
         return ApiResponse.success(tripService.updateTripVisibility(tripId, memberId, request.visibility()));
+    }
+
+    @PatchMapping("/{tripId}/title")
+    public ApiResponse<TripResponse> updateTripTitle(
+            @PathVariable Long tripId,
+            @LoginMemberId Long memberId,
+            @Valid @RequestBody TripTitleUpdateRequest request
+    ) {
+        return ApiResponse.success(tripService.updateTripTitle(tripId, memberId, request.title()));
     }
 
     @PostMapping("/{tripId}/generate")

@@ -167,6 +167,35 @@ class TripControllerTest {
     }
 
     @Test
+    void updateTripTitleReturnsUpdatedTitle() throws Exception {
+        when(tripService.updateTripTitle(1L, 100L, "부모님과 제주 여행")).thenReturn(new TripResponse(
+                1L,
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                2,
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                0L,
+                0L,
+                TripVisibility.PRIVATE,
+                "부모님과 제주 여행"
+        ));
+
+        mockMvc.perform(patch("/api/trips/1/title")
+                        .contentType("application/json")
+                        .content("{\"title\":\"부모님과 제주 여행\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.title").value("부모님과 제주 여행"));
+
+        verify(tripService).updateTripTitle(1L, 100L, "부모님과 제주 여행");
+    }
+
+    @Test
     void deleteTripReturnsNoContent() throws Exception {
         doNothing().when(tripService).deleteTrip(1L, 100L);
 
