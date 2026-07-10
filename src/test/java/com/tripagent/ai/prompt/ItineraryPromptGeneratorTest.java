@@ -11,6 +11,7 @@ import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.route.SimpleRouteCalculationAdapter;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -18,7 +19,9 @@ import org.junit.jupiter.api.Test;
 
 class ItineraryPromptGeneratorTest {
 
-    private final ItineraryPromptGenerator generator = new ItineraryPromptGenerator();
+    private final ItineraryPromptGenerator generator = new ItineraryPromptGenerator(
+            new SimpleRouteCalculationAdapter()
+    );
 
     @Test
     void generateIncludesTripCandidatePlacesAndJsonFormat() {
@@ -56,6 +59,8 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("Even for a CAFE concept, do not schedule only cafes back-to-back; include meals and tour places when possible.");
         assertThat(prompt).contains("Even for a NATURE concept, do not schedule only nature places back-to-back; include FOOD or CAFE places when possible.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.");
+        assertThat(prompt).contains("the next placeId must be included in the current place's recommendedNextPlaceIdsWithin90Minutes.");
+        assertThat(prompt).contains("Never create a same-day route whose calculated travel time exceeds 90 minutes.");
         assertThat(prompt).contains("For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.");
         assertThat(prompt).contains("For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.");
         assertThat(prompt).contains("Write every reason in Korean.");
@@ -76,6 +81,7 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("avgStayMinutes: 60");
         assertThat(prompt).contains("indoorYn: false");
         assertThat(prompt).contains("rainyDayScore: 1");
+        assertThat(prompt).contains("recommendedNextPlaceIdsWithin90Minutes:");
         assertThat(prompt).contains("description: Local food place.");
         assertThat(prompt).contains("\"placeId\"");
         assertThat(prompt).contains("\"dayNo\"");

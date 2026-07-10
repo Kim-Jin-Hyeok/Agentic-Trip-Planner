@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -236,6 +237,11 @@ public class ItineraryGenerateService {
                 logLlmFailure(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces, exception);
                 return generateFallbackDraftItinerariesOrThrow(trip, candidatePlaces, request, operation, exception);
             } catch (IllegalArgumentException exception) {
+                boolean repeatedValidationFailure = lastValidationException != null
+                        && Objects.equals(lastValidationException.getMessage(), exception.getMessage())
+                        && exception.getMessage().startsWith(
+                                "Itinerary travelMinutesFromPrevious must be less than or equal to "
+                        );
                 lastValidationException = exception;
                 logValidationFailure(
                         trip,
@@ -246,6 +252,23 @@ public class ItineraryGenerateService {
                         candidatePlaces,
                         exception
                 );
+                if (repeatedValidationFailure) {
+                    logFinalValidationFailure(
+                            trip,
+                            operation,
+                            attemptNumber,
+                            request,
+                            candidatePlaces,
+                            lastValidationException
+                    );
+                    return generateFallbackDraftItinerariesOrThrow(
+                            trip,
+                            candidatePlaces,
+                            request,
+                            operation,
+                            lastValidationException
+                    );
+                }
             }
         }
 

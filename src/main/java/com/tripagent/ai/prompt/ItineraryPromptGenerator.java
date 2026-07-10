@@ -7,15 +7,26 @@ import com.tripagent.itinerary.policy.PaceItineraryPolicy;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.trip.domain.Trip;
+import com.tripagent.route.RouteCalculationAdapter;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Comparator;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ItineraryPromptGenerator {
+
+    private static final int MAX_TRAVEL_MINUTES_BETWEEN_PLACES = 90;
+    private static final int MAX_RECOMMENDED_NEXT_PLACES = 8;
+
+    private final RouteCalculationAdapter routeCalculationAdapter;
+
+    public ItineraryPromptGenerator(RouteCalculationAdapter routeCalculationAdapter) {
+        this.routeCalculationAdapter = routeCalculationAdapter;
+    }
 
     public String generate(Trip trip, List<PlaceResponse> candidatePlaces) {
         return generate(trip, candidatePlaces, null);
@@ -52,6 +63,8 @@ public class ItineraryPromptGenerator {
         prompt.append("- Even for a NATURE concept, do not schedule only nature places back-to-back; include FOOD or CAFE places when possible.\n");
         prompt.append("- Follow the selected pace when choosing how many places to schedule each day.\n");
         prompt.append("- For each dayNo, the first itinerary item must have orderNo 1 and travelMinutesFromPrevious 0.\n");
+        prompt.append("- For consecutive items on the same day, the next placeId must be included in the current place's recommendedNextPlaceIdsWithin90Minutes.\n");
+        prompt.append("- Never create a same-day route whose calculated travel time exceeds 90 minutes.\n");
         prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");
         prompt.append("- For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.\n");
         prompt.append("- Every itinerary item's startTime and endTime must be inside that dayNo's available time window.\n");
@@ -99,6 +112,9 @@ public class ItineraryPromptGenerator {
             prompt.append("  avgStayMinutes: ").append(place.avgStayMinutes()).append("\n");
             prompt.append("  indoorYn: ").append(place.indoorYn()).append("\n");
             prompt.append("  rainyDayScore: ").append(place.rainyDayScore()).append("\n");
+            prompt.append("  recommendedNextPlaceIdsWithin90Minutes: ")
+                    .append(recommendedNextPlaceIds(place, candidatePlaces))
+                    .append("\n");
             prompt.append("  description: ").append(place.description()).append("\n");
         }
         prompt.append("\n");
@@ -116,6 +132,24 @@ public class ItineraryPromptGenerator {
         prompt.append("]\n");
 
         return prompt.toString();
+    }
+
+    private List<Long> recommendedNextPlaceIds(
+            PlaceResponse currentPlace,
+            List<PlaceResponse> candidatePlaces
+    ) {
+        return candidatePlaces.stream()
+                .filter(place -> !place.placeId().equals(currentPlace.placeId()))
+                .map(place -> new ReachablePlace(
+                        place.placeId(),
+                        routeCalculationAdapter.calculateTravelMinutes(currentPlace, place)
+                ))
+                .filter(place -> place.travelMinutes() <= MAX_TRAVEL_MINUTES_BETWEEN_PLACES)
+                .sorted(Comparator.comparingInt(ReachablePlace::travelMinutes)
+                        .thenComparing(ReachablePlace::placeId))
+                .limit(MAX_RECOMMENDED_NEXT_PLACES)
+                .map(ReachablePlace::placeId)
+                .toList();
     }
 
     private long calculateTripDays(Trip trip) {
@@ -194,6 +228,9 @@ public class ItineraryPromptGenerator {
             LocalTime startTime,
             LocalTime endTime
     ) {
+    }
+
+    private record ReachablePlace(Long placeId, int travelMinutes) {
     }
 
 }

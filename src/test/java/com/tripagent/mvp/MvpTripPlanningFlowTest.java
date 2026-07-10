@@ -110,7 +110,7 @@ class MvpTripPlanningFlowTest {
         itineraryGenerateService = new ItineraryGenerateService(
                 tripRepository,
                 placeService,
-                new ItineraryPromptGenerator(),
+                new ItineraryPromptGenerator(new SimpleRouteCalculationAdapter()),
                 llmClient,
                 new LlmItineraryJsonParser(new ObjectMapper().registerModule(new JavaTimeModule())),
                 new LlmItineraryResponseConverter(),

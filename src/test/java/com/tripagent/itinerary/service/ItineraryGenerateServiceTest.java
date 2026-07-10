@@ -1795,7 +1795,7 @@ class ItineraryGenerateServiceTest {
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
 
         assertThat(responses).hasSize(1);
-        verify(llmClient, times(3)).generate(anyString());
+        verify(llmClient, times(2)).generate(anyString());
         verify(itineraryService).createItinerary(eq(1L), any());
     }
 
