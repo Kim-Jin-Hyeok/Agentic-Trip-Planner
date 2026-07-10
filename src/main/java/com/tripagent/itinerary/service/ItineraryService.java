@@ -196,19 +196,22 @@ public class ItineraryService {
         List<ReorderState> finalStates = buildReorderStates(tripItineraries, reorderItems);
 
         validateFinalReorderStates(trip, finalStates);
+        Map<Long, ReorderState> finalStateByItineraryId = finalStates.stream()
+                .collect(java.util.stream.Collectors.toMap(ReorderState::itineraryId, state -> state));
 
         for (Itinerary itinerary : tripItineraries) {
             ItineraryReorderRequestItem item = reorderItems.get(itinerary.getItineraryId());
             if (item == null) {
                 continue;
             }
+            ReorderState finalState = finalStateByItineraryId.get(itinerary.getItineraryId());
             itinerary.update(
                     itinerary.getPlace(),
-                    item.dayNo(),
-                    item.orderNo(),
-                    itinerary.getStartTime(),
-                    itinerary.getEndTime(),
-                    itinerary.getTravelMinutesFromPrevious(),
+                    finalState.dayNo(),
+                    finalState.orderNo(),
+                    finalState.startTime(),
+                    finalState.endTime(),
+                    finalState.travelMinutesFromPrevious(),
                     itinerary.getReason()
             );
         }
@@ -504,19 +507,28 @@ public class ItineraryService {
             List<Itinerary> tripItineraries,
             Map<Long, ItineraryReorderRequestItem> reorderItems
     ) {
+        Map<String, Itinerary> itineraryByDayAndOrder = tripItineraries.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        itinerary -> itinerary.getDayNo() + ":" + itinerary.getOrderNo(),
+                        itinerary -> itinerary
+                ));
+
         return tripItineraries.stream()
                 .map(itinerary -> {
                     ItineraryReorderRequestItem item = reorderItems.get(itinerary.getItineraryId());
                     Integer dayNo = item == null ? itinerary.getDayNo() : item.dayNo();
                     Integer orderNo = item == null ? itinerary.getOrderNo() : item.orderNo();
+                    Itinerary timeSlot = item == null
+                            ? itinerary
+                            : itineraryByDayAndOrder.getOrDefault(dayNo + ":" + orderNo, itinerary);
 
                     return new ReorderState(
                             itinerary.getItineraryId(),
                             dayNo,
                             orderNo,
-                            itinerary.getStartTime(),
-                            itinerary.getEndTime(),
-                            itinerary.getTravelMinutesFromPrevious()
+                            timeSlot.getStartTime(),
+                            timeSlot.getEndTime(),
+                            timeSlot.getTravelMinutesFromPrevious()
                     );
                 })
                 .toList();

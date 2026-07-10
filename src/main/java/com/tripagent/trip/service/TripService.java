@@ -531,30 +531,12 @@ public class TripService {
                 continue;
             }
 
-            validatePublishableDayOrder(dayNo, dayItineraries);
         }
 
         if (!missingDayNos.isEmpty()) {
             throw new IllegalArgumentException(
                     "Trip itinerary must include every trip day before publishing. missingDayNos=" + missingDayNos
             );
-        }
-    }
-
-    private void validatePublishableDayOrder(Integer dayNo, List<ItineraryResponse> dayItineraries) {
-        for (int index = 0; index < dayItineraries.size(); index++) {
-            int expectedOrderNo = index + 1;
-            Integer actualOrderNo = dayItineraries.get(index).orderNo();
-            if (!Integer.valueOf(expectedOrderNo).equals(actualOrderNo)) {
-                throw new IllegalArgumentException(
-                        "Trip itinerary orderNo must be consecutive from 1 before publishing. dayNo="
-                                + dayNo
-                                + ", expectedOrderNo="
-                                + expectedOrderNo
-                                + ", actualOrderNo="
-                                + actualOrderNo
-                );
-            }
         }
     }
 

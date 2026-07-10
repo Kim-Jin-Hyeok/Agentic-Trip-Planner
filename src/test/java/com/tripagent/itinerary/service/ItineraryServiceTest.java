@@ -552,6 +552,32 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void reorderItinerariesSwapsTimeSlotsWhenOrderIsSwapped() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary second = itinerary(200L, trip, place, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        ItineraryReorderRequest request = reorderRequest(
+                item(100L, 1, 2),
+                item(200L, 1, 1)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(first));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(first, second));
+
+        List<ItineraryResponse> responses = itineraryService.reorderItineraries(1L, request);
+
+        assertThat(responses).extracting(ItineraryResponse::itineraryId)
+                .containsExactly(200L, 100L);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(second.getTravelMinutesFromPrevious()).isZero();
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(10, 30));
+        assertThat(first.getTravelMinutesFromPrevious()).isEqualTo(30);
+    }
+
+    @Test
     void reorderItinerariesRejectsEmptyItems() {
         ItineraryReorderRequest request = reorderRequest();
 

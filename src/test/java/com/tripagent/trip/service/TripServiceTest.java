@@ -1192,7 +1192,7 @@ class TripServiceTest {
     }
 
     @Test
-    void updateTripVisibilityRejectsPublicVisibilityWhenDayOrderDoesNotStartFromOne() {
+    void updateTripVisibilityAllowsPublicVisibilityWhenDayOrderDoesNotStartFromOne() {
         Trip trip = trip(1L);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
@@ -1203,15 +1203,13 @@ class TripServiceTest {
                         itinerary(trip, 30L, 3, 1)
                 ));
 
-        assertThatThrownBy(() -> tripService.updateTripVisibility(1L, TripVisibility.PUBLIC))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Trip itinerary orderNo must be consecutive from 1 before publishing. "
-                        + "dayNo=1, expectedOrderNo=1, actualOrderNo=2");
-        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
+        TripResponse response = tripService.updateTripVisibility(1L, TripVisibility.PUBLIC);
+
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
     }
 
     @Test
-    void updateTripVisibilityRejectsPublicVisibilityWhenDayOrderHasGap() {
+    void updateTripVisibilityAllowsPublicVisibilityWhenDayOrderHasGap() {
         Trip trip = trip(1L);
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
@@ -1223,11 +1221,9 @@ class TripServiceTest {
                         itinerary(trip, 30L, 3, 1)
                 ));
 
-        assertThatThrownBy(() -> tripService.updateTripVisibility(1L, TripVisibility.PUBLIC))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Trip itinerary orderNo must be consecutive from 1 before publishing. "
-                        + "dayNo=1, expectedOrderNo=2, actualOrderNo=3");
-        assertThat(trip.getVisibility()).isEqualTo(TripVisibility.PRIVATE);
+        TripResponse response = tripService.updateTripVisibility(1L, TripVisibility.PUBLIC);
+
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
     }
 
     @Test
