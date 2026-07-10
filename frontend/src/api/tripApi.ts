@@ -38,6 +38,12 @@ export function getTrip(tripId: number): Promise<TripDetail> {
   return apiRequest<TripDetail>(`/api/trips/${tripId}`);
 }
 
+export function deleteTrip(tripId: number): Promise<void> {
+  return apiRequest<void>(`/api/trips/${tripId}`, {
+    method: 'DELETE'
+  });
+}
+
 export function updateTripVisibility(tripId: number, visibility: TripVisibility): Promise<TripResponse> {
   return apiRequest<TripResponse>(`/api/trips/${tripId}/visibility`, {
     method: 'PATCH',

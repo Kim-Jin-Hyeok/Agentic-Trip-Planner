@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   createTrip,
+  deleteTrip,
   deleteItinerary,
   generateItinerary,
   getLikedPublicTrips,
@@ -81,6 +82,7 @@ export function TripCreatePage() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [isUpdatingLike, setIsUpdatingLike] = useState(false);
+  const [isDeletingTrip, setIsDeletingTrip] = useState(false);
   const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
   const [generateOptions, setGenerateOptions] = useState<ItineraryGenerateRequest>(initialGenerateOptions);
   const [candidatePlaces, setCandidatePlaces] = useState<PlaceResponse[]>([]);
@@ -328,6 +330,29 @@ export function TripCreatePage() {
       setMessage(error instanceof Error ? error.message : '공개 상태 변경에 실패했습니다.');
     } finally {
       setIsUpdatingVisibility(false);
+    }
+  }
+
+  async function handleDeleteTrip() {
+    if (trip == null || !window.confirm('이 여행과 모든 일정을 삭제할까요? 삭제한 데이터는 복구할 수 없습니다.')) {
+      return;
+    }
+
+    setIsDeletingTrip(true);
+    setMessage('');
+
+    try {
+      await deleteTrip(trip.tripId);
+      setTrip(null);
+      setItineraries([]);
+      setEditingItems({});
+      setCandidatePlaces([]);
+      await loadTrips();
+      setMessage('여행을 삭제했습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '여행 삭제에 실패했습니다.');
+    } finally {
+      setIsDeletingTrip(false);
     }
   }
 
@@ -586,12 +611,14 @@ export function TripCreatePage() {
           isLoadingCandidatePlaces={isLoadingCandidatePlaces}
           isUpdatingVisibility={isUpdatingVisibility}
           isUpdatingLike={isUpdatingLike}
+          isDeletingTrip={isDeletingTrip}
           generateOptions={generateOptions}
           candidatePlaces={candidatePlaces}
           onGenerate={() => void handleGenerateItinerary()}
           onGenerateOptionsChange={setGenerateOptions}
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
+          onDeleteTrip={() => void handleDeleteTrip()}
           onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
           onUpdateItineraryForm={updateItineraryForm}
           onMoveItinerary={(dayItineraries, index, direction) => void handleMoveItinerary(dayItineraries, index, direction)}

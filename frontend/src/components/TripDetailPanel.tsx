@@ -29,12 +29,14 @@ type TripDetailPanelProps = {
   isLoadingCandidatePlaces: boolean;
   isUpdatingVisibility: boolean;
   isUpdatingLike: boolean;
+  isDeletingTrip: boolean;
   generateOptions: ItineraryGenerateRequest;
   candidatePlaces: PlaceResponse[];
   onGenerate: () => void;
   onGenerateOptionsChange: (options: ItineraryGenerateRequest) => void;
   onLoadCandidatePlaces: () => void;
   onUpdateVisibility: (visibility: TripVisibility) => void;
+  onDeleteTrip: () => void;
   onToggleLike: (trip: PublicTripResponse | PublicTripDetail) => void;
   onUpdateItineraryForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
   onMoveItinerary: (dayItineraries: Itinerary[], index: number, direction: 'up' | 'down') => void;
@@ -54,12 +56,14 @@ export function TripDetailPanel({
   isLoadingCandidatePlaces,
   isUpdatingVisibility,
   isUpdatingLike,
+  isDeletingTrip,
   generateOptions,
   candidatePlaces,
   onGenerate,
   onGenerateOptionsChange,
   onLoadCandidatePlaces,
   onUpdateVisibility,
+  onDeleteTrip,
   onToggleLike,
   onUpdateItineraryForm,
   onMoveItinerary,
@@ -75,6 +79,14 @@ export function TripDetailPanel({
         </div>
         {viewMode === 'mine' && (
           <div className="result-actions">
+            <button
+              type="button"
+              className="danger-button"
+              onClick={onDeleteTrip}
+              disabled={trip == null || isDeletingTrip}
+            >
+              {isDeletingTrip ? '삭제 중...' : '여행 삭제'}
+            </button>
             <button
               type="button"
               className="secondary-button"
