@@ -319,9 +319,12 @@ public class ItineraryGenerateService {
         int maxItemsPerDay = pacePolicy == null ? candidatePlaces.size() : pacePolicy.maxItemsPerDay();
         int targetItemCount = targetFallbackItemCount(tripDays, minItemsPerDay, request, candidatePlaces);
 
-        List<PlaceResponse> selectedPlaces = candidatePlaces.stream()
-                .limit(targetItemCount)
-                .toList();
+        List<PlaceResponse> selectedPlaces = selectFallbackPlacesByRoute(
+                trip,
+                request,
+                candidatePlaces,
+                targetItemCount
+        );
         List<ItineraryCreateRequest> fallbackCreateRequests = new ArrayList<>();
         int selectedPlaceIndex = 0;
 
@@ -349,6 +352,40 @@ public class ItineraryGenerateService {
         validateDraftItineraries(trip, request, fallbackCreateRequests);
 
         return fallbackCreateRequests;
+    }
+
+    private List<PlaceResponse> selectFallbackPlacesByRoute(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            List<PlaceResponse> candidatePlaces,
+            int targetItemCount
+    ) {
+        Set<Long> mustVisitPlaceIds = request == null
+                ? Set.of()
+                : new HashSet<>(request.normalizedMustVisitPlaceIds());
+        List<PlaceResponse> remainingPlaces = new ArrayList<>(candidatePlaces);
+        List<PlaceResponse> selectedPlaces = new ArrayList<>();
+        PlaceResponse currentPlace = null;
+
+        while (selectedPlaces.size() < targetItemCount && !remainingPlaces.isEmpty()) {
+            List<PlaceResponse> selectablePlaces = remainingPlaces;
+            int remainingSelectionCount = targetItemCount - selectedPlaces.size();
+            long remainingMustVisitCount = remainingPlaces.stream()
+                    .filter(place -> mustVisitPlaceIds.contains(place.placeId()))
+                    .count();
+            if (remainingMustVisitCount >= remainingSelectionCount) {
+                selectablePlaces = remainingPlaces.stream()
+                        .filter(place -> mustVisitPlaceIds.contains(place.placeId()))
+                        .toList();
+            }
+
+            PlaceResponse nextPlace = findNextFallbackPlace(trip, currentPlace, selectablePlaces);
+            selectedPlaces.add(nextPlace);
+            remainingPlaces.remove(nextPlace);
+            currentPlace = nextPlace;
+        }
+
+        return selectedPlaces;
     }
 
     private int targetFallbackItemCount(
@@ -548,6 +585,7 @@ public class ItineraryGenerateService {
                 .toList();
         List<ItineraryCreateRequest> requestsWithCalculatedTravelMinutes = new ArrayList<>();
         PlaceResponse previousPlace = null;
+        ItineraryCreateRequest previousRequest = null;
 
         for (ItineraryCreateRequest request : sortedRequests) {
             PlaceResponse currentPlace = candidatePlaceById.get(request.placeId());
@@ -566,16 +604,29 @@ public class ItineraryGenerateService {
                     currentPlace
             );
 
-            requestsWithCalculatedTravelMinutes.add(new ItineraryCreateRequest(
+            LocalTime startTime = request.startTime();
+            LocalTime endTime = request.endTime();
+            if (previousRequest != null && previousRequest.dayNo().equals(request.dayNo())) {
+                LocalTime earliestStartTime = previousRequest.endTime().plusMinutes(travelMinutesFromPrevious);
+                if (!startTime.isBefore(previousRequest.endTime()) && startTime.isBefore(earliestStartTime)) {
+                    long stayMinutes = ChronoUnit.MINUTES.between(startTime, endTime);
+                    startTime = earliestStartTime;
+                    endTime = startTime.plusMinutes(stayMinutes);
+                }
+            }
+
+            ItineraryCreateRequest adjustedRequest = new ItineraryCreateRequest(
                     request.placeId(),
                     request.dayNo(),
                     request.orderNo(),
-                    request.startTime(),
-                    request.endTime(),
+                    startTime,
+                    endTime,
                     travelMinutesFromPrevious,
                     request.reason()
-            ));
+            );
+            requestsWithCalculatedTravelMinutes.add(adjustedRequest);
             previousPlace = currentPlace;
+            previousRequest = adjustedRequest;
         }
 
         return requestsWithCalculatedTravelMinutes;
