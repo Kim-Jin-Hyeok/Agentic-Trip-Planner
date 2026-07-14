@@ -25,7 +25,7 @@ export function MyTripList({
     <section className="trip-list-section">
       <div className="section-title-row">
         <div>
-          <p>My trips</p>
+          <p>MY TRIPS</p>
           <h2>내 여행</h2>
         </div>
         <button type="button" className="secondary-button" onClick={onRefresh} disabled={session == null || isLoadingTrips}>
@@ -47,7 +47,12 @@ export function MyTripList({
               onClick={() => onSelect(myTrip.tripId)}
               disabled={isLoadingDetail}
             >
-              <strong>{myTrip.title || `${myTrip.destination} 여행`}</strong>
+              <div className="trip-list-item-topline">
+                <strong>{myTrip.title || `${myTrip.destination} 여행`}</strong>
+                <span className={myTrip.visibility === 'PUBLIC' ? 'visibility-badge public' : 'visibility-badge'}>
+                  {myTrip.visibility === 'PUBLIC' ? '공개' : '비공개'}
+                </span>
+              </div>
               <span>
                 {myTrip.startDate} - {myTrip.endDate} · {myTrip.nights}박 · {conceptLabel(myTrip.concept)}
               </span>

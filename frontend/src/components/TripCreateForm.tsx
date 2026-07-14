@@ -13,6 +13,16 @@ type TripCreateFormProps = {
 export function TripCreateForm({ form, isCreating, disabled, onChange, onSubmit }: TripCreateFormProps) {
   return (
     <form className="trip-form" onSubmit={onSubmit}>
+      <div className="form-section-heading">
+        <span className="section-icon" aria-hidden="true">+</span>
+        <div>
+          <h3>새 여행 만들기</h3>
+          <p>기본 조건을 입력하면 여행 일정 생성을 준비합니다.</p>
+        </div>
+      </div>
+
+      {disabled && <p className="form-notice">로그인 후 나만의 여행을 만들 수 있습니다.</p>}
+
       <label>
         여행 제목
         <input
@@ -85,8 +95,8 @@ export function TripCreateForm({ form, isCreating, disabled, onChange, onSubmit 
         />
       </label>
 
-      <button type="submit" disabled={disabled || isCreating}>
-        {isCreating ? '저장 중' : '여행 생성'}
+      <button type="submit" className="primary-action" disabled={disabled || isCreating}>
+        {isCreating ? '저장 중...' : '여행 만들기'}
       </button>
     </form>
   );

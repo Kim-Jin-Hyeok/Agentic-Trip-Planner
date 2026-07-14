@@ -8,6 +8,7 @@ import type {
   TripVisibility
 } from '../types/trip';
 import {
+  conceptLabel,
   selectedTripStats,
   selectedTripTitle,
   selectedTripVisibility,
@@ -86,6 +87,8 @@ export function TripDetailPanel({
   onDeleteItinerary,
   onUpdateItinerary
 }: TripDetailPanelProps) {
+  const selectedTrip = trip ?? publicTrip;
+
   return (
     <div className="result-panel">
       <div className="result-header">
@@ -175,6 +178,10 @@ export function TripDetailPanel({
       {(trip != null || publicTrip != null) && (
         <div className="detail-summary">
           <span>{viewMode === 'public' && publicTrip != null ? publicTrip.author.nickname : '내 여행'}</span>
+          <span>{selectedTrip?.startDate} — {selectedTrip?.endDate}</span>
+          <span>{selectedTrip?.nights}박 {Number(selectedTrip?.nights ?? 0) + 1}일</span>
+          {selectedTrip != null && <span>{conceptLabel(selectedTrip.concept)}</span>}
+          <span>렌터카</span>
           <span>{selectedTripVisibility(trip, publicTrip)}</span>
           <span>조회 {selectedTripStats(trip, publicTrip).viewCount}</span>
           <span>좋아요 {selectedTripStats(trip, publicTrip).likeCount}</span>
@@ -194,7 +201,17 @@ export function TripDetailPanel({
       )}
 
       {Object.keys(itinerariesByDay).length === 0 ? (
-        <div className="empty-state">여행을 선택하거나 새 여행을 생성한 뒤 일정 생성 버튼을 눌러 날짜별 일정을 확인하세요.</div>
+        <div className="empty-state">
+          <div className="empty-state-content">
+            <span className="empty-state-mark" aria-hidden="true">⌁</span>
+            <strong>{selectedTrip == null ? '여행을 선택해 주세요' : '아직 생성된 일정이 없습니다'}</strong>
+            <p>
+              {selectedTrip == null
+                ? '왼쪽에서 저장한 여행을 선택하거나 새로운 여행을 만들어 보세요.'
+                : '일정 생성 옵션을 확인한 뒤 일정 생성 버튼을 눌러 주세요.'}
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="day-list">
           {Object.entries(itinerariesByDay).map(([dayNo, dayItineraries]) => (

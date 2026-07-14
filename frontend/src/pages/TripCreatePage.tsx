@@ -603,11 +603,43 @@ export function TripCreatePage() {
 
   return (
     <main className="app-shell">
+      <header className="service-header">
+        <div className="service-header-inner">
+          <div className="brand-lockup" aria-label="TripAgent 홈">
+            <span className="brand-mark">T</span>
+            <div>
+              <strong>TripAgent</strong>
+              <span>제주 여행을 더 쉽게</span>
+            </div>
+          </div>
+          <div className="service-status">
+            <span className="status-dot" aria-hidden="true" />
+            제주 여행 플래너
+          </div>
+        </div>
+      </header>
+
+      <section className="hero-section">
+        <div>
+          <p className="eyebrow">AI TRAVEL PLANNER</p>
+          <h1>취향을 담은 제주 여행,<br />일정은 가볍게 완성하세요.</h1>
+          <p className="hero-description">
+            검증된 장소 데이터를 바탕으로 여행 조건에 맞는 현실적인 일정을 만들어 드립니다.
+          </p>
+        </div>
+        <div className="hero-points" aria-label="서비스 특징">
+          <span><strong>01</strong> 검증된 장소</span>
+          <span><strong>02</strong> 맞춤형 동선</span>
+          <span><strong>03</strong> 자유로운 편집</span>
+        </div>
+      </section>
+
       <section className="workspace">
         <div className="form-panel">
           <header className="page-header">
-            <p>TripAgent MVP</p>
-            <h1>제주 여행 일정 생성</h1>
+            <p>MY TRIP WORKSPACE</p>
+            <h2>여행 플래너</h2>
+            <span>새 여행을 만들거나 저장한 일정을 관리하세요.</span>
           </header>
 
           <AuthPanel
@@ -629,7 +661,8 @@ export function TripCreatePage() {
                 setItineraries(trip?.itineraries ?? []);
               }}
             >
-              내 여행
+              <span>내 여행</span>
+              <small>만들고 관리하기</small>
             </button>
             <button
               type="button"
@@ -641,7 +674,8 @@ export function TripCreatePage() {
                 setPublicPage(0);
               }}
             >
-              공개 여행
+              <span>여행 둘러보기</span>
+              <small>다른 일정 참고하기</small>
             </button>
           </div>
 

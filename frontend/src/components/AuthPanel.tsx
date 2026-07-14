@@ -66,10 +66,11 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
 
   if (session != null) {
     return (
-      <section className="auth-panel">
-        <div>
-          <p>Signed in</p>
-          <strong>{session.nickname}</strong>
+      <section className="auth-panel signed-in-panel">
+        <div className="profile-avatar" aria-hidden="true">{session.nickname.slice(0, 1)}</div>
+        <div className="profile-copy">
+          <p>반가워요</p>
+          <strong>{session.nickname}님</strong>
           <span>{session.email}</span>
         </div>
         <button type="button" className="secondary-button" onClick={handleLogout}>
@@ -81,6 +82,10 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
 
   return (
     <section className="auth-panel">
+      <div className="auth-heading">
+        <strong>계정으로 시작하기</strong>
+        <span>여행을 저장하고 언제든 다시 확인하세요.</span>
+      </div>
       <div className="auth-tabs" role="tablist" aria-label="인증 방식">
         <button
           type="button"
