@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createItinerary,
   createTrip,
+  copyPublicTrip,
   deleteTrip,
   deleteItinerary,
   generateItinerary,
@@ -109,6 +110,7 @@ export function TripCreatePage() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [isUpdatingLike, setIsUpdatingLike] = useState(false);
+  const [isCopyingPublicTrip, setIsCopyingPublicTrip] = useState(false);
   const [isDeletingTrip, setIsDeletingTrip] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
@@ -782,6 +784,36 @@ export function TripCreatePage() {
     }
   }
 
+  async function handleCopyPublicTrip() {
+    if (publicTrip == null) {
+      return;
+    }
+    if (session == null) {
+      setMessage('로그인 후 공개 여행을 내 여행으로 가져올 수 있습니다.');
+      return;
+    }
+
+    setIsCopyingPublicTrip(true);
+    setMessage('');
+
+    try {
+      const copiedTrip = await copyPublicTrip(publicTrip.tripId);
+      setViewMode('mine');
+      setPublicTrip(null);
+      setTrip(copiedTrip);
+      setItineraries(copiedTrip.itineraries);
+      setEditingItems({});
+      setCandidatePlaces([]);
+      setGenerateOptions(createDefaultGenerateOptions(copiedTrip));
+      await loadTrips();
+      setMessage('공개 여행을 내 여행으로 가져왔습니다. 자유롭게 수정해 보세요.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '공개 여행을 내 여행으로 가져오지 못했습니다.');
+    } finally {
+      setIsCopyingPublicTrip(false);
+    }
+  }
+
   function handleApplyPublicFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPublicPage(0);
@@ -1097,6 +1129,7 @@ export function TripCreatePage() {
           isLoadingCandidatePlaces={isLoadingCandidatePlaces}
           isUpdatingVisibility={isUpdatingVisibility}
           isUpdatingLike={isUpdatingLike}
+          isCopyingPublicTrip={isCopyingPublicTrip}
           isDeletingTrip={isDeletingTrip}
           isEditingTitle={isEditingTitle}
           isUpdatingTitle={isUpdatingTitle}
@@ -1131,6 +1164,7 @@ export function TripCreatePage() {
           onCreateItinerary={handleCreateItinerary}
           onDeleteTrip={() => void handleDeleteTrip()}
           onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
+          onCopyPublicTrip={() => void handleCopyPublicTrip()}
           onUpdateItineraryForm={updateItineraryForm}
           onStartItineraryEdit={handleStartItineraryEdit}
           onCancelItineraryEdit={handleCancelItineraryEdit}

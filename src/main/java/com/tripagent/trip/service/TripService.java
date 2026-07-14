@@ -197,6 +197,48 @@ public class TripService {
         return TripDetailResponse.from(trip, itineraries);
     }
 
+    @Transactional
+    public TripDetailResponse copyPublicTrip(Long tripId, Long ownerId) {
+        if (ownerId == null) {
+            throw new IllegalArgumentException("Trip copy ownerId is required.");
+        }
+
+        Trip sourceTrip = findPublicTrip(tripId);
+        Trip copiedTrip = tripRepository.save(Trip.create(
+                createCopiedTripTitle(sourceTrip.getTitle()),
+                sourceTrip.getDestination(),
+                sourceTrip.getStartDate(),
+                sourceTrip.getEndDate(),
+                sourceTrip.getDailyStartTime(),
+                sourceTrip.getDailyEndTime(),
+                sourceTrip.getConcept(),
+                sourceTrip.getTransportation(),
+                sourceTrip.getLastAccommodationArea(),
+                ownerId
+        ));
+
+        List<Itinerary> copiedItineraries = itineraryRepository
+                .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
+                .stream()
+                .map(source -> Itinerary.create(
+                        copiedTrip,
+                        source.getPlace(),
+                        source.getDayNo(),
+                        source.getOrderNo(),
+                        source.getStartTime(),
+                        source.getEndTime(),
+                        source.getTravelMinutesFromPrevious(),
+                        source.getReason()
+                ))
+                .toList();
+        List<ItineraryResponse> copiedItineraryResponses = itineraryRepository.saveAll(copiedItineraries)
+                .stream()
+                .map(ItineraryResponse::from)
+                .toList();
+
+        return TripDetailResponse.from(copiedTrip, copiedItineraryResponses);
+    }
+
     public List<TripResponse> searchPublicTrips(
             String destination,
             TripConcept concept,
@@ -636,6 +678,15 @@ public class TripService {
     private Trip findPublicTrip(Long tripId) {
         return tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
                 .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
+    }
+
+    private String createCopiedTripTitle(String sourceTitle) {
+        String suffix = " 복사본";
+        int maxSourceTitleLength = 100 - suffix.length();
+        String normalizedSourceTitle = sourceTitle.length() > maxSourceTitleLength
+                ? sourceTitle.substring(0, maxSourceTitleLength).stripTrailing()
+                : sourceTitle;
+        return normalizedSourceTitle + suffix;
     }
 
     private void validateLikeUserId(Long userId) {

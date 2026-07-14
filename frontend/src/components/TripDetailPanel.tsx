@@ -38,6 +38,7 @@ type TripDetailPanelProps = {
   isLoadingCandidatePlaces: boolean;
   isUpdatingVisibility: boolean;
   isUpdatingLike: boolean;
+  isCopyingPublicTrip: boolean;
   isDeletingTrip: boolean;
   isEditingTitle: boolean;
   isUpdatingTitle: boolean;
@@ -72,6 +73,7 @@ type TripDetailPanelProps = {
   onCreateItinerary: (event: FormEvent<HTMLFormElement>) => void;
   onDeleteTrip: () => void;
   onToggleLike: (trip: PublicTripResponse | PublicTripDetail) => void;
+  onCopyPublicTrip: () => void;
   onUpdateItineraryForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
   onStartItineraryEdit: (itinerary: Itinerary) => void;
   onCancelItineraryEdit: () => void;
@@ -95,6 +97,7 @@ export function TripDetailPanel({
   isLoadingCandidatePlaces,
   isUpdatingVisibility,
   isUpdatingLike,
+  isCopyingPublicTrip,
   isDeletingTrip,
   isEditingTitle,
   isUpdatingTitle,
@@ -129,6 +132,7 @@ export function TripDetailPanel({
   onCreateItinerary,
   onDeleteTrip,
   onToggleLike,
+  onCopyPublicTrip,
   onUpdateItineraryForm,
   onStartItineraryEdit,
   onCancelItineraryEdit,
@@ -236,9 +240,16 @@ export function TripDetailPanel({
           <div className="result-actions">
             <button
               type="button"
+              onClick={onCopyPublicTrip}
+              disabled={isCopyingPublicTrip}
+            >
+              {isCopyingPublicTrip ? '가져오는 중...' : '내 여행으로 가져오기'}
+            </button>
+            <button
+              type="button"
               className={publicTrip.liked ? 'like-button active' : 'like-button'}
               onClick={() => onToggleLike(publicTrip)}
-              disabled={isUpdatingLike}
+              disabled={isUpdatingLike || isCopyingPublicTrip}
             >
               {publicTrip.liked ? '좋아요 취소' : '좋아요'}
             </button>

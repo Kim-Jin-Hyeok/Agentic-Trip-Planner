@@ -104,6 +104,12 @@ export function getPublicTrip(tripId: number): Promise<PublicTripDetail> {
   return apiRequest<PublicTripDetail>(`/api/public/trips/${tripId}`);
 }
 
+export function copyPublicTrip(tripId: number): Promise<TripDetail> {
+  return apiRequest<TripDetail>(`/api/public/trips/${tripId}/copy`, {
+    method: 'POST'
+  });
+}
+
 export function getLikedPublicTrips(page = 0, size = 20): Promise<PageResponse<PublicTripResponse>> {
   const searchParams = new URLSearchParams({
     page: String(page),

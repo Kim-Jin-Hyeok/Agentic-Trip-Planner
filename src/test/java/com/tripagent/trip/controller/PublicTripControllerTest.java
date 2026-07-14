@@ -27,6 +27,7 @@ import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.TripAuthorResponse;
+import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
@@ -446,6 +447,38 @@ class PublicTripControllerTest {
                 .andExpect(jsonPath("$.data.liked").value(true));
 
         verify(tripService).likePublicTrip(1L, 100L);
+    }
+
+    @Test
+    void copyPublicTripReturnsCreatedPrivateTrip() throws Exception {
+        when(tripService.copyPublicTrip(1L, 100L)).thenReturn(new TripDetailResponse(
+                99L,
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                2,
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                0L,
+                0L,
+                TripVisibility.PRIVATE,
+                List.of(),
+                "부모님과 제주 여행 복사본"
+        ));
+
+        mockMvc.perform(post("/api/public/trips/1/copy"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.tripId").value(99L))
+                .andExpect(jsonPath("$.data.visibility").value("PRIVATE"))
+                .andExpect(jsonPath("$.data.likeCount").value(0L))
+                .andExpect(jsonPath("$.data.viewCount").value(0L))
+                .andExpect(jsonPath("$.data.title").value("부모님과 제주 여행 복사본"));
+
+        verify(tripService).copyPublicTrip(1L, 100L);
     }
 
     @Test

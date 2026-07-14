@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.domain.Itinerary;
+import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.member.domain.Member;
 import com.tripagent.member.repository.MemberRepository;
@@ -1396,6 +1397,65 @@ class TripServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip duration must be 1 night 2 days to 3 nights 4 days.");
         verify(tripRepository, never()).findById(1L);
+    }
+
+    @Test
+    void copyPublicTripCreatesPrivateTripWithCopiedItineraries() {
+        Trip sourceTrip = trip(
+                1L,
+                "JEJU",
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                200L
+        );
+        sourceTrip.changeTitle("부모님과 제주 여행");
+        sourceTrip.changeVisibility(TripVisibility.PUBLIC);
+        List<Itinerary> sourceItineraries = publishableItineraries(sourceTrip);
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.of(sourceTrip));
+        when(tripRepository.save(any(Trip.class))).thenAnswer(invocation -> {
+            Trip copiedTrip = invocation.getArgument(0);
+            setId(copiedTrip, "tripId", 99L);
+            return copiedTrip;
+        });
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(sourceItineraries);
+        when(itineraryRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TripDetailResponse response = tripService.copyPublicTrip(1L, 100L);
+
+        assertThat(response.tripId()).isEqualTo(99L);
+        assertThat(response.title()).isEqualTo("부모님과 제주 여행 복사본");
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
+        assertThat(response.likeCount()).isZero();
+        assertThat(response.viewCount()).isZero();
+        assertThat(response.itineraries()).hasSize(3);
+        assertThat(response.itineraries()).extracting(ItineraryResponse::placeId)
+                .containsExactly(10L, 20L, 30L);
+
+        ArgumentCaptor<Trip> tripCaptor = ArgumentCaptor.forClass(Trip.class);
+        verify(tripRepository).save(tripCaptor.capture());
+        assertThat(tripCaptor.getValue().getOwnerId()).isEqualTo(100L);
+        assertThat(tripCaptor.getValue().getVisibility()).isEqualTo(TripVisibility.PRIVATE);
+    }
+
+    @Test
+    void copyPublicTripRejectsPrivateOrUnknownSource() {
+        when(tripRepository.findByTripIdAndVisibility(1L, TripVisibility.PUBLIC)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tripService.copyPublicTrip(1L, 100L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Public trip not found. tripId=1");
+        verify(tripRepository, never()).save(any());
+        verify(itineraryRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void copyPublicTripRejectsMissingOwnerBeforeLookup() {
+        assertThatThrownBy(() -> tripService.copyPublicTrip(1L, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip copy ownerId is required.");
+        verify(tripRepository, never()).findByTripIdAndVisibility(1L, TripVisibility.PUBLIC);
     }
 
     @Test

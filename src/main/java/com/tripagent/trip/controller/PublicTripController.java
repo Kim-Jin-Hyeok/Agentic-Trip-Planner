@@ -8,9 +8,11 @@ import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
+import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.service.TripService;
 import java.time.LocalDate;
+import org.springframework.http.HttpStatus;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -65,6 +68,15 @@ public class PublicTripController {
             @OptionalLoginMemberId Long memberId
     ) {
         return ApiResponse.success(tripService.getPublicTrip(tripId, memberId));
+    }
+
+    @PostMapping("/{tripId}/copy")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<TripDetailResponse> copyPublicTrip(
+            @PathVariable Long tripId,
+            @LoginMemberId Long memberId
+    ) {
+        return ApiResponse.success(tripService.copyPublicTrip(tripId, memberId));
     }
 
     @GetMapping("/likes")
