@@ -4,6 +4,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doNothing;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -13,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
@@ -37,12 +39,13 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 class TripControllerTest {
 
     private TripService tripService;
+    private ItineraryGenerateService itineraryGenerateService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         tripService = org.mockito.Mockito.mock(TripService.class);
-        ItineraryGenerateService itineraryGenerateService = org.mockito.Mockito.mock(ItineraryGenerateService.class);
+        itineraryGenerateService = org.mockito.Mockito.mock(ItineraryGenerateService.class);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new TripController(tripService, itineraryGenerateService))
                 .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver())
@@ -244,6 +247,22 @@ class TripControllerTest {
                 .andExpect(jsonPath("$.data.visibility").value("PRIVATE"));
 
         verify(tripService).updateTripConditions(1L, 100L, request);
+    }
+
+    @Test
+    void regenerateDayItinerariesReturnsCommonSuccessResponse() throws Exception {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null);
+        when(itineraryGenerateService.regenerateDayItineraries(1L, 2, request, 100L))
+                .thenReturn(List.of());
+
+        mockMvc.perform(post("/api/trips/1/days/2/regenerate")
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray());
+
+        verify(itineraryGenerateService).regenerateDayItineraries(1L, 2, request, 100L);
     }
 
     @Test

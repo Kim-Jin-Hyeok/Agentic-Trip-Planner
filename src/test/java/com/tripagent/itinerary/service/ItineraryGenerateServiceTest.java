@@ -28,11 +28,13 @@ import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceSummaryResponse;
 import com.tripagent.place.dto.PlaceResponse;
+import com.tripagent.place.domain.Place;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.route.SimpleRouteCalculationAdapter;
@@ -1229,6 +1231,87 @@ class ItineraryGenerateServiceTest {
                 1L,
                 request(20L, 2, LocalTime.of(10, 30), LocalTime.of(12, 0), 5)
         );
+    }
+
+    @Test
+    void regenerateDayItinerariesReplacesOnlyTargetDayAndKeepsOtherDays() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        Itinerary dayOneItinerary = itinerary(10L, 1);
+        Itinerary dayTwoItinerary = itinerary(20L, 2);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 60),
+                place(30L, 60)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(List.of(10L, 30L), null);
+        ItineraryGenerateRequest dayRequest = new ItineraryGenerateRequest(
+                List.of(30L),
+                null,
+                null,
+                null,
+                List.of(),
+                null,
+                List.of()
+        );
+        List<PlaceResponse> availableCandidatePlaces = List.of(candidatePlaces.get(2), candidatePlaces.get(1));
+        String prompt = "day prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(30L, 2, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(30L, 2, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryResponse> allResponses = List.of(
+                response(100L, 1L, 10L, 1),
+                response(300L, 1L, 30L, 1)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 2)).thenReturn(List.of(dayTwoItinerary));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(dayOneItinerary, dayTwoItinerary));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, availableCandidatePlaces, dayRequest, 2)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+        when(itineraryService.createItinerary(1L, createRequests.getFirst()))
+                .thenReturn(response(300L, 1L, 30L, 1));
+        when(itineraryService.getItineraries(1L, null)).thenReturn(allResponses);
+
+        List<ItineraryResponse> responses = itineraryGenerateService.regenerateDayItineraries(1L, 2, request, null);
+
+        assertThat(responses).isEqualTo(allResponses);
+        verify(candidatePlaceValidator).validatePlaceIds(availableCandidatePlaces, List.of(30L));
+        verify(itineraryRepository).deleteByTrip_TripIdAndDayNo(1L, 2);
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+        verify(itineraryService).createItinerary(1L, createRequests.getFirst());
+    }
+
+    @Test
+    void regenerateDayItinerariesRejectsDayOutsideTripPeriodBeforeDeletingItinerary() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        assertThatThrownBy(() -> itineraryGenerateService.regenerateDayItineraries(1L, 4, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("dayNo must be within trip period. dayNo=4, maxDayNo=3");
+
+        verify(itineraryRepository, never()).deleteByTrip_TripIdAndDayNo(any(), any());
     }
 
     @Test
@@ -2460,6 +2543,15 @@ class ItineraryGenerateServiceTest {
         );
         setId(trip, "tripId", tripId);
         return trip;
+    }
+
+    private Itinerary itinerary(Long placeId, Integer dayNo) {
+        Itinerary itinerary = org.mockito.Mockito.mock(Itinerary.class);
+        Place place = org.mockito.Mockito.mock(Place.class);
+        org.mockito.Mockito.lenient().when(itinerary.getDayNo()).thenReturn(dayNo);
+        org.mockito.Mockito.lenient().when(itinerary.getPlace()).thenReturn(place);
+        org.mockito.Mockito.lenient().when(place.getPlaceId()).thenReturn(placeId);
+        return itinerary;
     }
 
     private PlaceResponse place(Long placeId, Integer avgStayMinutes) {

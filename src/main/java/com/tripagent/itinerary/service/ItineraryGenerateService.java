@@ -11,6 +11,7 @@ import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.policy.PaceItineraryPolicy;
 import com.tripagent.place.dto.PlaceCategory;
@@ -54,6 +55,7 @@ public class ItineraryGenerateService {
     private static final Set<String> TOUR_CATEGORY_NAMES = Set.of("NATURE", "BEACH", "GARDEN", "MUSEUM");
     private static final String OPERATION_GENERATE = "generate";
     private static final String OPERATION_REGENERATE = "regenerate";
+    private static final String OPERATION_REGENERATE_DAY = "regenerateDay";
     private static final String OPERATION_GENERATE_DRAFT = "generateDraft";
 
     private final TripRepository tripRepository;
@@ -149,6 +151,46 @@ public class ItineraryGenerateService {
         return saveGeneratedItineraries(tripId, request, createRequests);
     }
 
+    @Transactional
+    public List<ItineraryResponse> regenerateDayItineraries(
+            Long tripId,
+            Integer dayNo,
+            ItineraryGenerateRequest request,
+            Long ownerId
+    ) {
+        validateTripId(tripId);
+        validateTripOwner(tripId, ownerId);
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        validateTargetDayNo(trip, dayNo);
+
+        List<Itinerary> dayItineraries = itineraryRepository.findByTrip_TripIdAndDayNo(tripId, dayNo);
+        if (dayItineraries.isEmpty()) {
+            throw new NoSuchElementException(
+                    "Itinerary day not found. tripId=" + tripId + ", dayNo=" + dayNo
+            );
+        }
+
+        Set<Long> unavailablePlaceIds = itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
+                .stream()
+                .filter(itinerary -> !dayNo.equals(itinerary.getDayNo()))
+                .map(itinerary -> itinerary.getPlace().getPlaceId())
+                .collect(Collectors.toSet());
+        ItineraryGenerateRequest dayRequest = requestForDay(request, unavailablePlaceIds, dayNo);
+        List<ItineraryCreateRequest> createRequests = generateDraftItineraries(
+                tripId,
+                dayRequest,
+                OPERATION_REGENERATE_DAY,
+                dayNo,
+                unavailablePlaceIds
+        );
+
+        itineraryRepository.deleteByTrip_TripIdAndDayNo(tripId, dayNo);
+        saveGeneratedItineraries(tripId, dayRequest, createRequests);
+        return itineraryService.getItineraries(tripId, ownerId);
+    }
+
     private List<ItineraryResponse> saveGeneratedItineraries(
             Long tripId,
             ItineraryGenerateRequest request,
@@ -194,21 +236,50 @@ public class ItineraryGenerateService {
             ItineraryGenerateRequest request,
             String operation
     ) {
+        return generateDraftItineraries(tripId, request, operation, null, Set.of());
+    }
+
+    private List<ItineraryCreateRequest> generateDraftItineraries(
+            Long tripId,
+            ItineraryGenerateRequest request,
+            String operation,
+            Integer targetDayNo,
+            Set<Long> unavailablePlaceIds
+    ) {
         validateTripId(tripId);
 
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
-        List<PlaceResponse> candidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
-        validateGenerateRequest(trip, candidatePlaces, request);
-        List<PlaceResponse> selectedCandidatePlaces = selectLlmCandidatePlaces(trip, candidatePlaces, request);
-        validateCandidatePlacesEnoughForTripDays(trip, selectedCandidatePlaces);
-        validateCandidatePlacesEnoughForPace(trip, request, selectedCandidatePlaces);
-        validateMustVisitPlacesFitPace(trip, request);
-        String prompt = request == null
-                ? itineraryPromptGenerator.generate(trip, selectedCandidatePlaces)
-                : itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request);
+        List<PlaceResponse> allCandidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
+        validateGenerateRequest(trip, allCandidatePlaces, request);
+        List<PlaceResponse> availableCandidatePlaces = allCandidatePlaces.stream()
+                .filter(place -> !unavailablePlaceIds.contains(place.placeId()))
+                .toList();
+        List<PlaceResponse> selectedCandidatePlaces = selectLlmCandidatePlaces(
+                trip,
+                availableCandidatePlaces,
+                request
+        );
+        validateCandidatePlacesEnoughForTripDays(trip, selectedCandidatePlaces, targetDayNo);
+        validateCandidatePlacesEnoughForPace(trip, request, selectedCandidatePlaces, targetDayNo);
+        validateMustVisitPlacesFitPace(trip, request, targetDayNo);
+        String prompt;
+        if (targetDayNo != null) {
+            prompt = itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request, targetDayNo);
+        } else if (request == null) {
+            prompt = itineraryPromptGenerator.generate(trip, selectedCandidatePlaces);
+        } else {
+            prompt = itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request);
+        }
 
-        return generateValidatedDraftItineraries(trip, selectedCandidatePlaces, request, prompt, operation);
+        return generateValidatedDraftItineraries(
+                trip,
+                selectedCandidatePlaces,
+                request,
+                prompt,
+                operation,
+                targetDayNo
+        );
     }
 
     private List<ItineraryCreateRequest> generateValidatedDraftItineraries(
@@ -216,7 +287,8 @@ public class ItineraryGenerateService {
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
             String prompt,
-            String operation
+            String operation,
+            Integer targetDayNo
     ) {
         IllegalArgumentException lastValidationException = null;
         int maxAttemptCount = MAX_LLM_VALIDATION_RETRY_COUNT + 1;
@@ -229,13 +301,16 @@ public class ItineraryGenerateService {
                         trip,
                         candidatePlaces,
                         request,
-                        attemptPrompt
+                        attemptPrompt,
+                        targetDayNo
                 );
                 logDraftGenerationSuccess(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces);
                 return createRequests;
             } catch (LlmException exception) {
                 logLlmFailure(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces, exception);
-                return generateFallbackDraftItinerariesOrThrow(trip, candidatePlaces, request, operation, exception);
+                return generateFallbackDraftItinerariesOrThrow(
+                        trip, candidatePlaces, request, operation, exception, targetDayNo
+                );
             } catch (IllegalArgumentException exception) {
                 boolean repeatedValidationFailure = lastValidationException != null
                         && Objects.equals(lastValidationException.getMessage(), exception.getMessage())
@@ -266,7 +341,8 @@ public class ItineraryGenerateService {
                             candidatePlaces,
                             request,
                             operation,
-                            lastValidationException
+                            lastValidationException,
+                            targetDayNo
                     );
                 }
             }
@@ -278,7 +354,8 @@ public class ItineraryGenerateService {
                 candidatePlaces,
                 request,
                 operation,
-                lastValidationException
+                lastValidationException,
+                targetDayNo
         );
     }
 
@@ -300,7 +377,8 @@ public class ItineraryGenerateService {
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
             String operation,
-            RuntimeException originalException
+            RuntimeException originalException,
+            Integer targetDayNo
     ) {
         if (!supportsFallback(operation)) {
             throw originalException;
@@ -310,7 +388,8 @@ public class ItineraryGenerateService {
             List<ItineraryCreateRequest> fallbackCreateRequests = generateFallbackDraftItineraries(
                     trip,
                     candidatePlaces,
-                    request
+                    request,
+                    targetDayNo
             );
             logFallbackDraftGenerationSuccess(trip, operation, request, candidatePlaces, originalException);
             return fallbackCreateRequests;
@@ -328,15 +407,18 @@ public class ItineraryGenerateService {
     }
 
     private boolean supportsFallback(String operation) {
-        return OPERATION_GENERATE.equals(operation) || OPERATION_REGENERATE.equals(operation);
+        return OPERATION_GENERATE.equals(operation)
+                || OPERATION_REGENERATE.equals(operation)
+                || OPERATION_REGENERATE_DAY.equals(operation);
     }
 
     private List<ItineraryCreateRequest> generateFallbackDraftItineraries(
             Trip trip,
             List<PlaceResponse> candidatePlaces,
-            ItineraryGenerateRequest request
+            ItineraryGenerateRequest request,
+            Integer targetDayNo
     ) {
-        int tripDays = Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1);
+        int tripDays = generationDayCount(trip, targetDayNo);
         PaceItineraryPolicy pacePolicy = request == null || request.pace() == null ? null : pacePolicy(request);
         int minItemsPerDay = pacePolicy == null ? 1 : pacePolicy.minItemsPerDay();
         int maxItemsPerDay = pacePolicy == null ? candidatePlaces.size() : pacePolicy.maxItemsPerDay();
@@ -351,9 +433,12 @@ public class ItineraryGenerateService {
         List<ItineraryCreateRequest> fallbackCreateRequests = new ArrayList<>();
         List<PlaceResponse> remainingSelectedPlaces = new ArrayList<>(selectedPlaces);
 
-        for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+        int firstDayNo = targetDayNo == null ? 1 : targetDayNo;
+        int lastDayNo = targetDayNo == null ? tripDays : targetDayNo;
+        for (int dayNo = firstDayNo; dayNo <= lastDayNo; dayNo++) {
+            int generationDayNo = dayNo - firstDayNo + 1;
             int dayItemCount = fallbackDayItemCount(
-                    dayNo,
+                    generationDayNo,
                     tripDays,
                     remainingSelectedPlaces.size(),
                     minItemsPerDay,
@@ -378,7 +463,7 @@ public class ItineraryGenerateService {
                 .toList();
         validateGeneratedPlaceControls(request, selectedPlaceIds);
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
-        validateDraftItineraries(trip, request, fallbackCreateRequests);
+        validateDraftItineraries(trip, request, fallbackCreateRequests, targetDayNo);
 
         return fallbackCreateRequests;
     }
@@ -607,7 +692,8 @@ public class ItineraryGenerateService {
             Trip trip,
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
-            String prompt
+            String prompt,
+            Integer targetDayNo
     ) {
         String rawResponse = llmClient.generate(prompt);
         List<LlmItineraryItemResponse> parsedItems = llmItineraryJsonParser.parse(rawResponse);
@@ -620,7 +706,7 @@ public class ItineraryGenerateService {
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
         validateDayAndOrderPolicies(trip, createRequests);
         createRequests = applyCalculatedTravelMinutes(candidatePlaces, createRequests);
-        validateDraftItineraries(trip, request, createRequests);
+        validateDraftItineraries(trip, request, createRequests, targetDayNo);
 
         return createRequests;
     }
@@ -687,11 +773,12 @@ public class ItineraryGenerateService {
     private void validateDraftItineraries(
             Trip trip,
             ItineraryGenerateRequest request,
-            List<ItineraryCreateRequest> createRequests
+            List<ItineraryCreateRequest> createRequests,
+            Integer targetDayNo
     ) {
         validateDayAndOrderPolicies(trip, createRequests);
-        validateAllTripDaysCovered(trip, createRequests);
-        validatePaceItemsPerDay(trip, request, createRequests);
+        validateGeneratedDays(trip, createRequests, targetDayNo);
+        validatePaceItemsPerDay(trip, request, createRequests, targetDayNo);
         validateNoDuplicatedPlace(createRequests);
         validateFirstTravelMinutes(createRequests);
         validateTravelMinutesBetweenPlaces(createRequests);
@@ -727,7 +814,21 @@ public class ItineraryGenerateService {
         }
     }
 
-    private void validateAllTripDaysCovered(Trip trip, List<ItineraryCreateRequest> createRequests) {
+    private void validateGeneratedDays(
+            Trip trip,
+            List<ItineraryCreateRequest> createRequests,
+            Integer targetDayNo
+    ) {
+        if (targetDayNo != null) {
+            if (createRequests.isEmpty() || createRequests.stream()
+                    .anyMatch(request -> !targetDayNo.equals(request.dayNo()))) {
+                throw new IllegalArgumentException(
+                        "Generated itinerary must contain only target day items. targetDayNo=" + targetDayNo
+                );
+            }
+            return;
+        }
+
         long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
         Set<Integer> includedDayNos = createRequests.stream()
                 .map(ItineraryCreateRequest::dayNo)
@@ -751,7 +852,8 @@ public class ItineraryGenerateService {
     private void validatePaceItemsPerDay(
             Trip trip,
             ItineraryGenerateRequest request,
-            List<ItineraryCreateRequest> createRequests
+            List<ItineraryCreateRequest> createRequests,
+            Integer targetDayNo
     ) {
         if (request == null || request.pace() == null) {
             return;
@@ -762,7 +864,9 @@ public class ItineraryGenerateService {
         Map<Integer, Long> itemCountByDayNo = createRequests.stream()
                 .collect(Collectors.groupingBy(ItineraryCreateRequest::dayNo, Collectors.counting()));
 
-        for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+        int firstDayNo = targetDayNo == null ? 1 : targetDayNo;
+        int lastDayNo = targetDayNo == null ? Math.toIntExact(tripDays) : targetDayNo;
+        for (int dayNo = firstDayNo; dayNo <= lastDayNo; dayNo++) {
             long itemCount = itemCountByDayNo.getOrDefault(dayNo, 0L);
             if (itemCount < pacePolicy.minItemsPerDay() || itemCount > pacePolicy.maxItemsPerDay()) {
                 throw new IllegalArgumentException(
@@ -941,6 +1045,44 @@ public class ItineraryGenerateService {
         if (tripId == null) {
             throw new IllegalArgumentException("Trip id is required.");
         }
+    }
+
+    private void validateTargetDayNo(Trip trip, Integer dayNo) {
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        if (dayNo == null || dayNo < 1 || dayNo > tripDays) {
+            throw new IllegalArgumentException(
+                    "dayNo must be within trip period. dayNo=" + dayNo + ", maxDayNo=" + tripDays
+            );
+        }
+    }
+
+    private ItineraryGenerateRequest requestForDay(
+            ItineraryGenerateRequest request,
+            Set<Long> unavailablePlaceIds,
+            Integer dayNo
+    ) {
+        if (request == null) {
+            return null;
+        }
+
+        List<Long> mustVisitPlaceIds = request.normalizedMustVisitPlaceIds().stream()
+                .filter(placeId -> !unavailablePlaceIds.contains(placeId))
+                .toList();
+        List<ItineraryDayTimeWindowRequest> dayTimeWindows = request.normalizedDayTimeWindows().stream()
+                .filter(dayTimeWindow -> dayTimeWindow != null && dayNo.equals(dayTimeWindow.dayNo()))
+                .toList();
+        List<Integer> rainyDayNos = request.normalizedRainyDayNos().stream()
+                .filter(dayNo::equals)
+                .toList();
+        return new ItineraryGenerateRequest(
+                mustVisitPlaceIds,
+                request.excludedPlaceIds(),
+                request.pace(),
+                request.preferredCategories(),
+                dayTimeWindows,
+                request.rainyDayMode(),
+                rainyDayNos
+        );
     }
 
     private void validateTripOwner(Long tripId, Long ownerId) {
@@ -1377,9 +1519,10 @@ public class ItineraryGenerateService {
 
     private void validateCandidatePlacesEnoughForTripDays(
             Trip trip,
-            List<PlaceResponse> selectedCandidatePlaces
+            List<PlaceResponse> selectedCandidatePlaces,
+            Integer targetDayNo
     ) {
-        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        long tripDays = generationDayCount(trip, targetDayNo);
         int candidateCount = selectedCandidatePlaces.size();
 
         if (candidateCount < tripDays) {
@@ -1395,14 +1538,15 @@ public class ItineraryGenerateService {
     private void validateCandidatePlacesEnoughForPace(
             Trip trip,
             ItineraryGenerateRequest request,
-            List<PlaceResponse> selectedCandidatePlaces
+            List<PlaceResponse> selectedCandidatePlaces,
+            Integer targetDayNo
     ) {
         if (request == null || request.pace() == null) {
             return;
         }
 
         PaceItineraryPolicy pacePolicy = pacePolicy(request);
-        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        long tripDays = generationDayCount(trip, targetDayNo);
         long requiredMinItems = tripDays * pacePolicy.minItemsPerDay();
         int candidateCount = selectedCandidatePlaces.size();
 
@@ -1421,13 +1565,17 @@ public class ItineraryGenerateService {
         }
     }
 
-    private void validateMustVisitPlacesFitPace(Trip trip, ItineraryGenerateRequest request) {
+    private void validateMustVisitPlacesFitPace(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            Integer targetDayNo
+    ) {
         if (request == null || request.pace() == null) {
             return;
         }
 
         PaceItineraryPolicy pacePolicy = pacePolicy(request);
-        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        long tripDays = generationDayCount(trip, targetDayNo);
         long allowedMaxItems = tripDays * pacePolicy.maxItemsPerDay();
         int mustVisitPlaceCount = request.normalizedMustVisitPlaceIds().size();
 
@@ -1451,6 +1599,13 @@ public class ItineraryGenerateService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Pace itinerary policy is not defined. pace=" + request.normalizedPace()
                 ));
+    }
+
+    private int generationDayCount(Trip trip, Integer targetDayNo) {
+        if (targetDayNo != null) {
+            return 1;
+        }
+        return Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1);
     }
 
     private Comparator<PlaceResponse> candidatePlaceComparator(Trip trip, ItineraryGenerateRequest request) {

@@ -29,10 +29,19 @@ public class ItineraryPromptGenerator {
     }
 
     public String generate(Trip trip, List<PlaceResponse> candidatePlaces) {
-        return generate(trip, candidatePlaces, null);
+        return generate(trip, candidatePlaces, null, null);
     }
 
     public String generate(Trip trip, List<PlaceResponse> candidatePlaces, ItineraryGenerateRequest request) {
+        return generate(trip, candidatePlaces, request, null);
+    }
+
+    public String generate(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            ItineraryGenerateRequest request,
+            Integer targetDayNo
+    ) {
         if (trip == null) {
             throw new IllegalArgumentException("Trip is required.");
         }
@@ -69,6 +78,10 @@ public class ItineraryPromptGenerator {
         prompt.append("- For each dayNo, the first itinerary item's startTime must be at or after Trip.dailyStartTime.\n");
         prompt.append("- For each dayNo, the last itinerary item's endTime must be at or before Trip.dailyEndTime.\n");
         prompt.append("- Every itinerary item's startTime and endTime must be inside that dayNo's available time window.\n");
+        if (targetDayNo != null) {
+            prompt.append("- Generate itinerary items only for targetDayNo.\n");
+            prompt.append("- Every returned itinerary item must have dayNo equal to targetDayNo.\n");
+        }
         prompt.append("- Write every reason in Korean.\n");
         prompt.append("- Return JSON only. Do not include markdown or explanation outside JSON.\n\n");
         prompt.append("Trip:\n");
@@ -81,9 +94,13 @@ public class ItineraryPromptGenerator {
         prompt.append("- concept: ").append(trip.getConcept()).append("\n");
         prompt.append("- transportation: ").append(trip.getTransportation()).append("\n");
         prompt.append("- lastAccommodationArea: ").append(trip.getLastAccommodationArea()).append("\n\n");
+        if (targetDayNo != null) {
+            prompt.append("Generation scope:\n");
+            prompt.append("- targetDayNo: ").append(targetDayNo).append("\n\n");
+        }
         prompt.append("Day time windows:\n");
         prompt.append("- Use these final available time windows for each dayNo.\n");
-        for (DayTimeWindow dayTimeWindow : dayTimeWindows(trip, request)) {
+        for (DayTimeWindow dayTimeWindow : dayTimeWindows(trip, request, targetDayNo)) {
             prompt.append("- dayNo: ").append(dayTimeWindow.dayNo())
                     .append(", startTime: ").append(dayTimeWindow.startTime())
                     .append(", endTime: ").append(dayTimeWindow.endTime())
@@ -158,7 +175,11 @@ public class ItineraryPromptGenerator {
         return ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
     }
 
-    private List<DayTimeWindow> dayTimeWindows(Trip trip, ItineraryGenerateRequest request) {
+    private List<DayTimeWindow> dayTimeWindows(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            Integer targetDayNo
+    ) {
         long tripDays = calculateTripDays(trip);
         Map<Integer, ItineraryDayTimeWindowRequest> overrideByDayNo = new HashMap<>();
         if (request != null) {
@@ -171,6 +192,9 @@ public class ItineraryPromptGenerator {
 
         List<DayTimeWindow> dayTimeWindows = new java.util.ArrayList<>();
         for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
+            if (targetDayNo != null && dayNo != targetDayNo) {
+                continue;
+            }
             ItineraryDayTimeWindowRequest override = overrideByDayNo.get(dayNo);
             LocalTime startTime = override == null ? trip.getDailyStartTime() : override.startTime();
             LocalTime endTime = override == null ? trip.getDailyEndTime() : override.endTime();

@@ -1428,6 +1428,30 @@ button.trip-list-item:hover:not(:disabled),
   padding: 0 14px;
 }
 
+.day-section-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.day-regenerate-button {
+  min-height: 34px;
+  border: 1px solid #b9cec2;
+  border-radius: 999px;
+  background: var(--green-50);
+  color: var(--green-800);
+  font-size: 12px;
+  padding: 0 13px;
+}
+
+.day-regenerate-button:hover:not(:disabled) {
+  border-color: var(--green-700);
+  background: var(--green-100);
+  color: var(--green-950);
+}
+
 .day-route-link {
   display: inline-flex;
   align-items: center;
@@ -1738,6 +1762,14 @@ button.trip-list-item:hover:not(:disabled),
   .itinerary-map-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .day-section-header {
+    align-items: flex-start;
+  }
+
+  .day-section-header-actions {
+    justify-content: flex-end;
   }
 
   .rainy-day-suggestion {

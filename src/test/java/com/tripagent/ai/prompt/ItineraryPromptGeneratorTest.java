@@ -186,6 +186,19 @@ class ItineraryPromptGeneratorTest {
     }
 
     @Test
+    void generateForTargetDayIncludesOnlyTargetDayScope() {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.NORMAL);
+
+        String prompt = generator.generate(trip(), candidatePlaces(), request, 2);
+
+        assertThat(prompt).contains("- targetDayNo: 2");
+        assertThat(prompt).contains("Generate itinerary items only for targetDayNo.");
+        assertThat(prompt).contains("- dayNo: 2, startTime: 09:00, endTime: 18:00");
+        assertThat(prompt).doesNotContain("- dayNo: 1, startTime:");
+        assertThat(prompt).doesNotContain("- dayNo: 3, startTime:");
+    }
+
+    @Test
     void generateIncludesDayTimeWindowsWithDefaultsAndOverrides() {
         ItineraryGenerateRequest request = new ItineraryGenerateRequest(
                 null,

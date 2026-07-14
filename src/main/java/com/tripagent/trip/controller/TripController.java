@@ -135,4 +135,16 @@ public class TripController {
     ) {
         return ApiResponse.success(itineraryGenerateService.regenerateItineraries(tripId, request, memberId));
     }
+
+    @PostMapping("/{tripId}/days/{dayNo}/regenerate")
+    public ApiResponse<List<ItineraryResponse>> regenerateDayItineraries(
+            @PathVariable Long tripId,
+            @PathVariable Integer dayNo,
+            @LoginMemberId Long memberId,
+            @Valid @RequestBody(required = false) ItineraryGenerateRequest request
+    ) {
+        return ApiResponse.success(
+                itineraryGenerateService.regenerateDayItineraries(tripId, dayNo, request, memberId)
+        );
+    }
 }

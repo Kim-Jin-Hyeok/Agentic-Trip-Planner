@@ -13,6 +13,8 @@ type ItineraryDaySectionProps = {
   candidatePlaces: PlaceResponse[];
   isLoadingCandidatePlaces: boolean;
   selectedItineraryId: number | null;
+  isRegenerating: boolean;
+  isRegenerateDisabled: boolean;
   onSelectItinerary: (itineraryId: number) => void;
   onUpdateForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
   onStartEdit: (itinerary: Itinerary) => void;
@@ -20,6 +22,7 @@ type ItineraryDaySectionProps = {
   onMove: (dayItineraries: Itinerary[], index: number, direction: 'up' | 'down') => void;
   onDelete: (itineraryId: number) => void;
   onUpdate: (itinerary: Itinerary) => void;
+  onRegenerate: () => void;
 };
 
 export function ItineraryDaySection({
@@ -34,27 +37,42 @@ export function ItineraryDaySection({
   candidatePlaces,
   isLoadingCandidatePlaces,
   selectedItineraryId,
+  isRegenerating,
+  isRegenerateDisabled,
   onSelectItinerary,
   onUpdateForm,
   onStartEdit,
   onCancelEdit,
   onMove,
   onDelete,
-  onUpdate
+  onUpdate,
+  onRegenerate
 }: ItineraryDaySectionProps) {
   return (
     <section className="day-section">
       <div className="day-section-header">
         <h3>Day {dayNo}</h3>
-        <a
-          className="day-route-link"
-          href={createDayRouteUrl(dayItineraries)}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`Day ${dayNo} 전체 동선을 Google 지도에서 보기`}
-        >
-          전체 동선 보기 <span aria-hidden="true">↗</span>
-        </a>
+        <div className="day-section-header-actions">
+          {viewMode === 'mine' && (
+            <button
+              type="button"
+              className="day-regenerate-button"
+              onClick={onRegenerate}
+              disabled={isRegenerateDisabled}
+            >
+              {isRegenerating ? '다시 만드는 중...' : '이 Day만 다시 만들기'}
+            </button>
+          )}
+          <a
+            className="day-route-link"
+            href={createDayRouteUrl(dayItineraries)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Day ${dayNo} 전체 동선을 Google 지도에서 보기`}
+          >
+            전체 동선 보기 <span aria-hidden="true">↗</span>
+          </a>
+        </div>
       </div>
       <ol>
         {dayItineraries.map((itinerary, index) => {

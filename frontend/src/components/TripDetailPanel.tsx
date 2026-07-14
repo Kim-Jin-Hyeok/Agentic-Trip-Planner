@@ -38,6 +38,7 @@ type TripDetailPanelProps = {
   message: string;
   isGenerating: boolean;
   isRegenerating: boolean;
+  regeneratingDayNo: number | null;
   isLoadingCandidatePlaces: boolean;
   tripWeather: TripWeatherForecast | null;
   isLoadingWeather: boolean;
@@ -62,6 +63,7 @@ type TripDetailPanelProps = {
   candidatePlaces: PlaceResponse[];
   onGenerate: () => void;
   onRegenerate: () => void;
+  onRegenerateDay: (dayNo: number) => void;
   onGenerateOptionsChange: (options: ItineraryGenerateRequest) => void;
   onLoadCandidatePlaces: () => void;
   onRefreshWeather: () => void;
@@ -103,6 +105,7 @@ export function TripDetailPanel({
   message,
   isGenerating,
   isRegenerating,
+  regeneratingDayNo,
   isLoadingCandidatePlaces,
   tripWeather,
   isLoadingWeather,
@@ -127,6 +130,7 @@ export function TripDetailPanel({
   candidatePlaces,
   onGenerate,
   onRegenerate,
+  onRegenerateDay,
   onGenerateOptionsChange,
   onLoadCandidatePlaces,
   onRefreshWeather,
@@ -165,6 +169,7 @@ export function TripDetailPanel({
     : mapDayNumbers[0] ?? null;
   const isChangingItinerary = isGenerating
     || isRegenerating
+    || regeneratingDayNo != null
     || isAddingItinerary
     || pendingItineraryId != null
     || editingItineraryId != null;
@@ -411,6 +416,8 @@ export function TripDetailPanel({
               candidatePlaces={candidatePlaces}
               isLoadingCandidatePlaces={isLoadingCandidatePlaces}
               selectedItineraryId={selectedMapItineraryId}
+              isRegenerating={regeneratingDayNo === Number(dayNo)}
+              isRegenerateDisabled={isChangingItinerary}
               onSelectItinerary={(itineraryId) => {
                 setSelectedMapDay(Number(dayNo));
                 setSelectedMapItineraryId(itineraryId);
@@ -421,6 +428,7 @@ export function TripDetailPanel({
               onMove={onMoveItinerary}
               onDelete={onDeleteItinerary}
               onUpdate={onUpdateItinerary}
+              onRegenerate={() => onRegenerateDay(Number(dayNo))}
             />
           ))}
         </div>

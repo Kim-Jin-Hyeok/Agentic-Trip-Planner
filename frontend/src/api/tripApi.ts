@@ -44,6 +44,17 @@ export function regenerateItinerary(tripId: number, request: ItineraryGenerateRe
   });
 }
 
+export function regenerateItineraryDay(
+  tripId: number,
+  dayNo: number,
+  request: ItineraryGenerateRequest
+): Promise<Itinerary[]> {
+  return apiRequest<Itinerary[]>(`/api/trips/${tripId}/days/${dayNo}/regenerate`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
 export function getTrip(tripId: number): Promise<TripDetail> {
   return apiRequest<TripDetail>(`/api/trips/${tripId}`);
 }

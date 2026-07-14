@@ -12,6 +12,7 @@ import {
   getTrip,
   getTrips,
   likePublicTrip,
+  regenerateItineraryDay,
   regenerateItinerary,
   reorderItineraries,
   unlikePublicTrip,
@@ -112,6 +113,7 @@ export function TripCreatePage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regeneratingDayNo, setRegeneratingDayNo] = useState<number | null>(null);
   const [isLoadingCandidatePlaces, setIsLoadingCandidatePlaces] = useState(false);
   const [isLoadingTrips, setIsLoadingTrips] = useState(false);
   const [isLoadingPublicTrips, setIsLoadingPublicTrips] = useState(false);
@@ -487,6 +489,35 @@ export function TripCreatePage() {
       setMessage(error instanceof Error ? error.message : '일정 재생성에 실패했습니다. 기존 일정은 유지됩니다.');
     } finally {
       setIsRegenerating(false);
+    }
+  }
+
+  async function handleRegenerateItineraryDay(dayNo: number) {
+    if (
+      trip == null
+      || regeneratingDayNo != null
+      || !window.confirm(`Day ${dayNo} 일정만 새 일정으로 교체할까요? 다른 날짜의 일정은 유지됩니다.`)
+    ) {
+      return;
+    }
+
+    setMessage('');
+    setRegeneratingDayNo(dayNo);
+
+    try {
+      const regeneratedItineraries = await regenerateItineraryDay(trip.tripId, dayNo, generateOptions);
+      setItineraries(regeneratedItineraries);
+      setTrip({
+        ...trip,
+        itineraries: regeneratedItineraries
+      });
+      setEditingItems({});
+      setMessage(`Day ${dayNo} 일정을 새롭게 만들었습니다.`);
+      setIsItineraryAddOpen(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `Day ${dayNo} 재생성에 실패했습니다. 기존 일정은 유지됩니다.`);
+    } finally {
+      setRegeneratingDayNo(null);
     }
   }
 
@@ -1257,6 +1288,7 @@ export function TripCreatePage() {
           message={message}
           isGenerating={isGenerating}
           isRegenerating={isRegenerating}
+          regeneratingDayNo={regeneratingDayNo}
           isLoadingCandidatePlaces={isLoadingCandidatePlaces}
           tripWeather={tripWeather}
           isLoadingWeather={isLoadingWeather}
@@ -1281,6 +1313,7 @@ export function TripCreatePage() {
           candidatePlaces={candidatePlaces}
           onGenerate={() => void handleGenerateItinerary()}
           onRegenerate={() => void handleRegenerateItinerary()}
+          onRegenerateDay={(dayNo) => void handleRegenerateItineraryDay(dayNo)}
           onGenerateOptionsChange={setGenerateOptions}
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onRefreshWeather={() => trip != null && void loadTripWeather(trip.tripId)}
