@@ -27,6 +27,7 @@ type TripDetailPanelProps = {
   pendingItineraryId: number | null;
   message: string;
   isGenerating: boolean;
+  isRegenerating: boolean;
   isLoadingCandidatePlaces: boolean;
   isUpdatingVisibility: boolean;
   isUpdatingLike: boolean;
@@ -38,6 +39,7 @@ type TripDetailPanelProps = {
   generateOptions: ItineraryGenerateRequest;
   candidatePlaces: PlaceResponse[];
   onGenerate: () => void;
+  onRegenerate: () => void;
   onGenerateOptionsChange: (options: ItineraryGenerateRequest) => void;
   onLoadCandidatePlaces: () => void;
   onUpdateVisibility: (visibility: TripVisibility) => void;
@@ -62,6 +64,7 @@ export function TripDetailPanel({
   pendingItineraryId,
   message,
   isGenerating,
+  isRegenerating,
   isLoadingCandidatePlaces,
   isUpdatingVisibility,
   isUpdatingLike,
@@ -73,6 +76,7 @@ export function TripDetailPanel({
   generateOptions,
   candidatePlaces,
   onGenerate,
+  onRegenerate,
   onGenerateOptionsChange,
   onLoadCandidatePlaces,
   onUpdateVisibility,
@@ -88,6 +92,8 @@ export function TripDetailPanel({
   onUpdateItinerary
 }: TripDetailPanelProps) {
   const selectedTrip = trip ?? publicTrip;
+  const hasItineraries = Object.keys(itinerariesByDay).length > 0;
+  const isChangingItinerary = isGenerating || isRegenerating;
 
   return (
     <div className="result-panel">
@@ -144,7 +150,7 @@ export function TripDetailPanel({
               type="button"
               className="danger-button"
               onClick={onDeleteTrip}
-              disabled={trip == null || isDeletingTrip}
+              disabled={trip == null || isDeletingTrip || isChangingItinerary}
             >
               {isDeletingTrip ? '삭제 중...' : '여행 삭제'}
             </button>
@@ -152,13 +158,24 @@ export function TripDetailPanel({
               type="button"
               className="secondary-button"
               onClick={() => onUpdateVisibility(trip?.visibility === 'PUBLIC' ? 'PRIVATE' : 'PUBLIC')}
-              disabled={trip == null || isUpdatingVisibility}
+              disabled={trip == null || isUpdatingVisibility || isChangingItinerary}
             >
               {trip?.visibility === 'PUBLIC' ? '비공개 전환' : '공개 전환'}
             </button>
-            <button type="button" onClick={onGenerate} disabled={trip == null || isGenerating}>
-              {isGenerating ? '생성 중' : '일정 생성'}
-            </button>
+            {hasItineraries ? (
+              <button
+                type="button"
+                className="regenerate-button"
+                onClick={onRegenerate}
+                disabled={trip == null || isChangingItinerary}
+              >
+                {isRegenerating ? '다시 만드는 중...' : '일정 다시 만들기'}
+              </button>
+            ) : (
+              <button type="button" onClick={onGenerate} disabled={trip == null || isChangingItinerary}>
+                {isGenerating ? '생성 중...' : '일정 생성'}
+              </button>
+            )}
           </div>
         )}
         {viewMode === 'public' && publicTrip != null && (

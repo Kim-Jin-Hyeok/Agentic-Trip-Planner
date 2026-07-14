@@ -35,6 +35,13 @@ export function generateItinerary(tripId: number, request: ItineraryGenerateRequ
   });
 }
 
+export function regenerateItinerary(tripId: number, request: ItineraryGenerateRequest): Promise<Itinerary[]> {
+  return apiRequest<Itinerary[]>(`/api/trips/${tripId}/regenerate`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
 export function getTrip(tripId: number): Promise<TripDetail> {
   return apiRequest<TripDetail>(`/api/trips/${tripId}`);
 }

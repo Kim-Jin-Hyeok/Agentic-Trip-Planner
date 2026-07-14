@@ -958,6 +958,24 @@ button.trip-list-item:hover:not(:disabled),
   color: #96382f;
 }
 
+.regenerate-button {
+  border: 1px solid #d5b28e;
+  background: #fff7ed;
+  color: #92572d;
+}
+
+.regenerate-button:hover:not(:disabled) {
+  border-color: #c58f5e;
+  background: #ffecd7;
+  color: #75401f;
+}
+
+.regenerate-button:disabled {
+  border-color: #d8ddda;
+  background: #e8ece9;
+  color: #84908a;
+}
+
 .edit-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

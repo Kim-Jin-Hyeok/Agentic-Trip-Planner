@@ -10,6 +10,7 @@ import {
   getTrip,
   getTrips,
   likePublicTrip,
+  regenerateItinerary,
   reorderItineraries,
   unlikePublicTrip,
   updateItinerary,
@@ -78,6 +79,7 @@ export function TripCreatePage() {
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [isLoadingCandidatePlaces, setIsLoadingCandidatePlaces] = useState(false);
   const [isLoadingTrips, setIsLoadingTrips] = useState(false);
   const [isLoadingPublicTrips, setIsLoadingPublicTrips] = useState(false);
@@ -307,6 +309,34 @@ export function TripCreatePage() {
       setMessage(error instanceof Error ? error.message : '일정 생성에 실패했습니다.');
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleRegenerateItinerary() {
+    if (
+      trip == null ||
+      itineraries.length === 0 ||
+      !window.confirm('현재 일정을 모두 새 일정으로 교체할까요? 기존 일정은 복구할 수 없습니다.')
+    ) {
+      return;
+    }
+
+    setMessage('');
+    setIsRegenerating(true);
+
+    try {
+      const regeneratedItineraries = await regenerateItinerary(trip.tripId, generateOptions);
+      setItineraries(regeneratedItineraries);
+      setTrip({
+        ...trip,
+        itineraries: regeneratedItineraries
+      });
+      setEditingItems({});
+      setMessage('새로운 일정으로 다시 만들었습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '일정 재생성에 실패했습니다. 기존 일정은 유지됩니다.');
+    } finally {
+      setIsRegenerating(false);
     }
   }
 
@@ -738,6 +768,7 @@ export function TripCreatePage() {
           pendingItineraryId={pendingItineraryId}
           message={message}
           isGenerating={isGenerating}
+          isRegenerating={isRegenerating}
           isLoadingCandidatePlaces={isLoadingCandidatePlaces}
           isUpdatingVisibility={isUpdatingVisibility}
           isUpdatingLike={isUpdatingLike}
@@ -749,6 +780,7 @@ export function TripCreatePage() {
           generateOptions={generateOptions}
           candidatePlaces={candidatePlaces}
           onGenerate={() => void handleGenerateItinerary()}
+          onRegenerate={() => void handleRegenerateItinerary()}
           onGenerateOptionsChange={setGenerateOptions}
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
