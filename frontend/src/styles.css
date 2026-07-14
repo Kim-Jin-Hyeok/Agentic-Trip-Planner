@@ -1034,6 +1034,197 @@ button.trip-list-item:hover:not(:disabled),
   gap: 26px;
 }
 
+.itinerary-map-panel {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 26px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f9fbfa;
+  padding: 18px;
+}
+
+.itinerary-map-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.itinerary-map-heading p,
+.itinerary-map-heading h3 {
+  margin: 0;
+}
+
+.itinerary-map-heading p {
+  color: var(--green-700);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.itinerary-map-heading h3 {
+  margin-top: 4px;
+  color: var(--green-950);
+  font-size: 18px;
+}
+
+.itinerary-map-heading > div > span {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.itinerary-map-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.itinerary-map-tabs button {
+  min-height: 32px;
+  border: 1px solid #cbdad1;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 0 12px;
+}
+
+.itinerary-map-tabs button.active {
+  border-color: var(--green-800);
+  background: var(--green-800);
+  color: #fff;
+}
+
+.itinerary-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(190px, 0.75fr);
+  gap: 14px;
+}
+
+.itinerary-map-canvas,
+.itinerary-map-empty {
+  min-height: 340px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  overflow: hidden;
+  background: #e9f0ec;
+}
+
+.itinerary-map-canvas {
+  z-index: 0;
+}
+
+.itinerary-map-empty {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 24px;
+  text-align: center;
+}
+
+.itinerary-map-stops {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  max-height: 340px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.itinerary-map-stops button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.itinerary-map-stops button:hover:not(:disabled),
+.itinerary-map-stops button.active {
+  border-color: #a9c2b4;
+  background: var(--green-50);
+}
+
+.map-stop-number {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green-950);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.map-stop-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.map-stop-copy strong,
+.map-stop-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-stop-copy strong {
+  font-size: 12px;
+}
+
+.map-stop-copy small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.route-marker-shell {
+  border: 0;
+  background: transparent;
+}
+
+.route-marker {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 10%;
+  background: var(--green-950);
+  box-shadow: 0 4px 12px rgb(18 55 42 / 28%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  transform: rotate(-45deg);
+}
+
+.route-marker.selected {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgb(222 132 67 / 22%), 0 4px 12px rgb(18 55 42 / 28%);
+}
+
+.route-marker-shell .route-marker b {
+  display: block;
+  font: inherit;
+  line-height: 1;
+  transform: rotate(45deg);
+}
+
 .day-section {
   position: relative;
 }
@@ -1108,6 +1299,11 @@ button.trip-list-item:hover:not(:disabled),
 .day-section li:hover {
   border-color: #bccbc1;
   box-shadow: var(--shadow-sm);
+}
+
+.day-section li.map-selected {
+  border-color: var(--green-700);
+  box-shadow: 0 0 0 2px rgb(38 112 85 / 12%);
 }
 
 .itinerary-content {
@@ -1359,6 +1555,29 @@ button.trip-list-item:hover:not(:disabled),
   .day-section li,
   .edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .itinerary-map-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .itinerary-map-tabs {
+    justify-content: flex-start;
+  }
+
+  .itinerary-map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .itinerary-map-canvas,
+  .itinerary-map-empty {
+    min-height: 280px;
+  }
+
+  .itinerary-map-stops {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
   }
 
   .result-header {

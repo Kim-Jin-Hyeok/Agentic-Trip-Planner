@@ -12,6 +12,8 @@ type ItineraryDaySectionProps = {
   tripDays: number;
   candidatePlaces: PlaceResponse[];
   isLoadingCandidatePlaces: boolean;
+  selectedItineraryId: number | null;
+  onSelectItinerary: (itineraryId: number) => void;
   onUpdateForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
   onStartEdit: (itinerary: Itinerary) => void;
   onCancelEdit: () => void;
@@ -31,6 +33,8 @@ export function ItineraryDaySection({
   tripDays,
   candidatePlaces,
   isLoadingCandidatePlaces,
+  selectedItineraryId,
+  onSelectItinerary,
   onUpdateForm,
   onStartEdit,
   onCancelEdit,
@@ -61,7 +65,11 @@ export function ItineraryDaySection({
           const currentPlaceIsCandidate = candidatePlaces.some((place) => place.placeId === itinerary.placeId);
 
           return (
-            <li key={itinerary.itineraryId}>
+            <li
+              key={itinerary.itineraryId}
+              className={selectedItineraryId === itinerary.itineraryId ? 'map-selected' : ''}
+              onClick={() => onSelectItinerary(itinerary.itineraryId)}
+            >
               <div className="time-range">
                 {itinerary.startTime} - {itinerary.endTime}
               </div>

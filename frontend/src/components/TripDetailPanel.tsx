@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import type {
   Itinerary,
   ItineraryCreateRequest,
@@ -21,6 +21,7 @@ import {
 import { ItineraryDaySection } from './ItineraryDaySection';
 import { ItineraryAddForm } from './ItineraryAddForm';
 import { ItineraryGenerateOptions } from './ItineraryGenerateOptions';
+import { ItineraryMapPanel } from './ItineraryMapPanel';
 import { TripConditionEditForm } from './TripConditionEditForm';
 
 type TripDetailPanelProps = {
@@ -146,6 +147,12 @@ export function TripDetailPanel({
 }: TripDetailPanelProps) {
   const selectedTrip = trip ?? publicTrip;
   const hasItineraries = Object.keys(itinerariesByDay).length > 0;
+  const mapDayNumbers = Object.keys(itinerariesByDay).map(Number).sort((left, right) => left - right);
+  const [selectedMapDay, setSelectedMapDay] = useState<number | null>(null);
+  const [selectedMapItineraryId, setSelectedMapItineraryId] = useState<number | null>(null);
+  const effectiveMapDay = selectedMapDay != null && mapDayNumbers.includes(selectedMapDay)
+    ? selectedMapDay
+    : mapDayNumbers[0] ?? null;
   const isChangingItinerary = isGenerating
     || isRegenerating
     || isAddingItinerary
@@ -342,6 +349,19 @@ export function TripDetailPanel({
         </section>
       )}
 
+      {hasItineraries && effectiveMapDay != null && (
+        <ItineraryMapPanel
+          itinerariesByDay={itinerariesByDay}
+          selectedDay={effectiveMapDay}
+          selectedItineraryId={selectedMapItineraryId}
+          onDayChange={(dayNo) => {
+            setSelectedMapDay(dayNo);
+            setSelectedMapItineraryId(null);
+          }}
+          onItinerarySelect={setSelectedMapItineraryId}
+        />
+      )}
+
       {Object.keys(itinerariesByDay).length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-content">
@@ -369,6 +389,11 @@ export function TripDetailPanel({
               tripDays={selectedTrip == null ? 0 : selectedTrip.nights + 1}
               candidatePlaces={candidatePlaces}
               isLoadingCandidatePlaces={isLoadingCandidatePlaces}
+              selectedItineraryId={selectedMapItineraryId}
+              onSelectItinerary={(itineraryId) => {
+                setSelectedMapDay(Number(dayNo));
+                setSelectedMapItineraryId(itineraryId);
+              }}
               onUpdateForm={onUpdateItineraryForm}
               onStartEdit={onStartItineraryEdit}
               onCancelEdit={onCancelItineraryEdit}
