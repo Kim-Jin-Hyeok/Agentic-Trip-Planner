@@ -1,4 +1,4 @@
-import type { Itinerary } from '../types/trip';
+import type { Itinerary, PlaceResponse } from '../types/trip';
 import { itineraryForm, type ItineraryEditForm, type ViewMode } from '../utils/tripDisplay';
 
 type ItineraryDaySectionProps = {
@@ -7,7 +7,14 @@ type ItineraryDaySectionProps = {
   viewMode: ViewMode;
   editingItems: Record<number, ItineraryEditForm>;
   pendingItineraryId: number | null;
+  editingItineraryId: number | null;
+  itineraryEditError: string;
+  tripDays: number;
+  candidatePlaces: PlaceResponse[];
+  isLoadingCandidatePlaces: boolean;
   onUpdateForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
+  onStartEdit: (itinerary: Itinerary) => void;
+  onCancelEdit: () => void;
   onMove: (dayItineraries: Itinerary[], index: number, direction: 'up' | 'down') => void;
   onDelete: (itineraryId: number) => void;
   onUpdate: (itinerary: Itinerary) => void;
@@ -19,7 +26,14 @@ export function ItineraryDaySection({
   viewMode,
   editingItems,
   pendingItineraryId,
+  editingItineraryId,
+  itineraryEditError,
+  tripDays,
+  candidatePlaces,
+  isLoadingCandidatePlaces,
   onUpdateForm,
+  onStartEdit,
+  onCancelEdit,
   onMove,
   onDelete,
   onUpdate
@@ -31,6 +45,9 @@ export function ItineraryDaySection({
         {dayItineraries.map((itinerary, index) => {
           const editForm = itineraryForm(itinerary, editingItems);
           const isPending = pendingItineraryId === itinerary.itineraryId;
+          const isEditing = editingItineraryId === itinerary.itineraryId;
+          const isAnotherItineraryEditing = editingItineraryId != null && !isEditing;
+          const currentPlaceIsCandidate = candidatePlaces.some((place) => place.placeId === itinerary.placeId);
 
           return (
             <li key={itinerary.itineraryId}>
@@ -42,11 +59,21 @@ export function ItineraryDaySection({
                   <strong>{itinerary.place.name}</strong>
                   {viewMode === 'mine' && (
                     <div className="itinerary-actions">
+                      {!isEditing && (
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={() => onStartEdit(itinerary)}
+                          disabled={isPending || isAnotherItineraryEditing}
+                        >
+                          편집
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="icon-button"
                         onClick={() => onMove(dayItineraries, index, 'up')}
-                        disabled={index === 0 || isPending}
+                        disabled={index === 0 || isPending || editingItineraryId != null}
                         aria-label="일정 위로 이동"
                         title="위로 이동"
                       >
@@ -56,13 +83,13 @@ export function ItineraryDaySection({
                         type="button"
                         className="icon-button"
                         onClick={() => onMove(dayItineraries, index, 'down')}
-                        disabled={index === dayItineraries.length - 1 || isPending}
+                        disabled={index === dayItineraries.length - 1 || isPending || editingItineraryId != null}
                         aria-label="일정 아래로 이동"
                         title="아래로 이동"
                       >
                         ↓
                       </button>
-                      <button type="button" className="danger-button" onClick={() => onDelete(itinerary.itineraryId)} disabled={isPending}>
+                      <button type="button" className="danger-button" onClick={() => onDelete(itinerary.itineraryId)} disabled={isPending || editingItineraryId != null}>
                         삭제
                       </button>
                     </div>
@@ -71,8 +98,39 @@ export function ItineraryDaySection({
                 <span>
                   {itinerary.place.region} · {itinerary.place.category}
                 </span>
-                {viewMode === 'mine' ? (
+                {viewMode === 'mine' && isEditing ? (
                   <>
+                    <div className="edit-grid edit-grid-primary">
+                      <label>
+                        장소
+                        <select
+                          value={editForm.placeId}
+                          onChange={(event) => onUpdateForm(itinerary, 'placeId', Number(event.target.value))}
+                          disabled={isPending || isLoadingCandidatePlaces}
+                        >
+                          {!currentPlaceIsCandidate && (
+                            <option value={itinerary.placeId}>{itinerary.place.name} · 현재 장소</option>
+                          )}
+                          {candidatePlaces.map((place) => (
+                            <option key={place.placeId} value={place.placeId}>
+                              {place.name} · {place.region}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        방문일
+                        <select
+                          value={editForm.dayNo}
+                          onChange={(event) => onUpdateForm(itinerary, 'dayNo', Number(event.target.value))}
+                          disabled={isPending}
+                        >
+                          {Array.from({ length: tripDays }, (_, dayIndex) => dayIndex + 1).map((targetDayNo) => (
+                            <option key={targetDayNo} value={targetDayNo}>Day {targetDayNo}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                     <div className="edit-grid">
                       <label>
                         시작
@@ -104,12 +162,21 @@ export function ItineraryDaySection({
                       사유
                       <textarea value={editForm.reason} onChange={(event) => onUpdateForm(itinerary, 'reason', event.target.value)} />
                     </label>
-                    <button type="button" className="secondary-button" onClick={() => onUpdate(itinerary)} disabled={isPending}>
-                      {isPending ? '저장 중' : '수정 저장'}
-                    </button>
+                    {itineraryEditError.length > 0 && <p className="field-error">{itineraryEditError}</p>}
+                    <div className="itinerary-edit-actions">
+                      <button type="button" onClick={() => onUpdate(itinerary)} disabled={isPending || isLoadingCandidatePlaces}>
+                        {isPending ? '저장 중...' : '변경 저장'}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={onCancelEdit} disabled={isPending}>
+                        취소
+                      </button>
+                    </div>
                   </>
                 ) : (
-                  <p>{itinerary.reason}</p>
+                  <div className="itinerary-readonly-detail">
+                    {itinerary.orderNo > 1 && <span>이전 장소에서 {itinerary.travelMinutesFromPrevious}분 이동</span>}
+                    <p>{itinerary.reason}</p>
+                  </div>
                 )}
               </div>
             </li>

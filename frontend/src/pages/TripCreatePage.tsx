@@ -126,6 +126,8 @@ export function TripCreatePage() {
   const [generateOptions, setGenerateOptions] = useState<ItineraryGenerateRequest>(initialGenerateOptions);
   const [candidatePlaces, setCandidatePlaces] = useState<PlaceResponse[]>([]);
   const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
+  const [editingItineraryId, setEditingItineraryId] = useState<number | null>(null);
+  const [itineraryEditError, setItineraryEditError] = useState('');
   const [message, setMessage] = useState('');
   const isTitleUpdateRequestInFlight = useRef(false);
   const isConditionUpdateRequestInFlight = useRef(false);
@@ -166,6 +168,8 @@ export function TripCreatePage() {
     setIsItineraryAddOpen(false);
     setItineraryAddError('');
     setItineraryAddForm(trip == null ? initialItineraryAddForm : createItineraryAddForm(trip, [], 1));
+    setEditingItineraryId(null);
+    setItineraryEditError('');
   }, [trip?.tripId]);
 
   function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
@@ -187,13 +191,33 @@ export function TripCreatePage() {
     key: K,
     value: ItineraryEditForm[K]
   ) {
-    setEditingItems((current) => ({
-      ...current,
-      [itinerary.itineraryId]: {
-        ...itineraryForm(itinerary, current),
-        [key]: value
+    setEditingItems((current) => {
+      const currentForm = itineraryForm(itinerary, current);
+      if (key !== 'dayNo') {
+        return {
+          ...current,
+          [itinerary.itineraryId]: {
+            ...currentForm,
+            [key]: value
+          }
+        };
       }
-    }));
+
+      const targetDayNo = value as number;
+      const targetOrderNo = targetDayNo === itinerary.dayNo
+        ? itinerary.orderNo
+        : nextOrderNo(itineraries, targetDayNo, itinerary.itineraryId);
+      return {
+        ...current,
+        [itinerary.itineraryId]: {
+          ...currentForm,
+          dayNo: targetDayNo,
+          orderNo: targetOrderNo,
+          travelMinutesFromPrevious: targetOrderNo === 1 ? 0 : currentForm.travelMinutesFromPrevious
+        }
+      };
+    });
+    setItineraryEditError('');
   }
 
   async function loadTrips() {
@@ -248,6 +272,8 @@ export function TripCreatePage() {
       setTitleDraft(detail.title);
       setTitleError('');
       setEditingItems({});
+      setEditingItineraryId(null);
+      setItineraryEditError('');
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(detail));
     } catch (error) {
@@ -439,6 +465,9 @@ export function TripCreatePage() {
     setConditionError('');
     setIsItineraryAddOpen(false);
     setItineraryAddError('');
+    setEditingItineraryId(null);
+    setEditingItems({});
+    setItineraryEditError('');
     setIsEditingTitle(true);
   }
 
@@ -514,6 +543,9 @@ export function TripCreatePage() {
     setTitleError('');
     setIsItineraryAddOpen(false);
     setItineraryAddError('');
+    setEditingItineraryId(null);
+    setEditingItems({});
+    setItineraryEditError('');
     setIsEditingConditions(true);
   }
 
@@ -584,6 +616,8 @@ export function TripCreatePage() {
       );
       setItineraries([]);
       setEditingItems({});
+      setEditingItineraryId(null);
+      setItineraryEditError('');
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(updatedDetail));
       setConditionForm(conditionFormFromTrip(updatedDetail));
@@ -613,6 +647,9 @@ export function TripCreatePage() {
     setTitleError('');
     setIsEditingConditions(false);
     setConditionError('');
+    setEditingItineraryId(null);
+    setEditingItems({});
+    setItineraryEditError('');
     setIsItineraryAddOpen(true);
     if (candidatePlaces.length === 0) {
       void handleLoadCandidatePlaces();
@@ -791,18 +828,62 @@ export function TripCreatePage() {
       return;
     }
 
+    const editForm = itineraryForm(itinerary, editingItems);
+    const validationMessage = validateItineraryEditForm(trip, itineraries, candidatePlaces, itinerary, editForm);
+    if (validationMessage != null) {
+      setItineraryEditError(validationMessage);
+      return;
+    }
+
     setPendingItineraryId(itinerary.itineraryId);
+    setItineraryEditError('');
     setMessage('');
 
     try {
-      await updateItinerary(trip.tripId, itinerary.itineraryId, itineraryForm(itinerary, editingItems));
-      await loadTripDetail(trip.tripId);
+      const updatedItinerary = await updateItinerary(trip.tripId, itinerary.itineraryId, editForm);
+      const updatedItineraries = itineraries
+        .map((current) => current.itineraryId === updatedItinerary.itineraryId ? updatedItinerary : current)
+        .sort((left, right) => left.dayNo - right.dayNo || left.orderNo - right.orderNo);
+      setItineraries(updatedItineraries);
+      setTrip({
+        ...trip,
+        itineraries: updatedItineraries
+      });
+      setEditingItineraryId(null);
+      setEditingItems({});
       setMessage('일정이 수정되었습니다.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '일정 수정에 실패했습니다.');
+      setItineraryEditError(error instanceof Error ? error.message : '일정 수정에 실패했습니다.');
     } finally {
       setPendingItineraryId(null);
     }
+  }
+
+  function handleStartItineraryEdit(itinerary: Itinerary) {
+    setEditingItineraryId(itinerary.itineraryId);
+    setEditingItems({
+      [itinerary.itineraryId]: itineraryForm(itinerary, {})
+    });
+    setItineraryEditError('');
+    setIsItineraryAddOpen(false);
+    setItineraryAddError('');
+    setIsEditingTitle(false);
+    setTitleError('');
+    setIsEditingConditions(false);
+    setConditionError('');
+    if (candidatePlaces.length === 0) {
+      void handleLoadCandidatePlaces();
+    }
+  }
+
+  function handleCancelItineraryEdit() {
+    if (pendingItineraryId != null) {
+      return;
+    }
+
+    setEditingItineraryId(null);
+    setEditingItems({});
+    setItineraryEditError('');
   }
 
   async function handleDeleteItinerary(itineraryId: number) {
@@ -816,6 +897,8 @@ export function TripCreatePage() {
     try {
       await deleteItinerary(trip.tripId, itineraryId);
       await loadTripDetail(trip.tripId);
+      setEditingItineraryId(null);
+      setItineraryEditError('');
       setMessage('일정이 삭제되었습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '일정 삭제에 실패했습니다.');
@@ -861,6 +944,8 @@ export function TripCreatePage() {
         itineraries: reordered
       });
       setEditingItems({});
+      setEditingItineraryId(null);
+      setItineraryEditError('');
       setMessage('일정 순서가 변경되었습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '일정 순서 변경에 실패했습니다.');
@@ -1004,6 +1089,8 @@ export function TripCreatePage() {
           itinerariesByDay={itinerariesByDay}
           editingItems={editingItems}
           pendingItineraryId={pendingItineraryId}
+          editingItineraryId={editingItineraryId}
+          itineraryEditError={itineraryEditError}
           message={message}
           isGenerating={isGenerating}
           isRegenerating={isRegenerating}
@@ -1045,6 +1132,8 @@ export function TripCreatePage() {
           onDeleteTrip={() => void handleDeleteTrip()}
           onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
           onUpdateItineraryForm={updateItineraryForm}
+          onStartItineraryEdit={handleStartItineraryEdit}
+          onCancelItineraryEdit={handleCancelItineraryEdit}
           onMoveItinerary={(dayItineraries, index, direction) => void handleMoveItinerary(dayItineraries, index, direction)}
           onDeleteItinerary={(itineraryId) => void handleDeleteItinerary(itineraryId)}
           onUpdateItinerary={(itinerary) => void handleUpdateItinerary(itinerary)}
@@ -1164,6 +1253,52 @@ function validateItineraryAddForm(
     itinerary.dayNo === form.dayNo
     && form.startTime < itinerary.endTime
     && itinerary.startTime < form.endTime
+  );
+  if (overlaps) {
+    return '선택한 시간이 기존 일정과 겹칩니다.';
+  }
+
+  return null;
+}
+
+function nextOrderNo(itineraries: Itinerary[], dayNo: number, excludedItineraryId: number): number {
+  return itineraries
+    .filter((itinerary) => itinerary.dayNo === dayNo && itinerary.itineraryId !== excludedItineraryId)
+    .reduce((maxOrderNo, itinerary) => Math.max(maxOrderNo, itinerary.orderNo), 0) + 1;
+}
+
+function validateItineraryEditForm(
+  trip: TripDetail,
+  itineraries: Itinerary[],
+  candidatePlaces: PlaceResponse[],
+  itinerary: Itinerary,
+  form: ItineraryEditForm
+): string | null {
+  const keepsCurrentPlace = form.placeId === itinerary.placeId;
+  if (!keepsCurrentPlace && !candidatePlaces.some((place) => place.placeId === form.placeId)) {
+    return 'DB 후보 장소 중에서 변경할 장소를 선택해 주세요.';
+  }
+  if (form.dayNo < 1 || form.dayNo > trip.nights + 1) {
+    return '여행 기간 안에서 방문일을 선택해 주세요.';
+  }
+  if (form.startTime >= form.endTime) {
+    return '시작 시간은 종료 시간보다 빨라야 합니다.';
+  }
+  if (form.startTime < trip.dailyStartTime || form.endTime > trip.dailyEndTime) {
+    return `일정 시간은 ${trip.dailyStartTime}부터 ${trip.dailyEndTime} 사이여야 합니다.`;
+  }
+  if (form.travelMinutesFromPrevious < 0) {
+    return '이동시간은 0분 이상이어야 합니다.';
+  }
+  if (form.orderNo === 1 && form.travelMinutesFromPrevious !== 0) {
+    return '하루의 첫 일정은 이전 장소 이동시간이 0분이어야 합니다.';
+  }
+
+  const overlaps = itineraries.some((current) =>
+    current.itineraryId !== itinerary.itineraryId
+    && current.dayNo === form.dayNo
+    && form.startTime < current.endTime
+    && current.startTime < form.endTime
   );
   if (overlaps) {
     return '선택한 시간이 기존 일정과 겹칩니다.';

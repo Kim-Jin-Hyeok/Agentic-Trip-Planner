@@ -104,6 +104,9 @@ export type ItineraryCreateRequest = {
 };
 
 export type ItineraryUpdateRequest = {
+  placeId: number;
+  dayNo: number;
+  orderNo: number;
   startTime: string;
   endTime: string;
   travelMinutesFromPrevious: number;

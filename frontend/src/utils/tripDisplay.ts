@@ -84,6 +84,9 @@ export function itineraryForm(
 ): ItineraryEditForm {
   return (
     editingItems[itinerary.itineraryId] ?? {
+      placeId: itinerary.placeId,
+      dayNo: itinerary.dayNo,
+      orderNo: itinerary.orderNo,
       startTime: itinerary.startTime,
       endTime: itinerary.endTime,
       travelMinutesFromPrevious: itinerary.travelMinutesFromPrevious,

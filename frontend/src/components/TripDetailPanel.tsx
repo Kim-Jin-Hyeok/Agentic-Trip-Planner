@@ -30,6 +30,8 @@ type TripDetailPanelProps = {
   itinerariesByDay: Record<number, Itinerary[]>;
   editingItems: Record<number, ItineraryEditForm>;
   pendingItineraryId: number | null;
+  editingItineraryId: number | null;
+  itineraryEditError: string;
   message: string;
   isGenerating: boolean;
   isRegenerating: boolean;
@@ -71,6 +73,8 @@ type TripDetailPanelProps = {
   onDeleteTrip: () => void;
   onToggleLike: (trip: PublicTripResponse | PublicTripDetail) => void;
   onUpdateItineraryForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
+  onStartItineraryEdit: (itinerary: Itinerary) => void;
+  onCancelItineraryEdit: () => void;
   onMoveItinerary: (dayItineraries: Itinerary[], index: number, direction: 'up' | 'down') => void;
   onDeleteItinerary: (itineraryId: number) => void;
   onUpdateItinerary: (itinerary: Itinerary) => void;
@@ -83,6 +87,8 @@ export function TripDetailPanel({
   itinerariesByDay,
   editingItems,
   pendingItineraryId,
+  editingItineraryId,
+  itineraryEditError,
   message,
   isGenerating,
   isRegenerating,
@@ -124,13 +130,19 @@ export function TripDetailPanel({
   onDeleteTrip,
   onToggleLike,
   onUpdateItineraryForm,
+  onStartItineraryEdit,
+  onCancelItineraryEdit,
   onMoveItinerary,
   onDeleteItinerary,
   onUpdateItinerary
 }: TripDetailPanelProps) {
   const selectedTrip = trip ?? publicTrip;
   const hasItineraries = Object.keys(itinerariesByDay).length > 0;
-  const isChangingItinerary = isGenerating || isRegenerating || isAddingItinerary;
+  const isChangingItinerary = isGenerating
+    || isRegenerating
+    || isAddingItinerary
+    || pendingItineraryId != null
+    || editingItineraryId != null;
 
   return (
     <div className="result-panel">
@@ -329,7 +341,14 @@ export function TripDetailPanel({
               viewMode={viewMode}
               editingItems={editingItems}
               pendingItineraryId={pendingItineraryId}
+              editingItineraryId={editingItineraryId}
+              itineraryEditError={itineraryEditError}
+              tripDays={selectedTrip == null ? 0 : selectedTrip.nights + 1}
+              candidatePlaces={candidatePlaces}
+              isLoadingCandidatePlaces={isLoadingCandidatePlaces}
               onUpdateForm={onUpdateItineraryForm}
+              onStartEdit={onStartItineraryEdit}
+              onCancelEdit={onCancelItineraryEdit}
               onMove={onMoveItinerary}
               onDelete={onDeleteItinerary}
               onUpdate={onUpdateItinerary}
