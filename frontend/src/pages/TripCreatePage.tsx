@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createTrip,
   deleteTrip,
@@ -13,6 +13,7 @@ import {
   reorderItineraries,
   unlikePublicTrip,
   updateItinerary,
+  updateTripTitle,
   updateTripVisibility
 } from '../api/tripApi';
 import { getStoredAuthSession } from '../api/authStorage';
@@ -84,11 +85,16 @@ export function TripCreatePage() {
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [isUpdatingLike, setIsUpdatingLike] = useState(false);
   const [isDeletingTrip, setIsDeletingTrip] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [titleError, setTitleError] = useState('');
   const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
   const [generateOptions, setGenerateOptions] = useState<ItineraryGenerateRequest>(initialGenerateOptions);
   const [candidatePlaces, setCandidatePlaces] = useState<PlaceResponse[]>([]);
   const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
+  const isTitleUpdateRequestInFlight = useRef(false);
 
   const itinerariesByDay = useMemo(() => {
     return itineraries.reduce<Record<number, Itinerary[]>>((days, itinerary) => {
@@ -194,6 +200,9 @@ export function TripCreatePage() {
       setTrip(detail);
       setPublicTrip(null);
       setItineraries(detail.itineraries);
+      setIsEditingTitle(false);
+      setTitleDraft(detail.title);
+      setTitleError('');
       setEditingItems({});
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(detail));
@@ -213,6 +222,9 @@ export function TripCreatePage() {
       setPublicTrip(detail);
       setTrip(null);
       setItineraries(detail.itineraries);
+      setIsEditingTitle(false);
+      setTitleDraft('');
+      setTitleError('');
       setEditingItems({});
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '공개 여행 상세 조회에 실패했습니다.');
@@ -226,6 +238,9 @@ export function TripCreatePage() {
     setTrip(null);
     setPublicTrip(null);
     setItineraries([]);
+    setIsEditingTitle(false);
+    setTitleDraft('');
+    setTitleError('');
     await loadTrips();
   }
 
@@ -235,6 +250,9 @@ export function TripCreatePage() {
     setTrip(null);
     setPublicTrip(null);
     setItineraries([]);
+    setIsEditingTitle(false);
+    setTitleDraft('');
+    setTitleError('');
   }
 
   async function handleCreateTrip(event: FormEvent<HTMLFormElement>) {
@@ -253,6 +271,9 @@ export function TripCreatePage() {
       setTrip(detail);
       setPublicTrip(null);
       setItineraries(detail.itineraries);
+      setIsEditingTitle(false);
+      setTitleDraft(detail.title);
+      setTitleError('');
       setEditingItems({});
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(detail));
@@ -334,6 +355,77 @@ export function TripCreatePage() {
     }
   }
 
+  function handleStartTitleEdit() {
+    if (trip == null) {
+      return;
+    }
+
+    setTitleDraft(trip.title);
+    setTitleError('');
+    setIsEditingTitle(true);
+  }
+
+  function handleCancelTitleEdit() {
+    if (isTitleUpdateRequestInFlight.current) {
+      return;
+    }
+
+    setTitleDraft(trip?.title ?? '');
+    setTitleError('');
+    setIsEditingTitle(false);
+  }
+
+  function handleTitleDraftChange(title: string) {
+    setTitleDraft(title);
+    setTitleError('');
+  }
+
+  async function handleUpdateTitle() {
+    if (trip == null || isTitleUpdateRequestInFlight.current) {
+      return;
+    }
+
+    const normalizedTitle = titleDraft.trim();
+    if (normalizedTitle.length === 0) {
+      setTitleError('여행 제목을 입력해 주세요.');
+      return;
+    }
+    if (titleDraft.length > 100) {
+      setTitleError('여행 제목은 100자 이하로 입력해 주세요.');
+      return;
+    }
+
+    isTitleUpdateRequestInFlight.current = true;
+    setIsUpdatingTitle(true);
+    setTitleError('');
+    setMessage('');
+
+    try {
+      const updatedTrip = await updateTripTitle(trip.tripId, { title: normalizedTitle });
+      setTrip((currentTrip) =>
+        currentTrip?.tripId === updatedTrip.tripId
+          ? {
+              ...currentTrip,
+              ...updatedTrip
+            }
+          : currentTrip
+      );
+      setTrips((currentTrips) =>
+        currentTrips.map((currentTrip) =>
+          currentTrip.tripId === updatedTrip.tripId ? updatedTrip : currentTrip
+        )
+      );
+      setTitleDraft(updatedTrip.title);
+      setIsEditingTitle(false);
+      setMessage('여행 제목이 수정되었습니다.');
+    } catch (error) {
+      setTitleError(error instanceof Error ? error.message : '여행 제목 수정에 실패했습니다.');
+    } finally {
+      isTitleUpdateRequestInFlight.current = false;
+      setIsUpdatingTitle(false);
+    }
+  }
+
   async function handleDeleteTrip() {
     if (trip == null || !window.confirm('이 여행과 모든 일정을 삭제할까요? 삭제한 데이터는 복구할 수 없습니다.')) {
       return;
@@ -346,6 +438,9 @@ export function TripCreatePage() {
       await deleteTrip(trip.tripId);
       setTrip(null);
       setItineraries([]);
+      setIsEditingTitle(false);
+      setTitleDraft('');
+      setTitleError('');
       setEditingItems({});
       setCandidatePlaces([]);
       await loadTrips();
@@ -613,12 +708,20 @@ export function TripCreatePage() {
           isUpdatingVisibility={isUpdatingVisibility}
           isUpdatingLike={isUpdatingLike}
           isDeletingTrip={isDeletingTrip}
+          isEditingTitle={isEditingTitle}
+          isUpdatingTitle={isUpdatingTitle}
+          titleDraft={titleDraft}
+          titleError={titleError}
           generateOptions={generateOptions}
           candidatePlaces={candidatePlaces}
           onGenerate={() => void handleGenerateItinerary()}
           onGenerateOptionsChange={setGenerateOptions}
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
+          onStartTitleEdit={handleStartTitleEdit}
+          onTitleDraftChange={handleTitleDraftChange}
+          onCancelTitleEdit={handleCancelTitleEdit}
+          onUpdateTitle={() => void handleUpdateTitle()}
           onDeleteTrip={() => void handleDeleteTrip()}
           onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
           onUpdateItineraryForm={updateItineraryForm}

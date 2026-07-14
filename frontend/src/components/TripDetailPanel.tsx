@@ -30,12 +30,20 @@ type TripDetailPanelProps = {
   isUpdatingVisibility: boolean;
   isUpdatingLike: boolean;
   isDeletingTrip: boolean;
+  isEditingTitle: boolean;
+  isUpdatingTitle: boolean;
+  titleDraft: string;
+  titleError: string;
   generateOptions: ItineraryGenerateRequest;
   candidatePlaces: PlaceResponse[];
   onGenerate: () => void;
   onGenerateOptionsChange: (options: ItineraryGenerateRequest) => void;
   onLoadCandidatePlaces: () => void;
   onUpdateVisibility: (visibility: TripVisibility) => void;
+  onStartTitleEdit: () => void;
+  onTitleDraftChange: (title: string) => void;
+  onCancelTitleEdit: () => void;
+  onUpdateTitle: () => void;
   onDeleteTrip: () => void;
   onToggleLike: (trip: PublicTripResponse | PublicTripDetail) => void;
   onUpdateItineraryForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
@@ -57,12 +65,20 @@ export function TripDetailPanel({
   isUpdatingVisibility,
   isUpdatingLike,
   isDeletingTrip,
+  isEditingTitle,
+  isUpdatingTitle,
+  titleDraft,
+  titleError,
   generateOptions,
   candidatePlaces,
   onGenerate,
   onGenerateOptionsChange,
   onLoadCandidatePlaces,
   onUpdateVisibility,
+  onStartTitleEdit,
+  onTitleDraftChange,
+  onCancelTitleEdit,
+  onUpdateTitle,
   onDeleteTrip,
   onToggleLike,
   onUpdateItineraryForm,
@@ -73,9 +89,51 @@ export function TripDetailPanel({
   return (
     <div className="result-panel">
       <div className="result-header">
-        <div>
+        <div className="result-title-area">
           <p>Trip detail</p>
-          <h2>{selectedTripTitle(trip, publicTrip)}</h2>
+          {viewMode === 'mine' && trip != null && isEditingTitle ? (
+            <form
+              className="trip-title-edit-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onUpdateTitle();
+              }}
+            >
+              <input
+                type="text"
+                value={titleDraft}
+                maxLength={100}
+                aria-label="여행 제목"
+                aria-invalid={titleError.length > 0}
+                onChange={(event) => onTitleDraftChange(event.target.value)}
+                disabled={isUpdatingTitle}
+                autoFocus
+              />
+              <div className="trip-title-edit-actions">
+                <button type="submit" disabled={isUpdatingTitle}>
+                  {isUpdatingTitle ? '저장 중' : '저장'}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={onCancelTitleEdit}
+                  disabled={isUpdatingTitle}
+                >
+                  취소
+                </button>
+              </div>
+              {titleError.length > 0 && <p className="field-error">{titleError}</p>}
+            </form>
+          ) : (
+            <div className="trip-title-row">
+              <h2>{selectedTripTitle(trip, publicTrip)}</h2>
+              {viewMode === 'mine' && trip != null && (
+                <button type="button" className="secondary-button" onClick={onStartTitleEdit}>
+                  제목 수정
+                </button>
+              )}
+            </div>
+          )}
         </div>
         {viewMode === 'mine' && (
           <div className="result-actions">

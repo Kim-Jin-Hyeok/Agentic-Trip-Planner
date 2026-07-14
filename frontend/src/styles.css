@@ -324,6 +324,36 @@ textarea {
   margin-bottom: 18px;
 }
 
+.result-title-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.trip-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.trip-title-edit-form {
+  display: grid;
+  gap: 8px;
+  max-width: 560px;
+}
+
+.trip-title-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.field-error {
+  color: #b42318;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
 .result-actions {
   display: flex;
   flex-wrap: wrap;

@@ -16,6 +16,10 @@ export type TripCreateRequest = {
   lastAccommodationArea: string;
 };
 
+export type TripTitleUpdateRequest = {
+  title: string;
+};
+
 export type TripResponse = TripCreateRequest & {
   tripId: number;
   nights: number;

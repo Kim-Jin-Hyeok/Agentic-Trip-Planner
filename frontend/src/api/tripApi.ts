@@ -13,6 +13,7 @@ import type {
   TripCreateRequest,
   TripDetail,
   TripResponse,
+  TripTitleUpdateRequest,
   TripVisibility
 } from '../types/trip';
 
@@ -48,6 +49,13 @@ export function updateTripVisibility(tripId: number, visibility: TripVisibility)
   return apiRequest<TripResponse>(`/api/trips/${tripId}/visibility`, {
     method: 'PATCH',
     body: JSON.stringify({ visibility })
+  });
+}
+
+export function updateTripTitle(tripId: number, request: TripTitleUpdateRequest): Promise<TripResponse> {
+  return apiRequest<TripResponse>(`/api/trips/${tripId}/title`, {
+    method: 'PATCH',
+    body: JSON.stringify(request)
   });
 }
 
