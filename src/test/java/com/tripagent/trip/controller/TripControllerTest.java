@@ -16,6 +16,7 @@ import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripVisibility;
+import com.tripagent.trip.dto.TripConditionUpdateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.service.TripService;
@@ -193,6 +194,56 @@ class TripControllerTest {
                 .andExpect(jsonPath("$.data.title").value("부모님과 제주 여행"));
 
         verify(tripService).updateTripTitle(1L, 100L, "부모님과 제주 여행");
+    }
+
+    @Test
+    void updateTripConditionsReturnsUpdatedConditions() throws Exception {
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 2),
+                LocalDate.of(2026, 7, 5),
+                LocalTime.of(8, 30),
+                LocalTime.of(19, 30),
+                TripConcept.FOOD,
+                "JEJU_CITY"
+        );
+        when(tripService.updateTripConditions(1L, 100L, request)).thenReturn(new TripResponse(
+                1L,
+                "JEJU",
+                LocalDate.of(2026, 7, 2),
+                LocalDate.of(2026, 7, 5),
+                3,
+                LocalTime.of(8, 30),
+                LocalTime.of(19, 30),
+                TripConcept.FOOD,
+                Transportation.RENT_CAR,
+                "JEJU_CITY",
+                0L,
+                0L,
+                TripVisibility.PRIVATE,
+                "제주 맛집 여행"
+        ));
+
+        mockMvc.perform(patch("/api/trips/1/conditions")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "startDate":"2026-07-02",
+                                  "endDate":"2026-07-05",
+                                  "dailyStartTime":"08:30",
+                                  "dailyEndTime":"19:30",
+                                  "concept":"FOOD",
+                                  "lastAccommodationArea":"JEJU_CITY"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.startDate[2]").value(2))
+                .andExpect(jsonPath("$.data.endDate[2]").value(5))
+                .andExpect(jsonPath("$.data.nights").value(3))
+                .andExpect(jsonPath("$.data.concept").value("FOOD"))
+                .andExpect(jsonPath("$.data.visibility").value("PRIVATE"));
+
+        verify(tripService).updateTripConditions(1L, 100L, request);
     }
 
     @Test

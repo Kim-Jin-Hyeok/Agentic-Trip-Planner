@@ -16,6 +16,7 @@ import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.TripAuthorResponse;
+import com.tripagent.trip.dto.TripConditionUpdateRequest;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
@@ -453,6 +454,42 @@ public class TripService {
     }
 
     @Transactional
+    public TripResponse updateTripConditions(Long tripId, Long ownerId, TripConditionUpdateRequest request) {
+        validateConditionUpdateRequest(request);
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        validateTripOwner(trip, ownerId);
+
+        String lastAccommodationArea = normalizeAccommodationArea(request.lastAccommodationArea());
+        boolean conditionsChanged = !Objects.equals(trip.getStartDate(), request.startDate())
+                || !Objects.equals(trip.getEndDate(), request.endDate())
+                || !Objects.equals(trip.getDailyStartTime(), request.dailyStartTime())
+                || !Objects.equals(trip.getDailyEndTime(), request.dailyEndTime())
+                || trip.getConcept() != request.concept()
+                || !Objects.equals(normalizeAccommodationArea(trip.getLastAccommodationArea()), lastAccommodationArea);
+        if (!conditionsChanged) {
+            return TripResponse.from(trip);
+        }
+
+        trip.changeConditions(
+                request.startDate(),
+                request.endDate(),
+                request.dailyStartTime(),
+                request.dailyEndTime(),
+                request.concept(),
+                lastAccommodationArea
+        );
+
+        if (itineraryRepository.existsByTrip_TripId(tripId)) {
+            itineraryRepository.deleteByTrip_TripId(tripId);
+            trip.changeVisibility(TripVisibility.PRIVATE);
+        }
+
+        return TripResponse.from(trip);
+    }
+
+    @Transactional
     public TripResponse updateTripVisibility(Long tripId, Long ownerId, TripVisibility visibility) {
         if (visibility == null) {
             throw new IllegalArgumentException("Trip visibility is required.");
@@ -510,6 +547,41 @@ public class TripService {
         if (request.transportation() != Transportation.RENT_CAR) {
             throw new IllegalArgumentException("Only RENT_CAR transportation is supported in MVP.");
         }
+    }
+
+    private void validateConditionUpdateRequest(TripConditionUpdateRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Trip condition request is required.");
+        }
+        if (request.startDate() == null || request.endDate() == null) {
+            throw new IllegalArgumentException("Trip startDate and endDate are required.");
+        }
+        long nights = ChronoUnit.DAYS.between(request.startDate(), request.endDate());
+        if (nights < MIN_NIGHTS || nights > MAX_NIGHTS) {
+            throw new IllegalArgumentException("Trip duration must be 1 night 2 days to 3 nights 4 days.");
+        }
+        if (request.dailyStartTime() == null) {
+            throw new IllegalArgumentException("Trip dailyStartTime is required.");
+        }
+        if (request.dailyEndTime() == null) {
+            throw new IllegalArgumentException("Trip dailyEndTime is required.");
+        }
+        if (!request.dailyStartTime().isBefore(request.dailyEndTime())) {
+            throw new IllegalArgumentException("Trip dailyStartTime must be before dailyEndTime.");
+        }
+        if (request.concept() == null) {
+            throw new IllegalArgumentException("Trip concept is required.");
+        }
+        if (request.lastAccommodationArea() != null && request.lastAccommodationArea().trim().length() > 50) {
+            throw new IllegalArgumentException("Trip lastAccommodationArea must be less than or equal to 50 characters.");
+        }
+    }
+
+    private String normalizeAccommodationArea(String lastAccommodationArea) {
+        if (lastAccommodationArea == null || lastAccommodationArea.isBlank()) {
+            return null;
+        }
+        return lastAccommodationArea.trim();
     }
 
     private void validateTripOwner(Trip trip, Long ownerId) {

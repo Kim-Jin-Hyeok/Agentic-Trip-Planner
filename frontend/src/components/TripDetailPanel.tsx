@@ -1,3 +1,4 @@
+import type { FormEvent } from 'react';
 import type {
   Itinerary,
   ItineraryGenerateRequest,
@@ -5,6 +6,7 @@ import type {
   PublicTripDetail,
   PublicTripResponse,
   TripDetail,
+  TripConditionUpdateRequest,
   TripVisibility
 } from '../types/trip';
 import {
@@ -17,6 +19,7 @@ import {
 } from '../utils/tripDisplay';
 import { ItineraryDaySection } from './ItineraryDaySection';
 import { ItineraryGenerateOptions } from './ItineraryGenerateOptions';
+import { TripConditionEditForm } from './TripConditionEditForm';
 
 type TripDetailPanelProps = {
   viewMode: ViewMode;
@@ -34,8 +37,12 @@ type TripDetailPanelProps = {
   isDeletingTrip: boolean;
   isEditingTitle: boolean;
   isUpdatingTitle: boolean;
+  isEditingConditions: boolean;
+  isUpdatingConditions: boolean;
   titleDraft: string;
   titleError: string;
+  conditionForm: TripConditionUpdateRequest;
+  conditionError: string;
   generateOptions: ItineraryGenerateRequest;
   candidatePlaces: PlaceResponse[];
   onGenerate: () => void;
@@ -47,6 +54,10 @@ type TripDetailPanelProps = {
   onTitleDraftChange: (title: string) => void;
   onCancelTitleEdit: () => void;
   onUpdateTitle: () => void;
+  onStartConditionEdit: () => void;
+  onConditionFormChange: <K extends keyof TripConditionUpdateRequest>(key: K, value: TripConditionUpdateRequest[K]) => void;
+  onCancelConditionEdit: () => void;
+  onUpdateConditions: (event: FormEvent<HTMLFormElement>) => void;
   onDeleteTrip: () => void;
   onToggleLike: (trip: PublicTripResponse | PublicTripDetail) => void;
   onUpdateItineraryForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
@@ -71,8 +82,12 @@ export function TripDetailPanel({
   isDeletingTrip,
   isEditingTitle,
   isUpdatingTitle,
+  isEditingConditions,
+  isUpdatingConditions,
   titleDraft,
   titleError,
+  conditionForm,
+  conditionError,
   generateOptions,
   candidatePlaces,
   onGenerate,
@@ -84,6 +99,10 @@ export function TripDetailPanel({
   onTitleDraftChange,
   onCancelTitleEdit,
   onUpdateTitle,
+  onStartConditionEdit,
+  onConditionFormChange,
+  onCancelConditionEdit,
+  onUpdateConditions,
   onDeleteTrip,
   onToggleLike,
   onUpdateItineraryForm,
@@ -137,9 +156,14 @@ export function TripDetailPanel({
             <div className="trip-title-row">
               <h2>{selectedTripTitle(trip, publicTrip)}</h2>
               {viewMode === 'mine' && trip != null && (
-                <button type="button" className="secondary-button" onClick={onStartTitleEdit}>
-                  제목 수정
-                </button>
+                <div className="trip-heading-actions">
+                  <button type="button" className="secondary-button" onClick={onStartTitleEdit} disabled={isUpdatingConditions}>
+                    제목 수정
+                  </button>
+                  <button type="button" className="secondary-button" onClick={onStartConditionEdit} disabled={isUpdatingConditions}>
+                    조건 수정
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -203,6 +227,17 @@ export function TripDetailPanel({
           <span>조회 {selectedTripStats(trip, publicTrip).viewCount}</span>
           <span>좋아요 {selectedTripStats(trip, publicTrip).likeCount}</span>
         </div>
+      )}
+
+      {viewMode === 'mine' && trip != null && isEditingConditions && (
+        <TripConditionEditForm
+          form={conditionForm}
+          error={conditionError}
+          isUpdating={isUpdatingConditions}
+          onChange={onConditionFormChange}
+          onCancel={onCancelConditionEdit}
+          onSubmit={onUpdateConditions}
+        />
       )}
 
       {message.length > 0 && <p className="status-message">{message}</p>}

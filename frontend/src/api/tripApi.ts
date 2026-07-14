@@ -10,6 +10,7 @@ import type {
   PublicTripSearchParams,
   PublicTripSort,
   TripLikeResponse,
+  TripConditionUpdateRequest,
   TripCreateRequest,
   TripDetail,
   TripResponse,
@@ -61,6 +62,13 @@ export function updateTripVisibility(tripId: number, visibility: TripVisibility)
 
 export function updateTripTitle(tripId: number, request: TripTitleUpdateRequest): Promise<TripResponse> {
   return apiRequest<TripResponse>(`/api/trips/${tripId}/title`, {
+    method: 'PATCH',
+    body: JSON.stringify(request)
+  });
+}
+
+export function updateTripConditions(tripId: number, request: TripConditionUpdateRequest): Promise<TripResponse> {
+  return apiRequest<TripResponse>(`/api/trips/${tripId}/conditions`, {
     method: 'PATCH',
     body: JSON.stringify(request)
   });

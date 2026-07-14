@@ -689,6 +689,12 @@ button.trip-list-item:hover:not(:disabled),
   gap: 10px;
 }
 
+.trip-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .trip-title-edit-form {
   display: grid;
   gap: 8px;
@@ -730,6 +736,65 @@ button.trip-list-item:hover:not(:disabled),
   font-size: 11px;
   font-weight: 750;
   padding: 6px 10px;
+}
+
+.condition-edit-form {
+  display: grid;
+  gap: 15px;
+  border: 1px solid #cfe0d5;
+  border-radius: 16px;
+  background: var(--green-50);
+  margin-bottom: 20px;
+  padding: 18px;
+}
+
+.condition-edit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.condition-edit-header p,
+.condition-edit-header h3 {
+  margin: 0;
+}
+
+.condition-edit-header p {
+  color: var(--green-700);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+  margin-bottom: 5px;
+}
+
+.condition-edit-header h3 {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.condition-edit-header > span {
+  border-radius: 999px;
+  background: var(--green-100);
+  color: var(--green-700);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 6px 9px;
+}
+
+.condition-edit-notice {
+  border-radius: 10px;
+  background: #fff4e8;
+  color: #8b542f;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+  padding: 11px 13px;
+}
+
+.condition-edit-actions {
+  display: flex;
+  gap: 7px;
 }
 
 .generate-options {

@@ -14,6 +14,7 @@ import {
   reorderItineraries,
   unlikePublicTrip,
   updateItinerary,
+  updateTripConditions,
   updateTripTitle,
   updateTripVisibility
 } from '../api/tripApi';
@@ -35,6 +36,7 @@ import type {
   PublicTripSearchParams,
   PublicTripSort,
   TripCreateRequest,
+  TripConditionUpdateRequest,
   TripDetail,
   TripResponse,
   TripVisibility
@@ -61,6 +63,15 @@ const initialGenerateOptions: ItineraryGenerateRequest = {
   preferredCategories: [],
   dayTimeWindows: [],
   rainyDayMode: false
+};
+
+const initialConditionForm: TripConditionUpdateRequest = {
+  startDate: '',
+  endDate: '',
+  dailyStartTime: '09:00',
+  dailyEndTime: '20:00',
+  concept: 'HEALING',
+  lastAccommodationArea: ''
 };
 
 export function TripCreatePage() {
@@ -91,12 +102,17 @@ export function TripCreatePage() {
   const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [titleError, setTitleError] = useState('');
+  const [isEditingConditions, setIsEditingConditions] = useState(false);
+  const [isUpdatingConditions, setIsUpdatingConditions] = useState(false);
+  const [conditionForm, setConditionForm] = useState<TripConditionUpdateRequest>(initialConditionForm);
+  const [conditionError, setConditionError] = useState('');
   const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
   const [generateOptions, setGenerateOptions] = useState<ItineraryGenerateRequest>(initialGenerateOptions);
   const [candidatePlaces, setCandidatePlaces] = useState<PlaceResponse[]>([]);
   const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
   const isTitleUpdateRequestInFlight = useRef(false);
+  const isConditionUpdateRequestInFlight = useRef(false);
 
   const itinerariesByDay = useMemo(() => {
     return itineraries.reduce<Record<number, Itinerary[]>>((days, itinerary) => {
@@ -125,6 +141,12 @@ export function TripCreatePage() {
     setItineraries([]);
     void loadPublicTrips(publicSort, publicPage, publicListMode, appliedPublicFilters);
   }, [viewMode, publicSort, publicPage, publicListMode, appliedPublicFilters]);
+
+  useEffect(() => {
+    setIsEditingConditions(false);
+    setConditionError('');
+    setConditionForm(trip == null ? initialConditionForm : conditionFormFromTrip(trip));
+  }, [trip?.tripId]);
 
   function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
     setForm((current) => ({
@@ -392,6 +414,8 @@ export function TripCreatePage() {
 
     setTitleDraft(trip.title);
     setTitleError('');
+    setIsEditingConditions(false);
+    setConditionError('');
     setIsEditingTitle(true);
   }
 
@@ -453,6 +477,102 @@ export function TripCreatePage() {
     } finally {
       isTitleUpdateRequestInFlight.current = false;
       setIsUpdatingTitle(false);
+    }
+  }
+
+  function handleStartConditionEdit() {
+    if (trip == null) {
+      return;
+    }
+
+    setConditionForm(conditionFormFromTrip(trip));
+    setConditionError('');
+    setIsEditingTitle(false);
+    setTitleError('');
+    setIsEditingConditions(true);
+  }
+
+  function handleCancelConditionEdit() {
+    if (isConditionUpdateRequestInFlight.current) {
+      return;
+    }
+
+    setConditionForm(trip == null ? initialConditionForm : conditionFormFromTrip(trip));
+    setConditionError('');
+    setIsEditingConditions(false);
+  }
+
+  function handleConditionFormChange<K extends keyof TripConditionUpdateRequest>(
+    key: K,
+    value: TripConditionUpdateRequest[K]
+  ) {
+    setConditionForm((current) => ({
+      ...current,
+      [key]: value
+    }));
+    setConditionError('');
+  }
+
+  async function handleUpdateConditions(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (trip == null || isConditionUpdateRequestInFlight.current) {
+      return;
+    }
+
+    const validationMessage = validateConditionForm(conditionForm);
+    if (validationMessage != null) {
+      setConditionError(validationMessage);
+      return;
+    }
+    if (!haveTripConditionsChanged(trip, conditionForm)) {
+      setIsEditingConditions(false);
+      setMessage('변경된 여행 조건이 없습니다.');
+      return;
+    }
+
+    const hasExistingItinerary = itineraries.length > 0;
+    if (
+      hasExistingItinerary &&
+      !window.confirm('여행 조건을 변경하면 기존 일정이 삭제되고 비공개로 전환됩니다. 계속할까요?')
+    ) {
+      return;
+    }
+
+    isConditionUpdateRequestInFlight.current = true;
+    setIsUpdatingConditions(true);
+    setConditionError('');
+    setMessage('');
+
+    try {
+      const updatedTrip = await updateTripConditions(trip.tripId, {
+        ...conditionForm,
+        lastAccommodationArea: conditionForm.lastAccommodationArea.trim()
+      });
+      const updatedDetail: TripDetail = {
+        ...trip,
+        ...updatedTrip,
+        itineraries: []
+      };
+      setTrip(updatedDetail);
+      setTrips((currentTrips) =>
+        currentTrips.map((currentTrip) => currentTrip.tripId === updatedTrip.tripId ? updatedTrip : currentTrip)
+      );
+      setItineraries([]);
+      setEditingItems({});
+      setCandidatePlaces([]);
+      setGenerateOptions(createDefaultGenerateOptions(updatedDetail));
+      setConditionForm(conditionFormFromTrip(updatedDetail));
+      setIsEditingConditions(false);
+      setMessage(
+        hasExistingItinerary
+          ? '여행 조건을 수정하고 기존 일정을 삭제했습니다. 새 조건으로 일정을 생성해 주세요.'
+          : '여행 조건을 수정했습니다.'
+      );
+    } catch (error) {
+      setConditionError(error instanceof Error ? error.message : '여행 조건 수정에 실패했습니다.');
+    } finally {
+      isConditionUpdateRequestInFlight.current = false;
+      setIsUpdatingConditions(false);
     }
   }
 
@@ -775,8 +895,12 @@ export function TripCreatePage() {
           isDeletingTrip={isDeletingTrip}
           isEditingTitle={isEditingTitle}
           isUpdatingTitle={isUpdatingTitle}
+          isEditingConditions={isEditingConditions}
+          isUpdatingConditions={isUpdatingConditions}
           titleDraft={titleDraft}
           titleError={titleError}
+          conditionForm={conditionForm}
+          conditionError={conditionError}
           generateOptions={generateOptions}
           candidatePlaces={candidatePlaces}
           onGenerate={() => void handleGenerateItinerary()}
@@ -788,6 +912,10 @@ export function TripCreatePage() {
           onTitleDraftChange={handleTitleDraftChange}
           onCancelTitleEdit={handleCancelTitleEdit}
           onUpdateTitle={() => void handleUpdateTitle()}
+          onStartConditionEdit={handleStartConditionEdit}
+          onConditionFormChange={handleConditionFormChange}
+          onCancelConditionEdit={handleCancelConditionEdit}
+          onUpdateConditions={handleUpdateConditions}
           onDeleteTrip={() => void handleDeleteTrip()}
           onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
           onUpdateItineraryForm={updateItineraryForm}
@@ -809,4 +937,42 @@ function createDefaultGenerateOptions(trip: TripDetail): ItineraryGenerateReques
       endTime: trip.dailyEndTime
     }))
   };
+}
+
+function conditionFormFromTrip(trip: TripDetail): TripConditionUpdateRequest {
+  return {
+    startDate: trip.startDate,
+    endDate: trip.endDate,
+    dailyStartTime: trip.dailyStartTime,
+    dailyEndTime: trip.dailyEndTime,
+    concept: trip.concept,
+    lastAccommodationArea: trip.lastAccommodationArea ?? ''
+  };
+}
+
+function haveTripConditionsChanged(trip: TripDetail, form: TripConditionUpdateRequest): boolean {
+  return trip.startDate !== form.startDate
+    || trip.endDate !== form.endDate
+    || trip.dailyStartTime !== form.dailyStartTime
+    || trip.dailyEndTime !== form.dailyEndTime
+    || trip.concept !== form.concept
+    || (trip.lastAccommodationArea ?? '').trim() !== form.lastAccommodationArea.trim();
+}
+
+function validateConditionForm(form: TripConditionUpdateRequest): string | null {
+  if (form.startDate.length === 0 || form.endDate.length === 0) {
+    return '여행 시작일과 종료일을 입력해 주세요.';
+  }
+
+  const startDate = new Date(`${form.startDate}T00:00:00Z`);
+  const endDate = new Date(`${form.endDate}T00:00:00Z`);
+  const nights = (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
+  if (!Number.isInteger(nights) || nights < 1 || nights > 3) {
+    return '여행 기간은 1박 2일부터 3박 4일까지 설정할 수 있습니다.';
+  }
+  if (form.dailyStartTime >= form.dailyEndTime) {
+    return '하루 시작 시간은 종료 시간보다 빨라야 합니다.';
+  }
+
+  return null;
 }

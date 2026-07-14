@@ -25,6 +25,7 @@ import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.PublicTripSort;
+import com.tripagent.trip.dto.TripConditionUpdateRequest;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripLikeResponse;
@@ -1323,6 +1324,78 @@ class TripServiceTest {
         assertThatThrownBy(() -> tripService.updateTripTitle(1L, 200L, "새 제목"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip owner does not match. tripId=1");
+    }
+
+    @Test
+    void updateTripConditionsUpdatesTripAndRemovesExistingItinerary() {
+        Trip trip = trip(
+                1L,
+                "JEJU",
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                100L
+        );
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 2),
+                LocalDate.of(2026, 7, 5),
+                LocalTime.of(8, 30),
+                LocalTime.of(19, 30),
+                TripConcept.FOOD,
+                "  JEJU_CITY  "
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+
+        TripResponse response = tripService.updateTripConditions(1L, 100L, request);
+
+        assertThat(response.startDate()).isEqualTo(LocalDate.of(2026, 7, 2));
+        assertThat(response.endDate()).isEqualTo(LocalDate.of(2026, 7, 5));
+        assertThat(response.nights()).isEqualTo(3);
+        assertThat(response.dailyStartTime()).isEqualTo(LocalTime.of(8, 30));
+        assertThat(response.dailyEndTime()).isEqualTo(LocalTime.of(19, 30));
+        assertThat(response.concept()).isEqualTo(TripConcept.FOOD);
+        assertThat(response.lastAccommodationArea()).isEqualTo("JEJU_CITY");
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
+        verify(itineraryRepository).deleteByTrip_TripId(1L);
+    }
+
+    @Test
+    void updateTripConditionsDoesNotRemoveItineraryWhenConditionsAreUnchanged() {
+        Trip trip = trip(1L);
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                "SEOGWIPO"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+
+        TripResponse response = tripService.updateTripConditions(1L, null, request);
+
+        assertThat(response.nights()).isEqualTo(2);
+        verify(itineraryRepository, never()).existsByTrip_TripId(1L);
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+    }
+
+    @Test
+    void updateTripConditionsRejectsUnsupportedDurationBeforeLookup() {
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 5),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                "SEOGWIPO"
+        );
+
+        assertThatThrownBy(() -> tripService.updateTripConditions(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip duration must be 1 night 2 days to 3 nights 4 days.");
+        verify(tripRepository, never()).findById(1L);
     }
 
     @Test

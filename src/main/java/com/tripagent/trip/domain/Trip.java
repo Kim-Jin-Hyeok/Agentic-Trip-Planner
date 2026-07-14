@@ -205,6 +205,23 @@ public class Trip {
         this.title = normalizedTitle;
     }
 
+    public void changeConditions(
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            String lastAccommodationArea
+    ) {
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.nights = Math.toIntExact(ChronoUnit.DAYS.between(startDate, endDate));
+        this.dailyStartTime = dailyStartTime;
+        this.dailyEndTime = dailyEndTime;
+        this.concept = concept;
+        this.lastAccommodationArea = lastAccommodationArea;
+    }
+
     public String getDestination() {
         return destination;
     }

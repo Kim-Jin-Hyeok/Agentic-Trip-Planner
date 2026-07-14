@@ -5,6 +5,7 @@ import com.tripagent.common.response.ApiResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
+import com.tripagent.trip.dto.TripConditionUpdateRequest;
 import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
@@ -106,6 +107,15 @@ public class TripController {
             @Valid @RequestBody TripTitleUpdateRequest request
     ) {
         return ApiResponse.success(tripService.updateTripTitle(tripId, memberId, request.title()));
+    }
+
+    @PatchMapping("/{tripId}/conditions")
+    public ApiResponse<TripResponse> updateTripConditions(
+            @PathVariable Long tripId,
+            @LoginMemberId Long memberId,
+            @Valid @RequestBody TripConditionUpdateRequest request
+    ) {
+        return ApiResponse.success(tripService.updateTripConditions(tripId, memberId, request));
     }
 
     @PostMapping("/{tripId}/generate")

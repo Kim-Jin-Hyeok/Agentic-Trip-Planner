@@ -20,6 +20,15 @@ export type TripTitleUpdateRequest = {
   title: string;
 };
 
+export type TripConditionUpdateRequest = {
+  startDate: string;
+  endDate: string;
+  dailyStartTime: string;
+  dailyEndTime: string;
+  concept: TripConcept;
+  lastAccommodationArea: string;
+};
+
 export type TripResponse = TripCreateRequest & {
   tripId: number;
   nights: number;
