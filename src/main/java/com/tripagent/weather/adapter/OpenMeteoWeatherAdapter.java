@@ -6,6 +6,7 @@ import java.net.http.HttpClient;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -25,6 +26,7 @@ public class OpenMeteoWeatherAdapter implements WeatherAdapter {
 
     private final RestClient restClient;
 
+    @Autowired
     public OpenMeteoWeatherAdapter(OpenMeteoProperties properties, RestClient.Builder restClientBuilder) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(properties.getConnectTimeout())

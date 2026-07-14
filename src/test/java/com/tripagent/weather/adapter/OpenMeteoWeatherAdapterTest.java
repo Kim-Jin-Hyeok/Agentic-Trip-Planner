@@ -5,14 +5,29 @@ import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.tripagent.weather.config.OpenMeteoProperties;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 class OpenMeteoWeatherAdapterTest {
+
+    @Test
+    void springCreatesAdapterWithConfiguredConstructor() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.getBeanFactory().registerSingleton("openMeteoProperties", new OpenMeteoProperties());
+            context.getBeanFactory().registerSingleton("restClientBuilder", RestClient.builder());
+            context.register(OpenMeteoWeatherAdapter.class);
+
+            context.refresh();
+
+            assertThat(context.getBean(OpenMeteoWeatherAdapter.class)).isNotNull();
+        }
+    }
 
     @Test
     void returnsDailyForecastsFromOpenMeteoResponse() {
