@@ -1038,6 +1038,14 @@ button.trip-list-item:hover:not(:disabled),
   position: relative;
 }
 
+.day-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
 .day-section h3 {
   display: inline-flex;
   align-items: center;
@@ -1047,8 +1055,35 @@ button.trip-list-item:hover:not(:disabled),
   color: #fff;
   font-size: 13px;
   letter-spacing: 0.04em;
-  margin: 0 0 13px;
+  margin: 0;
   padding: 0 14px;
+}
+
+.day-route-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  border: 1px solid #cbdad1;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--green-800);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 13px;
+  text-decoration: none;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.day-route-link:hover {
+  border-color: var(--green-700);
+  background: var(--green-50);
+  color: var(--green-950);
+}
+
+.day-route-link:focus-visible {
+  outline: 2px solid var(--green-700);
+  outline-offset: 3px;
 }
 
 .day-section ol {

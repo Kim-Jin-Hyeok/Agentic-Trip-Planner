@@ -40,7 +40,18 @@ export function ItineraryDaySection({
 }: ItineraryDaySectionProps) {
   return (
     <section className="day-section">
-      <h3>Day {dayNo}</h3>
+      <div className="day-section-header">
+        <h3>Day {dayNo}</h3>
+        <a
+          className="day-route-link"
+          href={createDayRouteUrl(dayItineraries)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Day ${dayNo} 전체 동선을 Google 지도에서 보기`}
+        >
+          전체 동선 보기 <span aria-hidden="true">↗</span>
+        </a>
+      </div>
       <ol>
         {dayItineraries.map((itinerary, index) => {
           const editForm = itineraryForm(itinerary, editingItems);
@@ -199,13 +210,37 @@ export function ItineraryDaySection({
 }
 
 function createGoogleMapsUrl(place: Itinerary['place']): string {
-  const hasCoordinates = Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
-  const query = hasCoordinates
-    ? `${place.latitude},${place.longitude}`
-    : `${place.name} ${place.address}`;
   const searchParams = new URLSearchParams({
     api: '1',
-    query
+    query: mapLocation(place)
   });
   return `https://www.google.com/maps/search/?${searchParams.toString()}`;
+}
+
+function createDayRouteUrl(itineraries: Itinerary[]): string {
+  if (itineraries.length === 0) {
+    return 'https://www.google.com/maps';
+  }
+  if (itineraries.length === 1) {
+    return createGoogleMapsUrl(itineraries[0].place);
+  }
+
+  const searchParams = new URLSearchParams({
+    api: '1',
+    origin: mapLocation(itineraries[0].place),
+    destination: mapLocation(itineraries[itineraries.length - 1].place),
+    travelmode: 'driving'
+  });
+  const waypoints = itineraries.slice(1, -1).map((itinerary) => mapLocation(itinerary.place));
+  if (waypoints.length > 0) {
+    searchParams.set('waypoints', waypoints.join('|'));
+  }
+
+  return `https://www.google.com/maps/dir/?${searchParams.toString()}`;
+}
+
+function mapLocation(place: Itinerary['place']): string {
+  return Number.isFinite(place.latitude) && Number.isFinite(place.longitude)
+    ? `${place.latitude},${place.longitude}`
+    : `${place.name} ${place.address}`;
 }
