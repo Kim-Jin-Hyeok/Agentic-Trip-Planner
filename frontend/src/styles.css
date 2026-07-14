@@ -1525,6 +1525,39 @@ button.trip-list-item:hover:not(:disabled),
   letter-spacing: -0.02em;
 }
 
+.place-lock-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  border: 1px solid #d2ddd6;
+  border-radius: 999px;
+  background: #fff;
+  color: #56635c;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  padding: 0 9px;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.place-lock-label.active {
+  border-color: #8eb39f;
+  background: var(--green-100);
+  color: var(--green-800);
+}
+
+.place-lock-label input {
+  width: 14px;
+  min-height: auto;
+  accent-color: var(--green-700);
+}
+
+.place-lock-label:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .place-location {
   display: flex;
   align-items: center;

@@ -39,6 +39,7 @@ type TripDetailPanelProps = {
   isGenerating: boolean;
   isRegenerating: boolean;
   regeneratingDayNo: number | null;
+  lockedPlaceIds: number[];
   isLoadingCandidatePlaces: boolean;
   tripWeather: TripWeatherForecast | null;
   isLoadingWeather: boolean;
@@ -64,6 +65,7 @@ type TripDetailPanelProps = {
   onGenerate: () => void;
   onRegenerate: () => void;
   onRegenerateDay: (dayNo: number) => void;
+  onTogglePlaceLock: (placeId: number) => void;
   onGenerateOptionsChange: (options: ItineraryGenerateRequest) => void;
   onLoadCandidatePlaces: () => void;
   onRefreshWeather: () => void;
@@ -106,6 +108,7 @@ export function TripDetailPanel({
   isGenerating,
   isRegenerating,
   regeneratingDayNo,
+  lockedPlaceIds,
   isLoadingCandidatePlaces,
   tripWeather,
   isLoadingWeather,
@@ -131,6 +134,7 @@ export function TripDetailPanel({
   onGenerate,
   onRegenerate,
   onRegenerateDay,
+  onTogglePlaceLock,
   onGenerateOptionsChange,
   onLoadCandidatePlaces,
   onRefreshWeather,
@@ -418,6 +422,7 @@ export function TripDetailPanel({
               selectedItineraryId={selectedMapItineraryId}
               isRegenerating={regeneratingDayNo === Number(dayNo)}
               isRegenerateDisabled={isChangingItinerary}
+              lockedPlaceIds={lockedPlaceIds}
               onSelectItinerary={(itineraryId) => {
                 setSelectedMapDay(Number(dayNo));
                 setSelectedMapItineraryId(itineraryId);
@@ -429,6 +434,7 @@ export function TripDetailPanel({
               onDelete={onDeleteItinerary}
               onUpdate={onUpdateItinerary}
               onRegenerate={() => onRegenerateDay(Number(dayNo))}
+              onTogglePlaceLock={onTogglePlaceLock}
             />
           ))}
         </div>

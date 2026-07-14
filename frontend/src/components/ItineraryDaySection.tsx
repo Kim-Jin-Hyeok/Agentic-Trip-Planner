@@ -15,6 +15,7 @@ type ItineraryDaySectionProps = {
   selectedItineraryId: number | null;
   isRegenerating: boolean;
   isRegenerateDisabled: boolean;
+  lockedPlaceIds: number[];
   onSelectItinerary: (itineraryId: number) => void;
   onUpdateForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
   onStartEdit: (itinerary: Itinerary) => void;
@@ -23,6 +24,7 @@ type ItineraryDaySectionProps = {
   onDelete: (itineraryId: number) => void;
   onUpdate: (itinerary: Itinerary) => void;
   onRegenerate: () => void;
+  onTogglePlaceLock: (placeId: number) => void;
 };
 
 export function ItineraryDaySection({
@@ -39,6 +41,7 @@ export function ItineraryDaySection({
   selectedItineraryId,
   isRegenerating,
   isRegenerateDisabled,
+  lockedPlaceIds,
   onSelectItinerary,
   onUpdateForm,
   onStartEdit,
@@ -46,8 +49,11 @@ export function ItineraryDaySection({
   onMove,
   onDelete,
   onUpdate,
-  onRegenerate
+  onRegenerate,
+  onTogglePlaceLock
 }: ItineraryDaySectionProps) {
+  const lockedPlaceCount = dayItineraries.filter((itinerary) => lockedPlaceIds.includes(itinerary.placeId)).length;
+
   return (
     <section className="day-section">
       <div className="day-section-header">
@@ -60,7 +66,11 @@ export function ItineraryDaySection({
               onClick={onRegenerate}
               disabled={isRegenerateDisabled}
             >
-              {isRegenerating ? '다시 만드는 중...' : '이 Day만 다시 만들기'}
+              {isRegenerating
+                ? '다시 만드는 중...'
+                : lockedPlaceCount > 0
+                  ? `고정 ${lockedPlaceCount}개 · 다시 만들기`
+                  : '이 Day만 다시 만들기'}
             </button>
           )}
           <a
@@ -96,6 +106,22 @@ export function ItineraryDaySection({
                   <strong>{itinerary.place.name}</strong>
                   {viewMode === 'mine' && (
                     <div className="itinerary-actions">
+                      {!isEditing && (
+                        <label
+                          className={lockedPlaceIds.includes(itinerary.placeId)
+                            ? 'place-lock-label active'
+                            : 'place-lock-label'}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={lockedPlaceIds.includes(itinerary.placeId)}
+                            onChange={() => onTogglePlaceLock(itinerary.placeId)}
+                            disabled={isRegenerateDisabled}
+                          />
+                          이 장소 유지
+                        </label>
+                      )}
                       {!isEditing && (
                         <button
                           type="button"

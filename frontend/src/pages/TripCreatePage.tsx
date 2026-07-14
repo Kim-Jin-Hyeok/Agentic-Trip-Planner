@@ -114,6 +114,7 @@ export function TripCreatePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regeneratingDayNo, setRegeneratingDayNo] = useState<number | null>(null);
+  const [lockedPlaceIds, setLockedPlaceIds] = useState<number[]>([]);
   const [isLoadingCandidatePlaces, setIsLoadingCandidatePlaces] = useState(false);
   const [isLoadingTrips, setIsLoadingTrips] = useState(false);
   const [isLoadingPublicTrips, setIsLoadingPublicTrips] = useState(false);
@@ -167,6 +168,10 @@ export function TripCreatePage() {
 
     void loadTrips();
   }, []);
+
+  useEffect(() => {
+    setLockedPlaceIds([]);
+  }, [trip?.tripId, publicTrip?.tripId, viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'public') {
@@ -354,6 +359,7 @@ export function TripCreatePage() {
       setEditingItems({});
       setEditingItineraryId(null);
       setItineraryEditError('');
+      setLockedPlaceIds([]);
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(detail));
     } catch (error) {
@@ -455,6 +461,7 @@ export function TripCreatePage() {
         itineraries: generatedItineraries
       });
       setEditingItems({});
+      setLockedPlaceIds([]);
       setMessage('일정이 생성되었습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '일정 생성에 실패했습니다.');
@@ -483,6 +490,7 @@ export function TripCreatePage() {
         itineraries: regeneratedItineraries
       });
       setEditingItems({});
+      setLockedPlaceIds([]);
       setMessage('새로운 일정으로 다시 만들었습니다.');
       setIsItineraryAddOpen(false);
     } catch (error) {
@@ -493,11 +501,41 @@ export function TripCreatePage() {
   }
 
   async function handleRegenerateItineraryDay(dayNo: number) {
+    const dayPlaceIds = itineraries
+      .filter((itinerary) => itinerary.dayNo === dayNo)
+      .map((itinerary) => itinerary.placeId);
+    const lockedDayPlaceIds = lockedPlaceIds.filter((placeId) => dayPlaceIds.includes(placeId));
+    const otherDayPlaceIds = new Set(
+      itineraries
+        .filter((itinerary) => itinerary.dayNo !== dayNo)
+        .map((itinerary) => itinerary.placeId)
+    );
+    const requiredDayPlaceIds = new Set([
+      ...generateOptions.mustVisitPlaceIds.filter((placeId) => !otherDayPlaceIds.has(placeId)),
+      ...lockedDayPlaceIds
+    ]);
+    const maxPlaces = maxPlacesForPace(generateOptions.pace);
+
     if (
       trip == null
       || regeneratingDayNo != null
-      || !window.confirm(`Day ${dayNo} 일정만 새 일정으로 교체할까요? 다른 날짜의 일정은 유지됩니다.`)
     ) {
+      return;
+    }
+    if (requiredDayPlaceIds.size > maxPlaces) {
+      setMessage(
+        `Day ${dayNo}에 유지할 장소가 ${requiredDayPlaceIds.size}개입니다. `
+        + `${paceLabel(generateOptions.pace)} 일정은 최대 ${maxPlaces}개까지 구성할 수 있습니다.`
+      );
+      return;
+    }
+
+    const lockedGuide = lockedDayPlaceIds.length > 0
+      ? ` 고정한 장소 ${lockedDayPlaceIds.length}개는 유지됩니다.`
+      : '';
+    if (!window.confirm(
+      `Day ${dayNo} 일정만 새 일정으로 교체할까요? 다른 날짜의 일정은 유지됩니다.${lockedGuide}`
+    )) {
       return;
     }
 
@@ -505,13 +543,20 @@ export function TripCreatePage() {
     setRegeneratingDayNo(dayNo);
 
     try {
-      const regeneratedItineraries = await regenerateItineraryDay(trip.tripId, dayNo, generateOptions);
+      const request: ItineraryGenerateRequest = {
+        ...generateOptions,
+        mustVisitPlaceIds: [...requiredDayPlaceIds],
+        excludedPlaceIds: generateOptions.excludedPlaceIds
+          .filter((placeId) => !lockedDayPlaceIds.includes(placeId))
+      };
+      const regeneratedItineraries = await regenerateItineraryDay(trip.tripId, dayNo, request);
       setItineraries(regeneratedItineraries);
       setTrip({
         ...trip,
         itineraries: regeneratedItineraries
       });
       setEditingItems({});
+      setLockedPlaceIds((current) => current.filter((placeId) => !dayPlaceIds.includes(placeId)));
       setMessage(`Day ${dayNo} 일정을 새롭게 만들었습니다.`);
       setIsItineraryAddOpen(false);
     } catch (error) {
@@ -519,6 +564,12 @@ export function TripCreatePage() {
     } finally {
       setRegeneratingDayNo(null);
     }
+  }
+
+  function handleTogglePlaceLock(placeId: number) {
+    setLockedPlaceIds((current) => current.includes(placeId)
+      ? current.filter((lockedPlaceId) => lockedPlaceId !== placeId)
+      : [...current, placeId]);
   }
 
   async function handleLoadCandidatePlaces() {
@@ -730,6 +781,7 @@ export function TripCreatePage() {
       setEditingItems({});
       setEditingItineraryId(null);
       setItineraryEditError('');
+      setLockedPlaceIds([]);
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(updatedDetail));
       setConditionForm(conditionFormFromTrip(updatedDetail));
@@ -1289,6 +1341,7 @@ export function TripCreatePage() {
           isGenerating={isGenerating}
           isRegenerating={isRegenerating}
           regeneratingDayNo={regeneratingDayNo}
+          lockedPlaceIds={lockedPlaceIds}
           isLoadingCandidatePlaces={isLoadingCandidatePlaces}
           tripWeather={tripWeather}
           isLoadingWeather={isLoadingWeather}
@@ -1314,6 +1367,7 @@ export function TripCreatePage() {
           onGenerate={() => void handleGenerateItinerary()}
           onRegenerate={() => void handleRegenerateItinerary()}
           onRegenerateDay={(dayNo) => void handleRegenerateItineraryDay(dayNo)}
+          onTogglePlaceLock={handleTogglePlaceLock}
           onGenerateOptionsChange={setGenerateOptions}
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onRefreshWeather={() => trip != null && void loadTripWeather(trip.tripId)}
@@ -1417,6 +1471,14 @@ function createDefaultGenerateOptions(trip: TripDetail): ItineraryGenerateReques
       endTime: trip.dailyEndTime
     }))
   };
+}
+
+function maxPlacesForPace(pace: ItineraryGenerateRequest['pace']): number {
+  return pace === 'RELAXED' ? 4 : pace === 'BUSY' ? 7 : 5;
+}
+
+function paceLabel(pace: ItineraryGenerateRequest['pace']): string {
+  return pace === 'RELAXED' ? '여유' : pace === 'BUSY' ? '빡빡' : '보통';
 }
 
 function conditionFormFromTrip(trip: TripDetail): TripConditionUpdateRequest {
