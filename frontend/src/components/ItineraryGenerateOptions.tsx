@@ -96,9 +96,24 @@ export function ItineraryGenerateOptions({
             checked={options.rainyDayMode}
             onChange={(event) => onChange({ ...options, rainyDayMode: event.target.checked })}
           />
-          우천 모드
+          전체 우천 모드
         </label>
       </div>
+
+      {(options.rainyDayMode || options.rainyDayNos.length > 0) && (
+        <div className="rainy-day-option-summary">
+          <span>
+            {options.rainyDayMode
+              ? '전체 여행일에 실내·우천 장소 우선순위를 적용합니다.'
+              : `예보 반영: ${options.rainyDayNos.map((dayNo) => `Day ${dayNo}`).join(', ')}만 실내·우천 장소를 우선합니다.`}
+          </span>
+          {!options.rainyDayMode && (
+            <button type="button" onClick={() => onChange({ ...options, rainyDayNos: [] })}>
+              해제
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="category-option-list">
         {categoryOptions.map((category) => (

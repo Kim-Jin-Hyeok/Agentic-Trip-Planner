@@ -78,6 +78,7 @@ export type ItineraryGenerateRequest = {
   preferredCategories: PlaceCategory[];
   dayTimeWindows: ItineraryDayTimeWindowRequest[];
   rainyDayMode: boolean;
+  rainyDayNos: number[];
 };
 
 export type Itinerary = {

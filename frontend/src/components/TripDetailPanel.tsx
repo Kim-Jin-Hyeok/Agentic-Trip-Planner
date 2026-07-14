@@ -65,7 +65,7 @@ type TripDetailPanelProps = {
   onGenerateOptionsChange: (options: ItineraryGenerateRequest) => void;
   onLoadCandidatePlaces: () => void;
   onRefreshWeather: () => void;
-  onEnableRainyDayMode: () => void;
+  onApplyRainyDays: (rainyDayNos: number[]) => void;
   onUpdateVisibility: (visibility: TripVisibility) => void;
   onStartTitleEdit: () => void;
   onTitleDraftChange: (title: string) => void;
@@ -130,7 +130,7 @@ export function TripDetailPanel({
   onGenerateOptionsChange,
   onLoadCandidatePlaces,
   onRefreshWeather,
-  onEnableRainyDayMode,
+  onApplyRainyDays,
   onUpdateVisibility,
   onStartTitleEdit,
   onTitleDraftChange,
@@ -317,8 +317,9 @@ export function TripDetailPanel({
           forecast={tripWeather}
           isLoading={isLoadingWeather}
           rainyDayMode={generateOptions.rainyDayMode}
+          rainyDayNos={generateOptions.rainyDayNos}
           onRefresh={onRefreshWeather}
-          onEnableRainyDayMode={onEnableRainyDayMode}
+          onApplyRainyDays={onApplyRainyDays}
         />
       )}
 

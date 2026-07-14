@@ -52,7 +52,8 @@ public class ItineraryPromptGenerator {
         prompt.append("- You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.\n");
         prompt.append("- You must never include any placeId listed in excludedPlaceIds in the generated itinerary.\n");
         prompt.append("- If preferredCategories is not empty, prioritize places in those categories when building the itinerary.\n");
-        prompt.append("- If rainyDayMode is true, prioritize indoor places and places with higher rainyDayScore.\n");
+        prompt.append("- If rainyDayMode is true, prioritize indoor places and places with higher rainyDayScore on every trip day.\n");
+        prompt.append("- For each dayNo listed in rainyDayNos, prioritize indoor places and places with higher rainyDayScore only on that day.\n");
         prompt.append("- mustVisitPlaceIds must be included even if their categories are not in preferredCategories.\n");
         prompt.append("- excludedPlaceIds must never be included regardless of preferredCategories.\n");
         prompt.append("- Use concept as the overall trip mood and priority, not as the only category to schedule.\n");
@@ -95,7 +96,8 @@ public class ItineraryPromptGenerator {
         prompt.append("Category preferences:\n");
         prompt.append("- preferredCategories: ").append(preferredCategories(request)).append("\n\n");
         prompt.append("Weather preference:\n");
-        prompt.append("- rainyDayMode: ").append(rainyDayMode(request)).append("\n\n");
+        prompt.append("- rainyDayMode: ").append(rainyDayMode(request)).append("\n");
+        prompt.append("- rainyDayNos: ").append(rainyDayNos(request)).append("\n\n");
         prompt.append("Pace:\n");
         prompt.append("- selectedPace: ").append(pace(request)).append("\n");
         for (PaceItineraryPolicy pacePolicy : PaceItineraryPolicy.all()) {
@@ -207,6 +209,13 @@ public class ItineraryPromptGenerator {
 
     private boolean rainyDayMode(ItineraryGenerateRequest request) {
         return request != null && request.normalizedRainyDayMode();
+    }
+
+    private List<Integer> rainyDayNos(ItineraryGenerateRequest request) {
+        if (request == null) {
+            return List.of();
+        }
+        return request.normalizedRainyDayNos();
     }
 
     private void appendExplicitPacePolicy(StringBuilder prompt, ItineraryGenerateRequest request) {

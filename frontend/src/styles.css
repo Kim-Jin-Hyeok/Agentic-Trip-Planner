@@ -1068,6 +1068,30 @@ button.trip-list-item:hover:not(:disabled),
   margin-bottom: 14px;
 }
 
+.rainy-day-option-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -4px 0 14px;
+  border-radius: 10px;
+  background: #eaf4fa;
+  color: #315e79;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.rainy-day-option-summary button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #315e79;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 4px;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;

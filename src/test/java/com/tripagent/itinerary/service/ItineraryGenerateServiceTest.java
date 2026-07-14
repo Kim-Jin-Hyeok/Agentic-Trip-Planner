@@ -472,6 +472,64 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateDraftItinerariesRejectsRainyDayOutsideTripPeriodBeforeCallingLlm() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60), place(20L, 60), place(30L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                List.of(4)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("rainyDayNos must be within trip period. dayNo=4, maxDayNo=3");
+        verify(llmClient, never()).generate(anyString());
+    }
+
+    @Test
+    void generateDraftItinerariesRejectsDuplicatedRainyDayBeforeCallingLlm() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(place(10L, 60), place(20L, 60), place(30L, 60));
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                List.of(2, 2)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+
+        assertThatThrownBy(() -> itineraryGenerateService.generateDraftItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("rainyDayNos must not contain duplicated dayNo. dayNo=2");
+        verify(llmClient, never()).generate(anyString());
+    }
+
+    @Test
     void generateDraftItinerariesRejectsInvalidDayTimeWindowTimeRangeBeforeCallingLlm() {
         Trip trip = trip(
                 1L,

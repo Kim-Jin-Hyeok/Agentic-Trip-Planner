@@ -11,14 +11,15 @@ public record ItineraryGenerateRequest(
         List<PlaceCategory> preferredCategories,
         @Valid
         List<ItineraryDayTimeWindowRequest> dayTimeWindows,
-        Boolean rainyDayMode
+        Boolean rainyDayMode,
+        List<Integer> rainyDayNos
 ) {
 
     public ItineraryGenerateRequest(
             List<Long> mustVisitPlaceIds,
             List<Long> excludedPlaceIds
     ) {
-        this(mustVisitPlaceIds, excludedPlaceIds, null, null, null, null);
+        this(mustVisitPlaceIds, excludedPlaceIds, null, null, null, null, null);
     }
 
     public ItineraryGenerateRequest(
@@ -26,7 +27,7 @@ public record ItineraryGenerateRequest(
             List<Long> excludedPlaceIds,
             ItineraryPace pace
     ) {
-        this(mustVisitPlaceIds, excludedPlaceIds, pace, null, null, null);
+        this(mustVisitPlaceIds, excludedPlaceIds, pace, null, null, null, null);
     }
 
     public ItineraryGenerateRequest(
@@ -35,7 +36,7 @@ public record ItineraryGenerateRequest(
             ItineraryPace pace,
             List<PlaceCategory> preferredCategories
     ) {
-        this(mustVisitPlaceIds, excludedPlaceIds, pace, preferredCategories, null, null);
+        this(mustVisitPlaceIds, excludedPlaceIds, pace, preferredCategories, null, null, null);
     }
 
     public ItineraryGenerateRequest(
@@ -45,7 +46,18 @@ public record ItineraryGenerateRequest(
             List<PlaceCategory> preferredCategories,
             List<ItineraryDayTimeWindowRequest> dayTimeWindows
     ) {
-        this(mustVisitPlaceIds, excludedPlaceIds, pace, preferredCategories, dayTimeWindows, null);
+        this(mustVisitPlaceIds, excludedPlaceIds, pace, preferredCategories, dayTimeWindows, null, null);
+    }
+
+    public ItineraryGenerateRequest(
+            List<Long> mustVisitPlaceIds,
+            List<Long> excludedPlaceIds,
+            ItineraryPace pace,
+            List<PlaceCategory> preferredCategories,
+            List<ItineraryDayTimeWindowRequest> dayTimeWindows,
+            Boolean rainyDayMode
+    ) {
+        this(mustVisitPlaceIds, excludedPlaceIds, pace, preferredCategories, dayTimeWindows, rainyDayMode, null);
     }
 
     public List<Long> normalizedMustVisitPlaceIds() {
@@ -85,5 +97,12 @@ public record ItineraryGenerateRequest(
 
     public boolean normalizedRainyDayMode() {
         return Boolean.TRUE.equals(rainyDayMode);
+    }
+
+    public List<Integer> normalizedRainyDayNos() {
+        if (rainyDayNos == null) {
+            return List.of();
+        }
+        return rainyDayNos;
     }
 }

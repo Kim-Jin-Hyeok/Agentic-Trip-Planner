@@ -49,7 +49,8 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("You must include every placeId listed in mustVisitPlaceIds in the generated itinerary.");
         assertThat(prompt).contains("You must never include any placeId listed in excludedPlaceIds in the generated itinerary.");
         assertThat(prompt).contains("If preferredCategories is not empty, prioritize places in those categories when building the itinerary.");
-        assertThat(prompt).contains("If rainyDayMode is true, prioritize indoor places and places with higher rainyDayScore.");
+        assertThat(prompt).contains("If rainyDayMode is true, prioritize indoor places and places with higher rainyDayScore on every trip day.");
+        assertThat(prompt).contains("For each dayNo listed in rainyDayNos, prioritize indoor places and places with higher rainyDayScore only on that day.");
         assertThat(prompt).contains("mustVisitPlaceIds must be included even if their categories are not in preferredCategories.");
         assertThat(prompt).contains("excludedPlaceIds must never be included regardless of preferredCategories.");
         assertThat(prompt).contains("Use concept as the overall trip mood and priority, not as the only category to schedule.");
@@ -70,6 +71,7 @@ class ItineraryPromptGeneratorTest {
         assertThat(prompt).contains("- dailyEndTime: 18:00");
         assertThat(prompt).contains("- preferredCategories: []");
         assertThat(prompt).contains("- rainyDayMode: false");
+        assertThat(prompt).contains("- rainyDayNos: []");
         assertThat(prompt).contains("- selectedPace: NORMAL");
         assertThat(prompt).contains("RELAXED: Plan 3 to 4 itinerary items per day with generous travel and rest time.");
         assertThat(prompt).contains("NORMAL: Plan 4 to 5 itinerary items per day with moderate travel time.");
@@ -157,9 +159,30 @@ class ItineraryPromptGeneratorTest {
         String prompt = generator.generate(trip(), candidatePlaces(), request);
 
         assertThat(prompt).contains("- rainyDayMode: true");
-        assertThat(prompt).contains("If rainyDayMode is true, prioritize indoor places and places with higher rainyDayScore.");
+        assertThat(prompt).contains("If rainyDayMode is true, prioritize indoor places and places with higher rainyDayScore on every trip day.");
         assertThat(prompt).contains("indoorYn: false");
         assertThat(prompt).contains("rainyDayScore: 1");
+    }
+
+    @Test
+    void generateIncludesRainyDayNumbersRulesAndValues() {
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                ItineraryPace.NORMAL,
+                null,
+                null,
+                false,
+                List.of(2)
+        );
+
+        String prompt = generator.generate(trip(), candidatePlaces(), request);
+
+        assertThat(prompt).contains("- rainyDayMode: false");
+        assertThat(prompt).contains("- rainyDayNos: [2]");
+        assertThat(prompt).contains(
+                "For each dayNo listed in rainyDayNos, prioritize indoor places and places with higher rainyDayScore only on that day."
+        );
     }
 
     @Test

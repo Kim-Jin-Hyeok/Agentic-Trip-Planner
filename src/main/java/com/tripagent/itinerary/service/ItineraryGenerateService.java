@@ -349,22 +349,28 @@ public class ItineraryGenerateService {
                 targetItemCount
         );
         List<ItineraryCreateRequest> fallbackCreateRequests = new ArrayList<>();
-        int selectedPlaceIndex = 0;
+        List<PlaceResponse> remainingSelectedPlaces = new ArrayList<>(selectedPlaces);
 
         for (int dayNo = 1; dayNo <= tripDays; dayNo++) {
             int dayItemCount = fallbackDayItemCount(
                     dayNo,
                     tripDays,
-                    selectedPlaces.size() - selectedPlaceIndex,
+                    remainingSelectedPlaces.size(),
                     minItemsPerDay,
                     maxItemsPerDay
             );
+            List<PlaceResponse> selectedDayPlaces = selectFallbackDayPlaces(
+                    request,
+                    dayNo,
+                    remainingSelectedPlaces,
+                    dayItemCount
+            );
             List<PlaceResponse> dayPlaces = orderFallbackDayPlacesByRoute(
                     trip,
-                    selectedPlaces.subList(selectedPlaceIndex, selectedPlaceIndex + dayItemCount)
+                    selectedDayPlaces
             );
             fallbackCreateRequests.addAll(createFallbackDayItineraries(trip, request, dayNo, dayPlaces));
-            selectedPlaceIndex += dayItemCount;
+            remainingSelectedPlaces.removeAll(selectedDayPlaces);
         }
 
         List<Long> selectedPlaceIds = fallbackCreateRequests.stream()
@@ -409,6 +415,29 @@ public class ItineraryGenerateService {
         }
 
         return selectedPlaces;
+    }
+
+    private List<PlaceResponse> selectFallbackDayPlaces(
+            ItineraryGenerateRequest request,
+            int dayNo,
+            List<PlaceResponse> remainingPlaces,
+            int dayItemCount
+    ) {
+        if (!isRainyDay(request, dayNo) && !hasRainyDayAfter(request, dayNo)) {
+            return new ArrayList<>(remainingPlaces.subList(0, dayItemCount));
+        }
+
+        Comparator<PlaceResponse> rainyDayComparator = Comparator
+                .comparingInt((PlaceResponse place) -> rainyDayScore(place))
+                .thenComparing(PlaceResponse::placeId);
+        if (isRainyDay(request, dayNo)) {
+            rainyDayComparator = rainyDayComparator.reversed();
+        }
+
+        return remainingPlaces.stream()
+                .sorted(rainyDayComparator)
+                .limit(dayItemCount)
+                .toList();
     }
 
     private int targetFallbackItemCount(
@@ -936,6 +965,7 @@ public class ItineraryGenerateService {
         }
 
         validateDayTimeWindows(trip, request);
+        validateRainyDayNos(trip, request);
 
         Set<Long> candidatePlaceIds = candidatePlaces.stream()
                 .map(PlaceResponse::placeId)
@@ -991,6 +1021,27 @@ public class ItineraryGenerateService {
             if (!dayTimeWindow.startTime().isBefore(dayTimeWindow.endTime())) {
                 throw new IllegalArgumentException(
                         "dayTimeWindows.startTime must be before endTime. dayNo=" + dayTimeWindow.dayNo()
+                );
+            }
+        }
+    }
+
+    private void validateRainyDayNos(Trip trip, ItineraryGenerateRequest request) {
+        long tripDays = ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1;
+        Set<Integer> seenDayNos = new HashSet<>();
+
+        for (Integer dayNo : request.normalizedRainyDayNos()) {
+            if (dayNo == null) {
+                throw new IllegalArgumentException("rainyDayNos must not contain null.");
+            }
+            if (dayNo < 1 || dayNo > tripDays) {
+                throw new IllegalArgumentException(
+                        "rainyDayNos must be within trip period. dayNo=" + dayNo + ", maxDayNo=" + tripDays
+                );
+            }
+            if (!seenDayNos.add(dayNo)) {
+                throw new IllegalArgumentException(
+                        "rainyDayNos must not contain duplicated dayNo. dayNo=" + dayNo
                 );
             }
         }
@@ -1413,13 +1464,29 @@ public class ItineraryGenerateService {
     }
 
     private int rainyDayScore(PlaceResponse place, ItineraryGenerateRequest request) {
-        if (request == null || !request.normalizedRainyDayMode()) {
+        if (request == null
+                || (!request.normalizedRainyDayMode() && request.normalizedRainyDayNos().isEmpty())) {
             return 0;
         }
 
+        return rainyDayScore(place);
+    }
+
+    private int rainyDayScore(PlaceResponse place) {
         int indoorScore = Boolean.TRUE.equals(place.indoorYn()) ? 1_000 : 0;
         int rainyDayScore = place.rainyDayScore() == null ? 0 : place.rainyDayScore();
         return indoorScore + rainyDayScore;
+    }
+
+    private boolean isRainyDay(ItineraryGenerateRequest request, int dayNo) {
+        return request != null
+                && (request.normalizedRainyDayMode() || request.normalizedRainyDayNos().contains(dayNo));
+    }
+
+    private boolean hasRainyDayAfter(ItineraryGenerateRequest request, int dayNo) {
+        return request != null
+                && !request.normalizedRainyDayMode()
+                && request.normalizedRainyDayNos().stream().anyMatch(rainyDayNo -> rainyDayNo > dayNo);
     }
 
     private boolean isAccommodationRegion(PlaceResponse place, Trip trip) {

@@ -67,7 +67,8 @@ const initialGenerateOptions: ItineraryGenerateRequest = {
   pace: 'NORMAL',
   preferredCategories: [],
   dayTimeWindows: [],
-  rainyDayMode: false
+  rainyDayMode: false,
+  rainyDayNos: []
 };
 
 const initialConditionForm: TripConditionUpdateRequest = {
@@ -1283,7 +1284,7 @@ export function TripCreatePage() {
           onGenerateOptionsChange={setGenerateOptions}
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onRefreshWeather={() => trip != null && void loadTripWeather(trip.tripId)}
-          onEnableRainyDayMode={() => setGenerateOptions((current) => ({ ...current, rainyDayMode: true }))}
+          onApplyRainyDays={(rainyDayNos) => setGenerateOptions((current) => ({ ...current, rainyDayNos }))}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
           onStartTitleEdit={handleStartTitleEdit}
           onTitleDraftChange={handleTitleDraftChange}
