@@ -10,6 +10,7 @@ import type {
   TripConditionUpdateRequest,
   TripVisibility
 } from '../types/trip';
+import type { TripWeatherForecast } from '../types/weather';
 import {
   conceptLabel,
   selectedTripStats,
@@ -23,6 +24,7 @@ import { ItineraryAddForm } from './ItineraryAddForm';
 import { ItineraryGenerateOptions } from './ItineraryGenerateOptions';
 import { ItineraryMapPanel } from './ItineraryMapPanel';
 import { TripConditionEditForm } from './TripConditionEditForm';
+import { TripWeatherPanel } from './TripWeatherPanel';
 
 type TripDetailPanelProps = {
   viewMode: ViewMode;
@@ -37,6 +39,8 @@ type TripDetailPanelProps = {
   isGenerating: boolean;
   isRegenerating: boolean;
   isLoadingCandidatePlaces: boolean;
+  tripWeather: TripWeatherForecast | null;
+  isLoadingWeather: boolean;
   isUpdatingVisibility: boolean;
   isUpdatingLike: boolean;
   isCopyingPublicTrip: boolean;
@@ -60,6 +64,8 @@ type TripDetailPanelProps = {
   onRegenerate: () => void;
   onGenerateOptionsChange: (options: ItineraryGenerateRequest) => void;
   onLoadCandidatePlaces: () => void;
+  onRefreshWeather: () => void;
+  onEnableRainyDayMode: () => void;
   onUpdateVisibility: (visibility: TripVisibility) => void;
   onStartTitleEdit: () => void;
   onTitleDraftChange: (title: string) => void;
@@ -98,6 +104,8 @@ export function TripDetailPanel({
   isGenerating,
   isRegenerating,
   isLoadingCandidatePlaces,
+  tripWeather,
+  isLoadingWeather,
   isUpdatingVisibility,
   isUpdatingLike,
   isCopyingPublicTrip,
@@ -121,6 +129,8 @@ export function TripDetailPanel({
   onRegenerate,
   onGenerateOptionsChange,
   onLoadCandidatePlaces,
+  onRefreshWeather,
+  onEnableRainyDayMode,
   onUpdateVisibility,
   onStartTitleEdit,
   onTitleDraftChange,
@@ -301,6 +311,16 @@ export function TripDetailPanel({
       )}
 
       {message.length > 0 && <p className="status-message">{message}</p>}
+
+      {viewMode === 'mine' && trip != null && (
+        <TripWeatherPanel
+          forecast={tripWeather}
+          isLoading={isLoadingWeather}
+          rainyDayMode={generateOptions.rainyDayMode}
+          onRefresh={onRefreshWeather}
+          onEnableRainyDayMode={onEnableRainyDayMode}
+        />
+      )}
 
       {viewMode === 'mine' && trip != null && (
         <ItineraryGenerateOptions

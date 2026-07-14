@@ -19,6 +19,12 @@ auth:
     secret: ${AUTH_JWT_SECRET:local-development-jwt-secret-change-before-prod}
     access-token-expiration-minutes: ${AUTH_JWT_ACCESS_TOKEN_EXPIRATION_MINUTES:60}
 
+weather:
+  open-meteo:
+    base-url: ${WEATHER_OPEN_METEO_BASE_URL:https://api.open-meteo.com}
+    connect-timeout: ${WEATHER_OPEN_METEO_CONNECT_TIMEOUT:3s}
+    read-timeout: ${WEATHER_OPEN_METEO_READ_TIMEOUT:5s}
+
 ---
 
 spring:

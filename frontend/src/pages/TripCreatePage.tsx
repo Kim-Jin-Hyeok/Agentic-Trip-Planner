@@ -22,6 +22,7 @@ import {
 } from '../api/tripApi';
 import { getStoredAuthSession } from '../api/authStorage';
 import { getRecommendedPlaces } from '../api/placeApi';
+import { getTripWeather } from '../api/weatherApi';
 import { AuthPanel } from '../components/AuthPanel';
 import { MyTripList } from '../components/MyTripList';
 import { PublicTripList } from '../components/PublicTripList';
@@ -44,6 +45,7 @@ import type {
   TripResponse,
   TripVisibility
 } from '../types/trip';
+import type { TripWeatherForecast } from '../types/weather';
 import { initialPublicFilters, itineraryForm, type ItineraryEditForm, type PublicListMode, type ViewMode } from '../utils/tripDisplay';
 
 const initialForm: TripCreateRequest = {
@@ -133,6 +135,8 @@ export function TripCreatePage() {
   const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
   const [generateOptions, setGenerateOptions] = useState<ItineraryGenerateRequest>(initialGenerateOptions);
   const [candidatePlaces, setCandidatePlaces] = useState<PlaceResponse[]>([]);
+  const [tripWeather, setTripWeather] = useState<TripWeatherForecast | null>(null);
+  const [isLoadingWeather, setIsLoadingWeather] = useState(false);
   const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
   const [editingItineraryId, setEditingItineraryId] = useState<number | null>(null);
   const [itineraryEditError, setItineraryEditError] = useState('');
@@ -141,6 +145,7 @@ export function TripCreatePage() {
   const isConditionUpdateRequestInFlight = useRef(false);
   const isItineraryAddRequestInFlight = useRef(false);
   const hasHandledInitialNavigation = useRef(false);
+  const weatherRequestId = useRef(0);
 
   const itinerariesByDay = useMemo(() => {
     return itineraries.reduce<Record<number, Itinerary[]>>((days, itinerary) => {
@@ -209,6 +214,17 @@ export function TripCreatePage() {
     setItineraryEditError('');
   }, [trip?.tripId]);
 
+  useEffect(() => {
+    const requestId = ++weatherRequestId.current;
+    setTripWeather(null);
+    setIsLoadingWeather(false);
+    if (viewMode !== 'mine' || trip == null) {
+      return;
+    }
+
+    void loadTripWeather(trip.tripId, requestId);
+  }, [viewMode, trip?.tripId, trip?.startDate, trip?.endDate]);
+
   function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
     setForm((current) => ({
       ...current,
@@ -266,6 +282,30 @@ export function TripCreatePage() {
       setMessage(error instanceof Error ? error.message : '내 여행 목록 조회에 실패했습니다.');
     } finally {
       setIsLoadingTrips(false);
+    }
+  }
+
+  async function loadTripWeather(tripId: number, requestId = ++weatherRequestId.current) {
+    setIsLoadingWeather(true);
+
+    try {
+      const forecast = await getTripWeather(tripId);
+      if (weatherRequestId.current === requestId) {
+        setTripWeather(forecast);
+      }
+    } catch {
+      if (weatherRequestId.current === requestId) {
+        setTripWeather({
+          available: false,
+          rainyDaySuggested: false,
+          message: '날씨 정보를 불러오지 못했습니다. 일정 생성은 계속 이용할 수 있습니다.',
+          days: []
+        });
+      }
+    } finally {
+      if (weatherRequestId.current === requestId) {
+        setIsLoadingWeather(false);
+      }
     }
   }
 
@@ -1217,6 +1257,8 @@ export function TripCreatePage() {
           isGenerating={isGenerating}
           isRegenerating={isRegenerating}
           isLoadingCandidatePlaces={isLoadingCandidatePlaces}
+          tripWeather={tripWeather}
+          isLoadingWeather={isLoadingWeather}
           isUpdatingVisibility={isUpdatingVisibility}
           isUpdatingLike={isUpdatingLike}
           isCopyingPublicTrip={isCopyingPublicTrip}
@@ -1240,6 +1282,8 @@ export function TripCreatePage() {
           onRegenerate={() => void handleRegenerateItinerary()}
           onGenerateOptionsChange={setGenerateOptions}
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
+          onRefreshWeather={() => trip != null && void loadTripWeather(trip.tripId)}
+          onEnableRainyDayMode={() => setGenerateOptions((current) => ({ ...current, rainyDayMode: true }))}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
           onStartTitleEdit={handleStartTitleEdit}
           onTitleDraftChange={handleTitleDraftChange}
