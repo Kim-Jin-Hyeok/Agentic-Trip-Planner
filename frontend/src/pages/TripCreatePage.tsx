@@ -87,10 +87,15 @@ const initialItineraryAddForm: ItineraryCreateRequest = {
   reason: ''
 };
 
+type BrowserNavigation = {
+  viewMode: ViewMode;
+  publicTripId: number | null;
+};
+
 export function TripCreatePage() {
   const [form, setForm] = useState<TripCreateRequest>(initialForm);
   const [session, setSession] = useState<AuthSession | null>(() => getStoredAuthSession());
-  const [viewMode, setViewMode] = useState<ViewMode>('mine');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => readBrowserNavigation().viewMode);
   const [trips, setTrips] = useState<TripResponse[]>([]);
   const [publicTripPage, setPublicTripPage] = useState<PageResponse<PublicTripResponse> | null>(null);
   const [publicSort, setPublicSort] = useState<PublicTripSort>('LATEST');
@@ -111,6 +116,7 @@ export function TripCreatePage() {
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [isUpdatingLike, setIsUpdatingLike] = useState(false);
   const [isCopyingPublicTrip, setIsCopyingPublicTrip] = useState(false);
+  const [isSharingPublicTrip, setIsSharingPublicTrip] = useState(false);
   const [isDeletingTrip, setIsDeletingTrip] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
@@ -134,6 +140,7 @@ export function TripCreatePage() {
   const isTitleUpdateRequestInFlight = useRef(false);
   const isConditionUpdateRequestInFlight = useRef(false);
   const isItineraryAddRequestInFlight = useRef(false);
+  const hasHandledInitialNavigation = useRef(false);
 
   const itinerariesByDay = useMemo(() => {
     return itineraries.reduce<Record<number, Itinerary[]>>((days, itinerary) => {
@@ -162,6 +169,34 @@ export function TripCreatePage() {
     setItineraries([]);
     void loadPublicTrips(publicSort, publicPage, publicListMode, appliedPublicFilters);
   }, [viewMode, publicSort, publicPage, publicListMode, appliedPublicFilters]);
+
+  useEffect(() => {
+    const initialNavigation = readBrowserNavigation();
+    if (
+      !hasHandledInitialNavigation.current
+      && initialNavigation.viewMode === 'public'
+      && initialNavigation.publicTripId != null
+    ) {
+      hasHandledInitialNavigation.current = true;
+      void loadPublicTripDetail(initialNavigation.publicTripId, false);
+    }
+
+    function handlePopState() {
+      const navigation = readBrowserNavigation();
+      setViewMode(navigation.viewMode);
+      setTrip(null);
+      setPublicTrip(null);
+      setItineraries([]);
+      setMessage('');
+
+      if (navigation.viewMode === 'public' && navigation.publicTripId != null) {
+        void loadPublicTripDetail(navigation.publicTripId, false);
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     setIsEditingConditions(false);
@@ -285,7 +320,7 @@ export function TripCreatePage() {
     }
   }
 
-  async function loadPublicTripDetail(tripId: number) {
+  async function loadPublicTripDetail(tripId: number, updateLocation = true) {
     setMessage('');
     setIsLoadingDetail(true);
 
@@ -298,6 +333,9 @@ export function TripCreatePage() {
       setTitleDraft('');
       setTitleError('');
       setEditingItems({});
+      if (updateLocation) {
+        updateBrowserNavigation('public', tripId);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '공개 여행 상세 조회에 실패했습니다.');
     } finally {
@@ -805,6 +843,7 @@ export function TripCreatePage() {
       setEditingItems({});
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(copiedTrip));
+      updateBrowserNavigation('mine');
       await loadTrips();
       setMessage('공개 여행을 내 여행으로 가져왔습니다. 자유롭게 수정해 보세요.');
     } catch (error) {
@@ -814,16 +853,71 @@ export function TripCreatePage() {
     }
   }
 
+  async function handleSharePublicTrip() {
+    if (publicTrip == null) {
+      return;
+    }
+
+    const shareUrl = createPublicTripUrl(publicTrip.tripId);
+    setIsSharingPublicTrip(true);
+    setMessage('');
+
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({
+          title: publicTrip.title,
+          text: `${publicTrip.author.nickname}님의 제주 여행 일정을 확인해 보세요.`,
+          url: shareUrl
+        });
+        setMessage('공유할 앱으로 여행 링크를 전달했습니다.');
+      } else {
+        await copyTextToClipboard(shareUrl);
+        setMessage('공개 여행 링크를 복사했습니다.');
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+
+      try {
+        await copyTextToClipboard(shareUrl);
+        setMessage('공개 여행 링크를 복사했습니다.');
+      } catch {
+        setMessage('공개 여행 링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      }
+    } finally {
+      setIsSharingPublicTrip(false);
+    }
+  }
+
+  function handleShowMyTrips() {
+    setViewMode('mine');
+    setPublicTrip(null);
+    setItineraries(trip?.itineraries ?? []);
+    updateBrowserNavigation('mine');
+  }
+
+  function handleShowPublicTrips() {
+    setViewMode('public');
+    setTrip(null);
+    setPublicTrip(null);
+    setItineraries([]);
+    setPublicPage(0);
+    updateBrowserNavigation('public');
+  }
+
   function handleApplyPublicFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPublicPage(0);
     setAppliedPublicFilters(publicFilters);
+    updateBrowserNavigation('public', null, true);
   }
 
   function handleResetPublicFilters() {
     setPublicFilters(initialPublicFilters);
     setAppliedPublicFilters(initialPublicFilters);
     setPublicPage(0);
+    updateBrowserNavigation('public', null, true);
   }
 
   function applyLikeResponse(tripId: number, likeCount: number, liked: boolean) {
@@ -1040,11 +1134,7 @@ export function TripCreatePage() {
             <button
               type="button"
               className={viewMode === 'mine' ? 'tab-button active' : 'tab-button'}
-              onClick={() => {
-                setViewMode('mine');
-                setPublicTrip(null);
-                setItineraries(trip?.itineraries ?? []);
-              }}
+              onClick={handleShowMyTrips}
             >
               <span>내 여행</span>
               <small>만들고 관리하기</small>
@@ -1052,12 +1142,7 @@ export function TripCreatePage() {
             <button
               type="button"
               className={viewMode === 'public' ? 'tab-button active' : 'tab-button'}
-              onClick={() => {
-                setViewMode('public');
-                setTrip(null);
-                setItineraries(publicTrip?.itineraries ?? []);
-                setPublicPage(0);
-              }}
+              onClick={handleShowPublicTrips}
             >
               <span>여행 둘러보기</span>
               <small>다른 일정 참고하기</small>
@@ -1099,17 +1184,22 @@ export function TripCreatePage() {
               onSortChange={(sort) => {
                 setPublicSort(sort);
                 setPublicPage(0);
+                updateBrowserNavigation('public', null, true);
               }}
               onListModeChange={(mode) => {
                 setPublicListMode(mode);
                 setPublicPage(0);
+                updateBrowserNavigation('public', null, true);
               }}
               onFilterChange={updatePublicFilter}
               onApplyFilters={handleApplyPublicFilters}
               onResetFilters={handleResetPublicFilters}
               onSelect={(tripId) => void loadPublicTripDetail(tripId)}
               onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
-              onPageChange={setPublicPage}
+              onPageChange={(pageUpdater) => {
+                setPublicPage(pageUpdater);
+                updateBrowserNavigation('public', null, true);
+              }}
             />
           )}
         </div>
@@ -1130,6 +1220,7 @@ export function TripCreatePage() {
           isUpdatingVisibility={isUpdatingVisibility}
           isUpdatingLike={isUpdatingLike}
           isCopyingPublicTrip={isCopyingPublicTrip}
+          isSharingPublicTrip={isSharingPublicTrip}
           isDeletingTrip={isDeletingTrip}
           isEditingTitle={isEditingTitle}
           isUpdatingTitle={isUpdatingTitle}
@@ -1165,6 +1256,7 @@ export function TripCreatePage() {
           onDeleteTrip={() => void handleDeleteTrip()}
           onToggleLike={(targetTrip) => void handleToggleLike(targetTrip)}
           onCopyPublicTrip={() => void handleCopyPublicTrip()}
+          onSharePublicTrip={() => void handleSharePublicTrip()}
           onUpdateItineraryForm={updateItineraryForm}
           onStartItineraryEdit={handleStartItineraryEdit}
           onCancelItineraryEdit={handleCancelItineraryEdit}
@@ -1175,6 +1267,67 @@ export function TripCreatePage() {
       </section>
     </main>
   );
+}
+
+function readBrowserNavigation(): BrowserNavigation {
+  const searchParams = new URLSearchParams(window.location.search);
+  const publicTripId = Number(searchParams.get('tripId'));
+
+  return {
+    viewMode: searchParams.get('view') === 'public' ? 'public' : 'mine',
+    publicTripId: Number.isInteger(publicTripId) && publicTripId > 0 ? publicTripId : null
+  };
+}
+
+function createPublicTripUrl(tripId: number): string {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('view', 'public');
+  url.searchParams.set('tripId', String(tripId));
+  return url.toString();
+}
+
+function updateBrowserNavigation(
+  viewMode: ViewMode,
+  publicTripId: number | null = null,
+  replace = false
+) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  if (viewMode === 'public') {
+    url.searchParams.set('view', 'public');
+    if (publicTripId != null) {
+      url.searchParams.set('tripId', String(publicTripId));
+    }
+  }
+
+  const nextLocation = `${url.pathname}${url.search}`;
+  if (replace) {
+    window.history.replaceState(null, '', nextLocation);
+  } else {
+    window.history.pushState(null, '', nextLocation);
+  }
+}
+
+async function copyTextToClipboard(text: string) {
+  if (navigator.clipboard?.writeText != null) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.opacity = '0';
+  document.body.appendChild(textArea);
+  textArea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textArea);
+  if (!copied) {
+    throw new Error('Clipboard copy failed');
+  }
 }
 
 function createDefaultGenerateOptions(trip: TripDetail): ItineraryGenerateRequest {

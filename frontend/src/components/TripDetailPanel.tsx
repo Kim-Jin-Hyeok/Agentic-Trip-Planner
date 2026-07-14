@@ -39,6 +39,7 @@ type TripDetailPanelProps = {
   isUpdatingVisibility: boolean;
   isUpdatingLike: boolean;
   isCopyingPublicTrip: boolean;
+  isSharingPublicTrip: boolean;
   isDeletingTrip: boolean;
   isEditingTitle: boolean;
   isUpdatingTitle: boolean;
@@ -74,6 +75,7 @@ type TripDetailPanelProps = {
   onDeleteTrip: () => void;
   onToggleLike: (trip: PublicTripResponse | PublicTripDetail) => void;
   onCopyPublicTrip: () => void;
+  onSharePublicTrip: () => void;
   onUpdateItineraryForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
   onStartItineraryEdit: (itinerary: Itinerary) => void;
   onCancelItineraryEdit: () => void;
@@ -98,6 +100,7 @@ export function TripDetailPanel({
   isUpdatingVisibility,
   isUpdatingLike,
   isCopyingPublicTrip,
+  isSharingPublicTrip,
   isDeletingTrip,
   isEditingTitle,
   isUpdatingTitle,
@@ -133,6 +136,7 @@ export function TripDetailPanel({
   onDeleteTrip,
   onToggleLike,
   onCopyPublicTrip,
+  onSharePublicTrip,
   onUpdateItineraryForm,
   onStartItineraryEdit,
   onCancelItineraryEdit,
@@ -240,8 +244,16 @@ export function TripDetailPanel({
           <div className="result-actions">
             <button
               type="button"
+              className="secondary-button"
+              onClick={onSharePublicTrip}
+              disabled={isSharingPublicTrip}
+            >
+              {isSharingPublicTrip ? '공유 준비 중...' : '공유하기'}
+            </button>
+            <button
+              type="button"
               onClick={onCopyPublicTrip}
-              disabled={isCopyingPublicTrip}
+              disabled={isCopyingPublicTrip || isSharingPublicTrip}
             >
               {isCopyingPublicTrip ? '가져오는 중...' : '내 여행으로 가져오기'}
             </button>
@@ -249,7 +261,7 @@ export function TripDetailPanel({
               type="button"
               className={publicTrip.liked ? 'like-button active' : 'like-button'}
               onClick={() => onToggleLike(publicTrip)}
-              disabled={isUpdatingLike || isCopyingPublicTrip}
+              disabled={isUpdatingLike || isCopyingPublicTrip || isSharingPublicTrip}
             >
               {publicTrip.liked ? '좋아요 취소' : '좋아요'}
             </button>
