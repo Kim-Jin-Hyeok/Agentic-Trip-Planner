@@ -98,6 +98,17 @@ export function ItineraryDaySection({
                 <span>
                   {itinerary.place.region} · {itinerary.place.category}
                 </span>
+                <div className="place-location">
+                  <p>{itinerary.place.address}</p>
+                  <a
+                    href={createGoogleMapsUrl(itinerary.place)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${itinerary.place.name} Google 지도에서 보기`}
+                  >
+                    지도에서 보기 <span aria-hidden="true">↗</span>
+                  </a>
+                </div>
                 {viewMode === 'mine' && isEditing ? (
                   <>
                     <div className="edit-grid edit-grid-primary">
@@ -185,4 +196,16 @@ export function ItineraryDaySection({
       </ol>
     </section>
   );
+}
+
+function createGoogleMapsUrl(place: Itinerary['place']): string {
+  const hasCoordinates = Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
+  const query = hasCoordinates
+    ? `${place.latitude},${place.longitude}`
+    : `${place.name} ${place.address}`;
+  const searchParams = new URLSearchParams({
+    api: '1',
+    query
+  });
+  return `https://www.google.com/maps/search/?${searchParams.toString()}`;
 }

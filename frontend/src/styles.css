@@ -1092,6 +1092,43 @@ button.trip-list-item:hover:not(:disabled),
   letter-spacing: -0.02em;
 }
 
+.place-location {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 10px;
+  background: var(--green-50);
+  padding: 9px 11px;
+}
+
+.place-location p {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.place-location a {
+  flex: 0 0 auto;
+  color: var(--green-800);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.place-location a:hover {
+  color: var(--green-950);
+  text-decoration: underline;
+}
+
+.place-location a:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--green-700);
+  outline-offset: 3px;
+}
+
 .icon-button,
 .danger-button {
   min-height: 32px;
@@ -1299,6 +1336,12 @@ button.trip-list-item:hover:not(:disabled),
 
   .result-actions button {
     flex: 1 1 auto;
+  }
+
+  .place-location {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
   }
 
   .signed-in-panel {
