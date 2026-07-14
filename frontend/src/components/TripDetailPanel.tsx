@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import type {
   Itinerary,
+  ItineraryCreateRequest,
   ItineraryGenerateRequest,
   PlaceResponse,
   PublicTripDetail,
@@ -18,6 +19,7 @@ import {
   type ViewMode
 } from '../utils/tripDisplay';
 import { ItineraryDaySection } from './ItineraryDaySection';
+import { ItineraryAddForm } from './ItineraryAddForm';
 import { ItineraryGenerateOptions } from './ItineraryGenerateOptions';
 import { TripConditionEditForm } from './TripConditionEditForm';
 
@@ -43,6 +45,10 @@ type TripDetailPanelProps = {
   titleError: string;
   conditionForm: TripConditionUpdateRequest;
   conditionError: string;
+  isItineraryAddOpen: boolean;
+  isAddingItinerary: boolean;
+  itineraryAddForm: ItineraryCreateRequest;
+  itineraryAddError: string;
   generateOptions: ItineraryGenerateRequest;
   candidatePlaces: PlaceResponse[];
   onGenerate: () => void;
@@ -58,6 +64,10 @@ type TripDetailPanelProps = {
   onConditionFormChange: <K extends keyof TripConditionUpdateRequest>(key: K, value: TripConditionUpdateRequest[K]) => void;
   onCancelConditionEdit: () => void;
   onUpdateConditions: (event: FormEvent<HTMLFormElement>) => void;
+  onStartItineraryAdd: () => void;
+  onItineraryAddFormChange: <K extends keyof ItineraryCreateRequest>(key: K, value: ItineraryCreateRequest[K]) => void;
+  onCancelItineraryAdd: () => void;
+  onCreateItinerary: (event: FormEvent<HTMLFormElement>) => void;
   onDeleteTrip: () => void;
   onToggleLike: (trip: PublicTripResponse | PublicTripDetail) => void;
   onUpdateItineraryForm: <K extends keyof ItineraryEditForm>(itinerary: Itinerary, key: K, value: ItineraryEditForm[K]) => void;
@@ -88,6 +98,10 @@ export function TripDetailPanel({
   titleError,
   conditionForm,
   conditionError,
+  isItineraryAddOpen,
+  isAddingItinerary,
+  itineraryAddForm,
+  itineraryAddError,
   generateOptions,
   candidatePlaces,
   onGenerate,
@@ -103,6 +117,10 @@ export function TripDetailPanel({
   onConditionFormChange,
   onCancelConditionEdit,
   onUpdateConditions,
+  onStartItineraryAdd,
+  onItineraryAddFormChange,
+  onCancelItineraryAdd,
+  onCreateItinerary,
   onDeleteTrip,
   onToggleLike,
   onUpdateItineraryForm,
@@ -112,7 +130,7 @@ export function TripDetailPanel({
 }: TripDetailPanelProps) {
   const selectedTrip = trip ?? publicTrip;
   const hasItineraries = Object.keys(itinerariesByDay).length > 0;
-  const isChangingItinerary = isGenerating || isRegenerating;
+  const isChangingItinerary = isGenerating || isRegenerating || isAddingItinerary;
 
   return (
     <div className="result-panel">
@@ -157,10 +175,10 @@ export function TripDetailPanel({
               <h2>{selectedTripTitle(trip, publicTrip)}</h2>
               {viewMode === 'mine' && trip != null && (
                 <div className="trip-heading-actions">
-                  <button type="button" className="secondary-button" onClick={onStartTitleEdit} disabled={isUpdatingConditions}>
+                  <button type="button" className="secondary-button" onClick={onStartTitleEdit} disabled={isUpdatingConditions || isChangingItinerary}>
                     제목 수정
                   </button>
-                  <button type="button" className="secondary-button" onClick={onStartConditionEdit} disabled={isUpdatingConditions}>
+                  <button type="button" className="secondary-button" onClick={onStartConditionEdit} disabled={isUpdatingConditions || isChangingItinerary}>
                     조건 수정
                   </button>
                 </div>
@@ -250,6 +268,43 @@ export function TripDetailPanel({
           onChange={onGenerateOptionsChange}
           onLoadPlaces={onLoadCandidatePlaces}
         />
+      )}
+
+      {viewMode === 'mine' && trip != null && (
+        <section className="manual-itinerary-section">
+          <div className="manual-itinerary-heading">
+            <div>
+              <p>MANUAL EDIT</p>
+              <h3>직접 일정 보완하기</h3>
+              <span>AI가 만든 일정에 DB 후보 장소를 직접 추가할 수 있습니다.</span>
+            </div>
+            {!isItineraryAddOpen && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={onStartItineraryAdd}
+                disabled={isChangingItinerary || isAddingItinerary}
+              >
+                + 장소 추가
+              </button>
+            )}
+          </div>
+
+          {isItineraryAddOpen && (
+            <ItineraryAddForm
+              form={itineraryAddForm}
+              tripDays={trip.nights + 1}
+              candidatePlaces={candidatePlaces}
+              error={itineraryAddError}
+              isLoadingPlaces={isLoadingCandidatePlaces}
+              isSubmitting={isAddingItinerary}
+              onChange={onItineraryAddFormChange}
+              onLoadPlaces={onLoadCandidatePlaces}
+              onCancel={onCancelItineraryAdd}
+              onSubmit={onCreateItinerary}
+            />
+          )}
+        </section>
       )}
 
       {Object.keys(itinerariesByDay).length === 0 ? (

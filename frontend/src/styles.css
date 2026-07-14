@@ -805,6 +805,93 @@ button.trip-list-item:hover:not(:disabled),
   padding: 18px;
 }
 
+.manual-itinerary-section {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  margin-bottom: 24px;
+  padding: 18px;
+}
+
+.manual-itinerary-heading,
+.itinerary-add-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.manual-itinerary-heading p,
+.manual-itinerary-heading h3,
+.manual-itinerary-heading span,
+.itinerary-add-header p,
+.itinerary-add-header h3,
+.itinerary-add-header span {
+  margin: 0;
+}
+
+.manual-itinerary-heading p,
+.itinerary-add-header p {
+  color: var(--green-700);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+  margin-bottom: 5px;
+}
+
+.manual-itinerary-heading h3,
+.itinerary-add-header h3 {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.manual-itinerary-heading span,
+.itinerary-add-header span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.itinerary-add-form {
+  display: grid;
+  gap: 15px;
+  border-top: 1px solid var(--line);
+  margin-top: 17px;
+  padding-top: 17px;
+}
+
+.itinerary-add-time-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.number-input-suffix {
+  position: relative;
+}
+
+.number-input-suffix input {
+  padding-right: 35px;
+}
+
+.number-input-suffix span {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.itinerary-add-actions {
+  display: flex;
+  gap: 7px;
+}
+
 .generate-options-header {
   display: flex;
   align-items: flex-start;
@@ -1168,6 +1255,7 @@ button.trip-list-item:hover:not(:disabled),
   .option-row,
   .candidate-place-item,
   .time-window-item,
+  .itinerary-add-time-grid,
   .day-section li,
   .edit-grid {
     grid-template-columns: 1fr;
@@ -1199,6 +1287,16 @@ button.trip-list-item:hover:not(:disabled),
 
   .itinerary-title-row {
     display: grid;
+  }
+
+  .manual-itinerary-heading,
+  .itinerary-add-header {
+    display: grid;
+  }
+
+  .manual-itinerary-heading button,
+  .itinerary-add-header button {
+    width: 100%;
   }
 
   .itinerary-actions {

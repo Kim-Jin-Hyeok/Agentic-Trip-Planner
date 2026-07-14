@@ -1,6 +1,7 @@
 import { apiRequest } from './client';
 import type {
   Itinerary,
+  ItineraryCreateRequest,
   ItineraryGenerateRequest,
   ItineraryReorderRequest,
   ItineraryUpdateRequest,
@@ -131,6 +132,13 @@ export function updateItinerary(
 ): Promise<Itinerary> {
   return apiRequest<Itinerary>(`/api/trips/${tripId}/itineraries/${itineraryId}`, {
     method: 'PATCH',
+    body: JSON.stringify(request)
+  });
+}
+
+export function createItinerary(tripId: number, request: ItineraryCreateRequest): Promise<Itinerary> {
+  return apiRequest<Itinerary>(`/api/trips/${tripId}/itineraries`, {
+    method: 'POST',
     body: JSON.stringify(request)
   });
 }

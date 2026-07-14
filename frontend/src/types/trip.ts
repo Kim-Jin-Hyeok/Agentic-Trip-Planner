@@ -93,6 +93,16 @@ export type Itinerary = {
   reason: string;
 };
 
+export type ItineraryCreateRequest = {
+  placeId: number;
+  dayNo: number;
+  orderNo: number;
+  startTime: string;
+  endTime: string;
+  travelMinutesFromPrevious: number;
+  reason: string;
+};
+
 export type ItineraryUpdateRequest = {
   startTime: string;
   endTime: string;
