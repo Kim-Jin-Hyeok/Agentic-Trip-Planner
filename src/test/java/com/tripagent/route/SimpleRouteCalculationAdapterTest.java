@@ -35,6 +35,12 @@ class SimpleRouteCalculationAdapterTest {
     }
 
     @Test
+    void calculateTravelMinutesSupportsCoordinateAnchors() {
+        assertThat(adapter.calculateTravelMinutes(33.2394018, 126.3039897, 33.55384, 126.75357))
+                .isEqualTo(127);
+    }
+
+    @Test
     void calculateTravelMinutesReturnsDefaultMinutesWhenCoordinatesAreMissing() {
         PlaceResponse previousPlace = place(10L, null, 126.942500);
         PlaceResponse currentPlace = place(20L, 33.305833, 126.289444);

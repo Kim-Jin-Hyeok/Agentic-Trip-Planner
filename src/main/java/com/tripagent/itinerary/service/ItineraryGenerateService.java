@@ -1,5 +1,6 @@
 package com.tripagent.itinerary.service;
 
+import com.tripagent.accommodation.domain.Accommodation;
 import com.tripagent.ai.llm.LlmClient;
 import com.tripagent.ai.llm.LlmException;
 import com.tripagent.ai.llm.LlmItineraryResponseConverter;
@@ -53,6 +54,7 @@ public class ItineraryGenerateService {
     private static final int MAX_LLM_VALIDATION_RETRY_COUNT = 2;
     private static final int DEFAULT_LLM_CANDIDATE_PLACE_COUNT = 30;
     private static final int MAX_BALANCED_REGION_COUNT = 3;
+    private static final int DEFAULT_ACCOMMODATION_REGION_CANDIDATE_COUNT = 4;
     private static final int MAX_TRAVEL_MINUTES_BETWEEN_PLACES = 90;
     private static final int MIN_FALLBACK_STAY_MINUTES = 30;
     private static final Set<String> MEAL_AND_REST_CATEGORY_NAMES = Set.of("FOOD", "CAFE");
@@ -257,7 +259,8 @@ public class ItineraryGenerateService {
 
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
-        Map<Integer, String> accommodationRegionByDayNo = findAccommodationRegionsByDayNo(trip);
+        Map<Integer, TripAccommodation> accommodationByDayNo = findAccommodationsByDayNo(trip);
+        Map<Integer, String> accommodationRegionByDayNo = accommodationRegionsByDayNo(accommodationByDayNo);
         List<PlaceResponse> allCandidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
         validateGenerateRequest(trip, allCandidatePlaces, request);
         List<PlaceResponse> availableCandidatePlaces = allCandidatePlaces.stream()
@@ -297,7 +300,8 @@ public class ItineraryGenerateService {
                 prompt,
                 operation,
                 targetDayNo,
-                accommodationRegionByDayNo
+                accommodationRegionByDayNo,
+                accommodationByDayNo
         );
     }
 
@@ -308,7 +312,8 @@ public class ItineraryGenerateService {
             String prompt,
             String operation,
             Integer targetDayNo,
-            Map<Integer, String> accommodationRegionByDayNo
+            Map<Integer, String> accommodationRegionByDayNo,
+            Map<Integer, TripAccommodation> accommodationByDayNo
     ) {
         IllegalArgumentException lastValidationException = null;
         int maxAttemptCount = MAX_LLM_VALIDATION_RETRY_COUNT + 1;
@@ -324,7 +329,8 @@ public class ItineraryGenerateService {
                         request,
                         attemptPrompt,
                         targetDayNo,
-                        repairDuplicatedPlaces
+                        repairDuplicatedPlaces,
+                        accommodationByDayNo
                 );
                 logDraftGenerationSuccess(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces);
                 return createRequests;
@@ -332,7 +338,7 @@ public class ItineraryGenerateService {
                 logLlmFailure(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces, exception);
                 return generateFallbackDraftItinerariesOrThrow(
                         trip, candidatePlaces, request, operation, exception, targetDayNo,
-                        accommodationRegionByDayNo
+                        accommodationRegionByDayNo, accommodationByDayNo
                 );
             } catch (IllegalArgumentException exception) {
                 boolean repeatedValidationFailure = lastValidationException != null
@@ -366,7 +372,8 @@ public class ItineraryGenerateService {
                             operation,
                             lastValidationException,
                             targetDayNo,
-                            accommodationRegionByDayNo
+                            accommodationRegionByDayNo,
+                            accommodationByDayNo
                     );
                 }
             }
@@ -380,7 +387,8 @@ public class ItineraryGenerateService {
                 operation,
                 lastValidationException,
                 targetDayNo,
-                accommodationRegionByDayNo
+                accommodationRegionByDayNo,
+                accommodationByDayNo
         );
     }
 
@@ -404,7 +412,8 @@ public class ItineraryGenerateService {
             String operation,
             RuntimeException originalException,
             Integer targetDayNo,
-            Map<Integer, String> accommodationRegionByDayNo
+            Map<Integer, String> accommodationRegionByDayNo,
+            Map<Integer, TripAccommodation> accommodationByDayNo
     ) {
         if (!supportsFallback(operation)) {
             throw originalException;
@@ -416,7 +425,8 @@ public class ItineraryGenerateService {
                     candidatePlaces,
                     request,
                     targetDayNo,
-                    accommodationRegionByDayNo
+                    accommodationRegionByDayNo,
+                    accommodationByDayNo
             );
             logFallbackDraftGenerationSuccess(trip, operation, request, candidatePlaces, originalException);
             return fallbackCreateRequests;
@@ -444,7 +454,8 @@ public class ItineraryGenerateService {
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
             Integer targetDayNo,
-            Map<Integer, String> accommodationRegionByDayNo
+            Map<Integer, String> accommodationRegionByDayNo,
+            Map<Integer, TripAccommodation> accommodationByDayNo
     ) {
         int tripDays = generationDayCount(trip, targetDayNo);
         PaceItineraryPolicy pacePolicy = request == null || request.pace() == null ? null : pacePolicy(request);
@@ -480,13 +491,17 @@ public class ItineraryGenerateService {
             List<PlaceResponse> dayPlaces;
             String preferredStartRegion = preferredStartRegion(trip, accommodationRegionByDayNo, dayNo);
             String preferredEndRegion = accommodationRegionByDayNo.get(dayNo);
+            TripAccommodation startAccommodation = accommodationByDayNo.get(dayNo - 1);
+            TripAccommodation endAccommodation = accommodationByDayNo.get(dayNo);
             if (routeFlexibleSelection) {
                 dayPlaces = selectReachableFallbackDayPlaces(
                         trip,
                         remainingSelectedPlaces,
                         dayItemCount,
                         preferredStartRegion,
-                        preferredEndRegion
+                        preferredEndRegion,
+                        startAccommodation,
+                        endAccommodation
                 );
             } else {
                 List<PlaceResponse> selectedDayPlaces = selectFallbackDayPlaces(
@@ -499,7 +514,9 @@ public class ItineraryGenerateService {
                         trip,
                         selectedDayPlaces,
                         preferredStartRegion,
-                        preferredEndRegion
+                        preferredEndRegion,
+                        startAccommodation,
+                        endAccommodation
                 );
             }
             fallbackCreateRequests.addAll(createFallbackDayItineraries(trip, request, dayNo, dayPlaces));
@@ -512,15 +529,14 @@ public class ItineraryGenerateService {
         validateGeneratedPlaceControls(request, selectedPlaceIds);
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
         validateDraftItineraries(trip, request, fallbackCreateRequests, targetDayNo);
+        validateAccommodationRouteAnchors(candidatePlaces, fallbackCreateRequests, accommodationByDayNo);
 
         return fallbackCreateRequests;
     }
 
     private boolean hasNoFallbackPlaceControls(ItineraryGenerateRequest request) {
         return request == null
-                || (request.normalizedMustVisitPlaceIds().isEmpty()
-                && !request.normalizedRainyDayMode()
-                && request.normalizedRainyDayNos().isEmpty());
+                || request.normalizedMustVisitPlaceIds().isEmpty();
     }
 
     private List<PlaceResponse> selectReachableFallbackDayPlaces(
@@ -528,9 +544,16 @@ public class ItineraryGenerateService {
             List<PlaceResponse> candidatePlaces,
             int dayItemCount,
             String preferredStartRegion,
-            String preferredEndRegion
+            String preferredEndRegion,
+            TripAccommodation startAccommodation,
+            TripAccommodation endAccommodation
     ) {
         List<PlaceResponse> startCandidates = new ArrayList<>(candidatePlaces);
+        if (startAccommodation != null) {
+            startCandidates.sort(Comparator
+                    .comparingInt((PlaceResponse place) -> travelMinutes(startAccommodation, place))
+                    .thenComparing(PlaceResponse::placeId));
+        }
         PlaceResponse preferredStart = findFallbackStartPlace(trip, candidatePlaces, preferredStartRegion);
         if (dayItemCount == 1 && preferredEndRegion != null) {
             preferredStart = findFallbackStartPlace(trip, candidatePlaces, preferredEndRegion);
@@ -539,6 +562,10 @@ public class ItineraryGenerateService {
         startCandidates.addFirst(preferredStart);
 
         for (PlaceResponse startCandidate : startCandidates) {
+            if (startAccommodation != null
+                    && travelMinutes(startAccommodation, startCandidate) > MAX_TRAVEL_MINUTES_BETWEEN_PLACES) {
+                continue;
+            }
             List<PlaceResponse> route = new ArrayList<>();
             List<PlaceResponse> remainingPlaces = new ArrayList<>(candidatePlaces);
             route.add(startCandidate);
@@ -550,7 +577,8 @@ public class ItineraryGenerateService {
                 PlaceResponse nextPlace = findReachableFallbackPlace(
                         currentPlace,
                         remainingPlaces,
-                        finalPlace ? preferredEndRegion : null
+                        finalPlace ? preferredEndRegion : null,
+                        finalPlace ? endAccommodation : null
                 );
                 if (nextPlace == null) {
                     break;
@@ -559,7 +587,9 @@ public class ItineraryGenerateService {
                 remainingPlaces.remove(nextPlace);
             }
 
-            if (route.size() == dayItemCount) {
+            if (route.size() == dayItemCount
+                    && (endAccommodation == null
+                    || travelMinutes(route.getLast(), endAccommodation) <= MAX_TRAVEL_MINUTES_BETWEEN_PLACES)) {
                 return route;
             }
         }
@@ -572,13 +602,19 @@ public class ItineraryGenerateService {
     private PlaceResponse findReachableFallbackPlace(
             PlaceResponse currentPlace,
             List<PlaceResponse> candidatePlaces,
-            String preferredRegion
+            String preferredRegion,
+            TripAccommodation endAccommodation
     ) {
         return candidatePlaces.stream()
                 .filter(place -> routeCalculationAdapter.calculateTravelMinutes(currentPlace, place)
                         <= MAX_TRAVEL_MINUTES_BETWEEN_PLACES)
+                .filter(place -> endAccommodation == null
+                        || travelMinutes(place, endAccommodation) <= MAX_TRAVEL_MINUTES_BETWEEN_PLACES)
                 .min(Comparator.comparing((PlaceResponse place) -> isSameArea(preferredRegion, place.region()))
                         .reversed()
+                        .thenComparingInt(place -> endAccommodation == null
+                                ? 0
+                                : travelMinutes(place, endAccommodation))
                         .thenComparingInt(place ->
                                 routeCalculationAdapter.calculateTravelMinutes(currentPlace, place))
                         .thenComparing(place -> !isSameRegion(currentPlace, place))
@@ -678,13 +714,20 @@ public class ItineraryGenerateService {
             Trip trip,
             List<PlaceResponse> dayPlaces,
             String preferredStartRegion,
-            String preferredEndRegion
+            String preferredEndRegion,
+            TripAccommodation startAccommodation,
+            TripAccommodation endAccommodation
     ) {
         List<PlaceResponse> remainingPlaces = new ArrayList<>(dayPlaces);
         List<PlaceResponse> orderedPlaces = new ArrayList<>();
         PlaceResponse currentPlace = null;
         PlaceResponse preferredEndPlace = null;
-        if (remainingPlaces.size() > 1 && preferredEndRegion != null) {
+        if (remainingPlaces.size() > 1 && endAccommodation != null) {
+            preferredEndPlace = remainingPlaces.stream()
+                    .min(Comparator.comparingInt(place -> travelMinutes(place, endAccommodation)))
+                    .orElse(null);
+            remainingPlaces.remove(preferredEndPlace);
+        } else if (remainingPlaces.size() > 1 && preferredEndRegion != null) {
             preferredEndPlace = remainingPlaces.stream()
                     .filter(place -> isSameArea(preferredEndRegion, place.region()))
                     .findFirst()
@@ -693,9 +736,16 @@ public class ItineraryGenerateService {
         }
 
         while (!remainingPlaces.isEmpty()) {
-            PlaceResponse nextPlace = currentPlace == null
-                    ? findFallbackStartPlace(trip, remainingPlaces, preferredStartRegion)
-                    : findNextFallbackPlace(trip, currentPlace, remainingPlaces);
+            PlaceResponse nextPlace;
+            if (currentPlace != null) {
+                nextPlace = findNextFallbackPlace(trip, currentPlace, remainingPlaces);
+            } else if (startAccommodation != null) {
+                nextPlace = remainingPlaces.stream()
+                        .min(Comparator.comparingInt(place -> travelMinutes(startAccommodation, place)))
+                        .orElseThrow();
+            } else {
+                nextPlace = findFallbackStartPlace(trip, remainingPlaces, preferredStartRegion);
+            }
             orderedPlaces.add(nextPlace);
             remainingPlaces.remove(nextPlace);
             currentPlace = nextPlace;
@@ -773,8 +823,8 @@ public class ItineraryGenerateService {
         return candidatePlaces.getFirst();
     }
 
-    private Map<Integer, String> findAccommodationRegionsByDayNo(Trip trip) {
-        Map<Integer, String> accommodationRegionByDayNo = new HashMap<>();
+    private Map<Integer, TripAccommodation> findAccommodationsByDayNo(Trip trip) {
+        Map<Integer, TripAccommodation> accommodationByDayNo = new HashMap<>();
         List<TripAccommodation> tripAccommodations =
                 tripAccommodationRepository.findByTripIdOrderByStayDate(trip.getTripId());
 
@@ -783,14 +833,23 @@ public class ItineraryGenerateService {
             if (stayDate.isBefore(trip.getStartDate()) || !stayDate.isBefore(trip.getEndDate())) {
                 continue;
             }
-            String region = normalizeArea(tripAccommodation.getAccommodation().getRegion());
-            if (region == null) {
-                continue;
-            }
             int dayNo = Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), stayDate) + 1);
-            accommodationRegionByDayNo.put(dayNo, region);
+            accommodationByDayNo.put(dayNo, tripAccommodation);
         }
 
+        return accommodationByDayNo;
+    }
+
+    private Map<Integer, String> accommodationRegionsByDayNo(
+            Map<Integer, TripAccommodation> accommodationByDayNo
+    ) {
+        Map<Integer, String> accommodationRegionByDayNo = new HashMap<>();
+        accommodationByDayNo.forEach((dayNo, tripAccommodation) -> {
+            String region = normalizeArea(tripAccommodation.getAccommodation().getRegion());
+            if (region != null) {
+                accommodationRegionByDayNo.put(dayNo, region);
+            }
+        });
         return accommodationRegionByDayNo;
     }
 
@@ -901,7 +960,8 @@ public class ItineraryGenerateService {
             ItineraryGenerateRequest request,
             String prompt,
             Integer targetDayNo,
-            boolean repairDuplicatedPlaces
+            boolean repairDuplicatedPlaces,
+            Map<Integer, TripAccommodation> accommodationByDayNo
     ) {
         String rawResponse = llmClient.generate(prompt);
         List<LlmItineraryItemResponse> parsedItems = llmItineraryJsonParser.parse(rawResponse);
@@ -918,6 +978,7 @@ public class ItineraryGenerateService {
         validateDayAndOrderPolicies(trip, createRequests);
         createRequests = applyCalculatedTravelMinutes(candidatePlaces, createRequests);
         validateDraftItineraries(trip, request, createRequests, targetDayNo);
+        validateAccommodationRouteAnchors(candidatePlaces, createRequests, accommodationByDayNo);
 
         return createRequests;
     }
@@ -1072,6 +1133,26 @@ public class ItineraryGenerateService {
         return routeCalculationAdapter.calculateTravelMinutes(from, to);
     }
 
+    private int travelMinutes(TripAccommodation from, PlaceResponse to) {
+        Accommodation accommodation = from.getAccommodation();
+        return routeCalculationAdapter.calculateTravelMinutes(
+                accommodation.getLatitude(),
+                accommodation.getLongitude(),
+                to.latitude(),
+                to.longitude()
+        );
+    }
+
+    private int travelMinutes(PlaceResponse from, TripAccommodation to) {
+        Accommodation accommodation = to.getAccommodation();
+        return routeCalculationAdapter.calculateTravelMinutes(
+                from.latitude(),
+                from.longitude(),
+                accommodation.getLatitude(),
+                accommodation.getLongitude()
+        );
+    }
+
     private List<ItineraryCreateRequest> applyCalculatedTravelMinutes(
             List<PlaceResponse> candidatePlaces,
             List<ItineraryCreateRequest> createRequests
@@ -1147,6 +1228,58 @@ public class ItineraryGenerateService {
         validateDraftOrderTimeSequence(createRequests);
         validateTravelTimeFitsSchedule(createRequests);
         validateNoDraftTimeOverlap(createRequests);
+    }
+
+    private void validateAccommodationRouteAnchors(
+            List<PlaceResponse> candidatePlaces,
+            List<ItineraryCreateRequest> createRequests,
+            Map<Integer, TripAccommodation> accommodationByDayNo
+    ) {
+        if (accommodationByDayNo.isEmpty()) {
+            return;
+        }
+
+        Map<Long, PlaceResponse> candidatePlaceById = candidatePlaces.stream()
+                .collect(Collectors.toMap(PlaceResponse::placeId, Function.identity()));
+        Map<Integer, List<ItineraryCreateRequest>> requestsByDayNo = createRequests.stream()
+                .collect(Collectors.groupingBy(ItineraryCreateRequest::dayNo));
+
+        requestsByDayNo.forEach((dayNo, dayRequests) -> {
+            List<ItineraryCreateRequest> orderedRequests = dayRequests.stream()
+                    .sorted(Comparator.comparing(ItineraryCreateRequest::orderNo))
+                    .toList();
+            PlaceResponse firstPlace = candidatePlaceById.get(orderedRequests.getFirst().placeId());
+            PlaceResponse lastPlace = candidatePlaceById.get(orderedRequests.getLast().placeId());
+            TripAccommodation startAccommodation = accommodationByDayNo.get(dayNo - 1);
+            TripAccommodation endAccommodation = accommodationByDayNo.get(dayNo);
+
+            if (startAccommodation != null) {
+                int travelMinutes = travelMinutes(startAccommodation, firstPlace);
+                if (travelMinutes > MAX_TRAVEL_MINUTES_BETWEEN_PLACES) {
+                    throw new IllegalArgumentException(
+                            "Itinerary first place must be reachable from previous accommodation. dayNo="
+                                    + dayNo
+                                    + ", placeId="
+                                    + firstPlace.placeId()
+                                    + ", travelMinutes="
+                                    + travelMinutes
+                    );
+                }
+            }
+            if (endAccommodation != null) {
+                int travelMinutes = travelMinutes(lastPlace, endAccommodation);
+                if (travelMinutes > MAX_TRAVEL_MINUTES_BETWEEN_PLACES) {
+                    throw new IllegalArgumentException(
+                            "Itinerary last place must be reachable from accommodation. dayNo="
+                                    + dayNo
+                                    + ", placeId="
+                                    + lastPlace.placeId()
+                                    + ", travelMinutes="
+                                    + travelMinutes
+                    );
+                }
+            }
+        });
     }
 
     private void validateDayAndOrderPolicies(Trip trip, List<ItineraryCreateRequest> createRequests) {
@@ -1646,12 +1779,60 @@ public class ItineraryGenerateService {
                 candidatePlaceComparator(trip, request, accommodationRegionByDayNo),
                 generationDayCount(trip, targetDayNo)
         );
-        return includeRegionBalanceCandidates(
+        List<PlaceResponse> regionBalancedCandidatePlaces = includeRegionBalanceCandidates(
                 categoryBalancedCandidatePlaces,
                 filteredCandidatePlaces,
                 mustVisitPlaceIds,
                 candidatePlaceComparator(trip, request, accommodationRegionByDayNo)
         );
+        return includeAccommodationRegionCandidates(
+                regionBalancedCandidatePlaces,
+                filteredCandidatePlaces,
+                candidatePlaceComparator(trip, request, accommodationRegionByDayNo),
+                requiredAccommodationRegionCandidateCounts(
+                        trip,
+                        accommodationRegionByDayNo,
+                        request,
+                        targetDayNo
+                )
+        );
+    }
+
+    private Map<String, Integer> requiredAccommodationRegionCandidateCounts(
+            Trip trip,
+            Map<Integer, String> accommodationRegionByDayNo,
+            ItineraryGenerateRequest request,
+            Integer targetDayNo
+    ) {
+        int itemsPerDay = request == null
+                ? DEFAULT_ACCOMMODATION_REGION_CANDIDATE_COUNT
+                : pacePolicy(request).maxItemsPerDay();
+        int tripDays = generationDayCount(trip, null);
+        Map<String, Set<Integer>> affectedDaysByRegion = new HashMap<>();
+
+        accommodationRegionByDayNo.forEach((stayDayNo, region) -> {
+            String normalizedRegion = normalizeArea(region);
+            if (normalizedRegion == null) {
+                return;
+            }
+            Set<Integer> affectedDays = affectedDaysByRegion.computeIfAbsent(
+                    normalizedRegion,
+                    ignored -> new HashSet<>()
+            );
+            if (targetDayNo == null || targetDayNo.equals(stayDayNo)) {
+                affectedDays.add(stayDayNo);
+            }
+            int nextDayNo = stayDayNo + 1;
+            if (nextDayNo <= tripDays && (targetDayNo == null || targetDayNo.equals(nextDayNo))) {
+                affectedDays.add(nextDayNo);
+            }
+        });
+
+        Map<String, Integer> requiredCountByRegion = new HashMap<>();
+        affectedDaysByRegion.forEach((region, affectedDays) ->
+                requiredCountByRegion.put(region, affectedDays.size() * itemsPerDay)
+        );
+        return requiredCountByRegion;
     }
 
     private int calculateLlmCandidatePlaceLimit(
@@ -1855,6 +2036,43 @@ public class ItineraryGenerateService {
         }
 
         return regionBalancedCandidatePlaces;
+    }
+
+    private List<PlaceResponse> includeAccommodationRegionCandidates(
+            List<PlaceResponse> selectedCandidatePlaces,
+            List<PlaceResponse> candidatePlaces,
+            Comparator<PlaceResponse> comparator,
+            Map<String, Integer> requiredCountByRegion
+    ) {
+        if (requiredCountByRegion.isEmpty()) {
+            return selectedCandidatePlaces;
+        }
+
+        List<PlaceResponse> selectedPlaces = new ArrayList<>(selectedCandidatePlaces);
+        Set<Long> selectedPlaceIds = selectedPlaces.stream()
+                .map(PlaceResponse::placeId)
+                .collect(Collectors.toSet());
+        for (Map.Entry<String, Integer> requiredCount : requiredCountByRegion.entrySet()) {
+            String accommodationRegion = requiredCount.getKey();
+            long selectedRegionCount = selectedPlaces.stream()
+                    .filter(place -> isSameArea(accommodationRegion, place.region()))
+                    .count();
+            int missingCount = Math.max(0, requiredCount.getValue() - Math.toIntExact(selectedRegionCount));
+            if (missingCount == 0) {
+                continue;
+            }
+
+            List<PlaceResponse> additionalPlaces = candidatePlaces.stream()
+                    .filter(place -> !selectedPlaceIds.contains(place.placeId()))
+                    .filter(place -> isSameArea(accommodationRegion, place.region()))
+                    .sorted(comparator)
+                    .limit(missingCount)
+                    .toList();
+            selectedPlaces.addAll(additionalPlaces);
+            additionalPlaces.forEach(place -> selectedPlaceIds.add(place.placeId()));
+        }
+
+        return selectedPlaces;
     }
 
     private int lastReplaceableRegionCandidateIndex(

@@ -1331,6 +1331,18 @@ button.trip-list-item:hover:not(:disabled),
   text-align: left;
 }
 
+.map-accommodation-stop > div {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 54px;
+  border: 1px solid #d9b991;
+  border-radius: 11px;
+  background: #fff8ef;
+  padding: 8px 10px;
+}
+
 .itinerary-map-stops button:hover:not(:disabled),
 .itinerary-map-stops button.active {
   border-color: #a9c2b4;
@@ -1347,6 +1359,11 @@ button.trip-list-item:hover:not(:disabled),
   color: #fff;
   font-size: 11px;
   font-weight: 800;
+}
+
+.map-stop-number.accommodation,
+.route-marker.accommodation {
+  background: #b56f32;
 }
 
 .map-stop-copy {

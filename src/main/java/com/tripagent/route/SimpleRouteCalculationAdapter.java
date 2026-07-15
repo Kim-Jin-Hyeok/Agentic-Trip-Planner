@@ -24,11 +24,33 @@ public class SimpleRouteCalculationAdapter implements RouteCalculationAdapter {
             return DEFAULT_TRAVEL_MINUTES;
         }
 
-        double straightDistanceKm = calculateStraightDistanceKm(
+        return calculateTravelMinutes(
                 previousPlace.latitude(),
                 previousPlace.longitude(),
                 currentPlace.latitude(),
                 currentPlace.longitude()
+        );
+    }
+
+    @Override
+    public int calculateTravelMinutes(
+            Double previousLatitude,
+            Double previousLongitude,
+            Double currentLatitude,
+            Double currentLongitude
+    ) {
+        if (previousLatitude == null
+                || previousLongitude == null
+                || currentLatitude == null
+                || currentLongitude == null) {
+            return DEFAULT_TRAVEL_MINUTES;
+        }
+
+        double straightDistanceKm = calculateStraightDistanceKm(
+                previousLatitude,
+                previousLongitude,
+                currentLatitude,
+                currentLongitude
         );
         double estimatedRoadDistanceKm = straightDistanceKm * ROAD_DISTANCE_FACTOR;
         double travelHours = estimatedRoadDistanceKm / AVERAGE_CAR_SPEED_KM_PER_HOUR;

@@ -50,6 +50,7 @@ import com.tripagent.trip.repository.TripRepository;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -1167,6 +1168,78 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesFallbackUsesAccommodationAsEndAndNextDayStartAnchor() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 2),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        TripAccommodation tripAccommodation = tripAccommodation(
+                trip,
+                LocalDate.of(2026, 7, 1),
+                "WEST",
+                33.24,
+                126.30
+        );
+        List<PlaceResponse> candidatePlaces = new ArrayList<>();
+        for (long placeId = 10L; placeId < 40L; placeId++) {
+            candidatePlaces.add(placeWithFoodScoreRegionAndCoordinates(
+                    placeId, 100, "EAST", 33.55, 126.75
+            ));
+        }
+        for (long placeId = 100L; placeId < 106L; placeId++) {
+            candidatePlaces.add(placeWithFoodScoreRegionAndCoordinates(
+                    placeId, 10, "WEST", 33.24, 126.30
+            ));
+        }
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                ItineraryPace.RELAXED,
+                null,
+                null,
+                true,
+                null
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(tripAccommodation));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn("base prompt");
+        when(itineraryPromptGenerator.appendAccommodationRoutePreferences(
+                "base prompt",
+                trip,
+                Map.of(1, "WEST"),
+                null
+        )).thenReturn("accommodation prompt");
+        when(llmClient.generate("accommodation prompt")).thenThrow(
+                LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
+        );
+        when(itineraryService.createItinerary(eq(1L), any()))
+                .thenReturn(response(100L, 1L, 100L, 1));
+
+        itineraryGenerateService.generateItineraries(1L, request);
+
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor =
+                ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService, times(6)).createItinerary(eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues())
+                .filteredOn(item -> item.dayNo().equals(1) && item.orderNo().equals(3))
+                .extracting(ItineraryCreateRequest::placeId)
+                .hasSize(1)
+                .allMatch(placeId -> placeId >= 100L);
+        assertThat(requestCaptor.getAllValues())
+                .filteredOn(item -> item.dayNo().equals(2) && item.orderNo().equals(1))
+                .extracting(ItineraryCreateRequest::placeId)
+                .hasSize(1)
+                .allMatch(placeId -> placeId >= 100L);
+    }
+
+    @Test
     void generateDraftItinerariesBoostsIndoorAndRainyDayScoreWhenRainyDayModeIsEnabled() {
         Trip trip = trip(1L, TripConcept.FOOD);
         PlaceResponse outdoorHighConceptScore = placeWithFoodScoreRegionIndoorAndRainyScore(
@@ -1842,7 +1915,15 @@ class ItineraryGenerateServiceTest {
                 placeWithFoodScoreAndRegion(70L, "NATURE", 20, "WEST"),
                 placeWithFoodScoreAndRegion(80L, "NATURE", 10, "WEST")
         );
-        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.RELAXED);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                ItineraryPace.RELAXED,
+                null,
+                null,
+                true,
+                null
+        );
         List<LlmItineraryItemResponse> parsedItems = List.of(
                 llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
         );
@@ -2803,13 +2884,23 @@ class ItineraryGenerateServiceTest {
     }
 
     private TripAccommodation tripAccommodation(Trip trip, LocalDate stayDate, String region) {
+        return tripAccommodation(trip, stayDate, region, 33.0, 126.0);
+    }
+
+    private TripAccommodation tripAccommodation(
+            Trip trip,
+            LocalDate stayDate,
+            String region,
+            Double latitude,
+            Double longitude
+    ) {
         Accommodation accommodation = Accommodation.create(
                 "Test Hotel",
                 AccommodationType.HOTEL,
                 region,
                 "Jeju",
-                33.25,
-                126.55,
+                latitude,
+                longitude,
                 "description",
                 null,
                 true,
@@ -2886,6 +2977,35 @@ class ItineraryGenerateServiceTest {
                 "JEJU",
                 33.0,
                 126.0,
+                60,
+                false,
+                true,
+                1,
+                2,
+                foodScore,
+                4,
+                5,
+                4,
+                3,
+                "description"
+        );
+    }
+
+    private PlaceResponse placeWithFoodScoreRegionAndCoordinates(
+            Long placeId,
+            Integer foodScore,
+            String region,
+            Double latitude,
+            Double longitude
+    ) {
+        return new PlaceResponse(
+                placeId,
+                "Place " + placeId,
+                "NATURE",
+                region,
+                "JEJU",
+                latitude,
+                longitude,
                 60,
                 false,
                 true,

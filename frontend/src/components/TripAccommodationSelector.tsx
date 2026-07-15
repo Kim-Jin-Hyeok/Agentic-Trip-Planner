@@ -18,6 +18,7 @@ type TripAccommodationSelectorProps = {
   endDate: string;
   disabled: boolean;
   onBusyChange: (busy: boolean) => void;
+  onAccommodationsChange: (accommodations: TripAccommodation[]) => void;
 };
 
 const searchPageSize = 8;
@@ -43,7 +44,8 @@ export function TripAccommodationSelector({
   startDate,
   endDate,
   disabled,
-  onBusyChange
+  onBusyChange,
+  onAccommodationsChange
 }: TripAccommodationSelectorProps) {
   const stayDates = useMemo(() => datesBeforeEndDate(startDate, endDate), [startDate, endDate]);
   const [selectedByDate, setSelectedByDate] = useState<Record<string, TripAccommodation>>({});
@@ -62,11 +64,13 @@ export function TripAccommodationSelector({
     setSearchPage(null);
     setError('');
     setIsLoading(true);
+    onAccommodationsChange([]);
 
     void getTripAccommodations(tripId)
       .then((items) => {
         if (!cancelled) {
           setSelectedByDate(indexByStayDate(items));
+          onAccommodationsChange(items);
         }
       })
       .catch((loadError) => {
@@ -84,7 +88,7 @@ export function TripAccommodationSelector({
       cancelled = true;
       onBusyChange(false);
     };
-  }, [tripId, startDate, endDate, onBusyChange]);
+  }, [tripId, startDate, endDate, onBusyChange, onAccommodationsChange]);
 
   useEffect(() => {
     if (activeStayDate == null) {
@@ -158,6 +162,7 @@ export function TripAccommodationSelector({
           }))
       });
       setSelectedByDate(indexByStayDate(savedItems));
+      onAccommodationsChange(savedItems);
       setActiveStayDate(null);
       setSearchPage(null);
     } catch (saveError) {

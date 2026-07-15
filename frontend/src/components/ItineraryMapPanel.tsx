@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Itinerary } from '../types/trip';
+import type { TripAccommodation } from '../types/accommodation';
 
 type ItineraryMapPanelProps = {
   itinerariesByDay: Record<number, Itinerary[]>;
   selectedDay: number;
   selectedItineraryId: number | null;
+  tripStartDate: string;
+  tripAccommodations: TripAccommodation[];
   onDayChange: (dayNo: number) => void;
   onItinerarySelect: (itineraryId: number) => void;
 };
@@ -15,6 +18,8 @@ export function ItineraryMapPanel({
   itinerariesByDay,
   selectedDay,
   selectedItineraryId,
+  tripStartDate,
+  tripAccommodations,
   onDayChange,
   onItinerarySelect
 }: ItineraryMapPanelProps) {
@@ -25,6 +30,14 @@ export function ItineraryMapPanel({
     () => dayItineraries.filter(hasValidCoordinates),
     [dayItineraries]
   );
+  const selectedAccommodation = useMemo(() => {
+    const stayDate = stayDateForDay(tripStartDate, selectedDay);
+    return tripAccommodations.find((item) => item.stayDate === stayDate) ?? null;
+  }, [selectedDay, tripAccommodations, tripStartDate]);
+  const mappableAccommodation = selectedAccommodation != null
+    && hasValidAccommodationCoordinates(selectedAccommodation)
+    ? selectedAccommodation
+    : null;
 
   useEffect(() => {
     if (mapContainerRef.current == null || mappableItineraries.length === 0) {
@@ -39,27 +52,34 @@ export function ItineraryMapPanel({
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
-    const coordinates = mappableItineraries.map((itinerary) =>
+    const itineraryCoordinates = mappableItineraries.map((itinerary) =>
       L.latLng(itinerary.place.latitude, itinerary.place.longitude)
     );
-    if (coordinates.length > 1) {
-      L.polyline(coordinates, {
+    const routeCoordinates = [...itineraryCoordinates];
+    if (mappableAccommodation != null) {
+      routeCoordinates.push(L.latLng(
+        mappableAccommodation.accommodation.latitude,
+        mappableAccommodation.accommodation.longitude
+      ));
+    }
+    if (routeCoordinates.length > 1) {
+      L.polyline(routeCoordinates, {
         color: '#267055',
         opacity: 0.72,
         weight: 4,
         dashArray: '8 8'
       }).addTo(map);
-      map.fitBounds(L.latLngBounds(coordinates), {
+      map.fitBounds(L.latLngBounds(routeCoordinates), {
         maxZoom: 13,
         padding: [38, 38]
       });
     } else {
-      map.setView(coordinates[0], 13);
+      map.setView(routeCoordinates[0], 13);
     }
 
     mappableItineraries.forEach((itinerary, index) => {
       const isSelected = itinerary.itineraryId === selectedItineraryId;
-      const marker = L.marker(coordinates[index], {
+      const marker = L.marker(itineraryCoordinates[index], {
         icon: L.divIcon({
           className: 'route-marker-shell',
           html: `<span class="route-marker${isSelected ? ' selected' : ''}"><b>${index + 1}</b></span>`,
@@ -79,12 +99,29 @@ export function ItineraryMapPanel({
       }
     });
 
+    if (mappableAccommodation != null) {
+      const accommodation = mappableAccommodation.accommodation;
+      const marker = L.marker([accommodation.latitude, accommodation.longitude], {
+        icon: L.divIcon({
+          className: 'route-marker-shell',
+          html: '<span class="route-marker accommodation"><b>숙</b></span>',
+          iconAnchor: [18, 18],
+          iconSize: [36, 36]
+        }),
+        keyboard: true,
+        title: `숙소. ${accommodation.name}`
+      }).addTo(map);
+      const tooltip = document.createElement('span');
+      tooltip.textContent = `숙소 · ${accommodation.name}`;
+      marker.bindTooltip(tooltip, { direction: 'top', offset: [0, -16] });
+    }
+
     const resizeFrame = window.requestAnimationFrame(() => map.invalidateSize());
     return () => {
       window.cancelAnimationFrame(resizeFrame);
       map.remove();
     };
-  }, [mappableItineraries, onItinerarySelect, selectedItineraryId]);
+  }, [mappableAccommodation, mappableItineraries, onItinerarySelect, selectedItineraryId]);
 
   return (
     <section className="itinerary-map-panel" aria-labelledby="itinerary-map-title">
@@ -142,6 +179,17 @@ export function ItineraryMapPanel({
               </li>
             );
           })}
+          {selectedAccommodation != null && (
+            <li className="map-accommodation-stop">
+              <div>
+                <span className="map-stop-number accommodation">숙</span>
+                <span className="map-stop-copy">
+                  <strong>{selectedAccommodation.accommodation.name}</strong>
+                  <small>일정 종료 숙소 · {selectedAccommodation.accommodation.region}</small>
+                </span>
+              </div>
+            </li>
+          )}
         </ol>
       </div>
     </section>
@@ -153,4 +201,20 @@ function hasValidCoordinates(itinerary: Itinerary): boolean {
     && Number.isFinite(itinerary.place.longitude)
     && Math.abs(itinerary.place.latitude) <= 90
     && Math.abs(itinerary.place.longitude) <= 180;
+}
+
+function hasValidAccommodationCoordinates(item: TripAccommodation): boolean {
+  return Number.isFinite(item.accommodation.latitude)
+    && Number.isFinite(item.accommodation.longitude)
+    && Math.abs(item.accommodation.latitude) <= 90
+    && Math.abs(item.accommodation.longitude) <= 180;
+}
+
+function stayDateForDay(startDate: string, dayNo: number): string {
+  if (startDate.length === 0 || dayNo < 1) {
+    return '';
+  }
+  const date = new Date(`${startDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + dayNo - 1);
+  return date.toISOString().slice(0, 10);
 }

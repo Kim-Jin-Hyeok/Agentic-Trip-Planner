@@ -11,6 +11,7 @@ import type {
   TripVisibility
 } from '../types/trip';
 import type { TripWeatherForecast } from '../types/weather';
+import type { TripAccommodation } from '../types/accommodation';
 import {
   conceptLabel,
   selectedTripStats,
@@ -173,6 +174,7 @@ export function TripDetailPanel({
   const mapDayNumbers = Object.keys(itinerariesByDay).map(Number).sort((left, right) => left - right);
   const [selectedMapDay, setSelectedMapDay] = useState<number | null>(null);
   const [selectedMapItineraryId, setSelectedMapItineraryId] = useState<number | null>(null);
+  const [tripAccommodations, setTripAccommodations] = useState<TripAccommodation[]>([]);
   const effectiveMapDay = selectedMapDay != null && mapDayNumbers.includes(selectedMapDay)
     ? selectedMapDay
     : mapDayNumbers[0] ?? null;
@@ -334,6 +336,7 @@ export function TripDetailPanel({
           endDate={trip.endDate}
           disabled={isChangingItinerary}
           onBusyChange={onAccommodationBusyChange}
+          onAccommodationsChange={setTripAccommodations}
         />
       )}
 
@@ -400,6 +403,8 @@ export function TripDetailPanel({
           itinerariesByDay={itinerariesByDay}
           selectedDay={effectiveMapDay}
           selectedItineraryId={selectedMapItineraryId}
+          tripStartDate={selectedTrip?.startDate ?? ''}
+          tripAccommodations={viewMode === 'mine' ? tripAccommodations : []}
           onDayChange={(dayNo) => {
             setSelectedMapDay(dayNo);
             setSelectedMapItineraryId(null);
