@@ -105,6 +105,26 @@ class TripServiceTest {
     }
 
     @Test
+    void createTripAllowsSixNightsSevenDays() {
+        TripCreateRequest request = new TripCreateRequest(
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 7),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO"
+        );
+        when(tripRepository.save(any(Trip.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TripResponse response = tripService.createTrip(request);
+
+        assertThat(response.nights()).isEqualTo(6);
+        verify(tripRepository).save(any(Trip.class));
+    }
+
+    @Test
     void createTripUsesRequestedTitle() {
         TripCreateRequest request = new TripCreateRequest(
                 "JEJU",
@@ -216,7 +236,7 @@ class TripServiceTest {
         TripCreateRequest request = new TripCreateRequest(
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
-                LocalDate.of(2026, 7, 5),
+                LocalDate.of(2026, 7, 8),
                 LocalTime.of(9, 0),
                 LocalTime.of(18, 0),
                 TripConcept.HEALING,
@@ -226,7 +246,7 @@ class TripServiceTest {
 
         assertThatThrownBy(() -> tripService.createTrip(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Trip duration must be 1 night 2 days to 3 nights 4 days.");
+                .hasMessage("Trip duration must be 1 night 2 days to 6 nights 7 days.");
         verify(tripRepository, never()).save(any(Trip.class));
     }
 
@@ -613,8 +633,14 @@ class TripServiceTest {
 
     @Test
     void searchPublicTripsFiltersByNights() {
-        Trip twoNightTrip = trip(4L, "JEJU", TripConcept.FOOD, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
-        twoNightTrip.changeVisibility(TripVisibility.PUBLIC);
+        Trip sixNightTrip = trip(
+                4L,
+                "JEJU",
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 7)
+        );
+        sixNightTrip.changeVisibility(TripVisibility.PUBLIC);
         when(tripRepository.searchTripsByVisibility(
                 eq(TripVisibility.PUBLIC),
                 isNull(),
@@ -623,9 +649,9 @@ class TripServiceTest {
                 isNull(),
                 isNull(),
                 isNull(),
-                eq(2),
+                eq(6),
                 eq(Sort.by(Sort.Direction.DESC, "tripId"))
-        )).thenReturn(List.of(twoNightTrip));
+        )).thenReturn(List.of(sixNightTrip));
 
         List<TripResponse> responses = tripService.searchPublicTrips(
                 null,
@@ -634,12 +660,12 @@ class TripServiceTest {
                 null,
                 null,
                 null,
-                2,
+                6,
                 PublicTripSort.LATEST
         );
 
         assertThat(responses).extracting(TripResponse::nights)
-                .containsExactly(2);
+                .containsExactly(6);
     }
 
     @Test
@@ -651,11 +677,11 @@ class TripServiceTest {
                 null,
                 null,
                 null,
-                4,
+                7,
                 PublicTripSort.LATEST
         ))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Trip nights must be between 1 and 3.");
+                .hasMessage("Trip nights must be between 1 and 6.");
         verify(tripRepository, never()).searchTripsByVisibility(any(), any(), any(), any(), any(), any(), any(), any(), any(Sort.class));
     }
 
@@ -1363,6 +1389,25 @@ class TripServiceTest {
     }
 
     @Test
+    void updateTripConditionsAllowsSixNightsSevenDays() {
+        Trip trip = trip(1L);
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 7),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                "SEOGWIPO"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+
+        TripResponse response = tripService.updateTripConditions(1L, null, request);
+
+        assertThat(response.nights()).isEqualTo(6);
+    }
+
+    @Test
     void updateTripConditionsDoesNotRemoveItineraryWhenConditionsAreUnchanged() {
         Trip trip = trip(1L);
         TripConditionUpdateRequest request = new TripConditionUpdateRequest(
@@ -1386,7 +1431,7 @@ class TripServiceTest {
     void updateTripConditionsRejectsUnsupportedDurationBeforeLookup() {
         TripConditionUpdateRequest request = new TripConditionUpdateRequest(
                 LocalDate.of(2026, 7, 1),
-                LocalDate.of(2026, 7, 5),
+                LocalDate.of(2026, 7, 8),
                 LocalTime.of(9, 0),
                 LocalTime.of(18, 0),
                 TripConcept.HEALING,
@@ -1395,7 +1440,7 @@ class TripServiceTest {
 
         assertThatThrownBy(() -> tripService.updateTripConditions(1L, 100L, request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Trip duration must be 1 night 2 days to 3 nights 4 days.");
+                .hasMessage("Trip duration must be 1 night 2 days to 6 nights 7 days.");
         verify(tripRepository, never()).findById(1L);
     }
 

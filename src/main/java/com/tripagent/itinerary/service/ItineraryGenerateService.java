@@ -10,6 +10,7 @@ import com.tripagent.ai.validator.CandidatePlaceValidator;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryDayTimeWindowRequest;
 import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
+import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
@@ -47,7 +48,7 @@ public class ItineraryGenerateService {
     private static final Logger log = LoggerFactory.getLogger(ItineraryGenerateService.class);
 
     private static final int MAX_LLM_VALIDATION_RETRY_COUNT = 2;
-    private static final int MAX_LLM_CANDIDATE_PLACE_COUNT = 30;
+    private static final int DEFAULT_LLM_CANDIDATE_PLACE_COUNT = 30;
     private static final int MAX_BALANCED_REGION_COUNT = 3;
     private static final int MAX_TRAVEL_MINUTES_BETWEEN_PLACES = 90;
     private static final int MIN_FALLBACK_STAY_MINUTES = 30;
@@ -258,7 +259,8 @@ public class ItineraryGenerateService {
         List<PlaceResponse> selectedCandidatePlaces = selectLlmCandidatePlaces(
                 trip,
                 availableCandidatePlaces,
-                request
+                request,
+                targetDayNo
         );
         validateCandidatePlacesEnoughForTripDays(trip, selectedCandidatePlaces, targetDayNo);
         validateCandidatePlacesEnoughForPace(trip, request, selectedCandidatePlaces, targetDayNo);
@@ -431,31 +433,37 @@ public class ItineraryGenerateService {
                 targetItemCount
         );
         List<ItineraryCreateRequest> fallbackCreateRequests = new ArrayList<>();
-        List<PlaceResponse> remainingSelectedPlaces = new ArrayList<>(selectedPlaces);
+        boolean routeFlexibleSelection = hasNoFallbackPlaceControls(request);
+        List<PlaceResponse> remainingSelectedPlaces = routeFlexibleSelection
+                ? new ArrayList<>(candidatePlaces)
+                : new ArrayList<>(selectedPlaces);
 
         int firstDayNo = targetDayNo == null ? 1 : targetDayNo;
         int lastDayNo = targetDayNo == null ? tripDays : targetDayNo;
         for (int dayNo = firstDayNo; dayNo <= lastDayNo; dayNo++) {
             int generationDayNo = dayNo - firstDayNo + 1;
+            int generatedItemCount = fallbackCreateRequests.size();
             int dayItemCount = fallbackDayItemCount(
                     generationDayNo,
                     tripDays,
-                    remainingSelectedPlaces.size(),
+                    targetItemCount - generatedItemCount,
                     minItemsPerDay,
                     maxItemsPerDay
             );
-            List<PlaceResponse> selectedDayPlaces = selectFallbackDayPlaces(
-                    request,
-                    dayNo,
-                    remainingSelectedPlaces,
-                    dayItemCount
-            );
-            List<PlaceResponse> dayPlaces = orderFallbackDayPlacesByRoute(
-                    trip,
-                    selectedDayPlaces
-            );
+            List<PlaceResponse> dayPlaces;
+            if (routeFlexibleSelection) {
+                dayPlaces = selectReachableFallbackDayPlaces(trip, remainingSelectedPlaces, dayItemCount);
+            } else {
+                List<PlaceResponse> selectedDayPlaces = selectFallbackDayPlaces(
+                        request,
+                        dayNo,
+                        remainingSelectedPlaces,
+                        dayItemCount
+                );
+                dayPlaces = orderFallbackDayPlacesByRoute(trip, selectedDayPlaces);
+            }
             fallbackCreateRequests.addAll(createFallbackDayItineraries(trip, request, dayNo, dayPlaces));
-            remainingSelectedPlaces.removeAll(selectedDayPlaces);
+            remainingSelectedPlaces.removeAll(dayPlaces);
         }
 
         List<Long> selectedPlaceIds = fallbackCreateRequests.stream()
@@ -466,6 +474,63 @@ public class ItineraryGenerateService {
         validateDraftItineraries(trip, request, fallbackCreateRequests, targetDayNo);
 
         return fallbackCreateRequests;
+    }
+
+    private boolean hasNoFallbackPlaceControls(ItineraryGenerateRequest request) {
+        return request == null
+                || (request.normalizedMustVisitPlaceIds().isEmpty()
+                && !request.normalizedRainyDayMode()
+                && request.normalizedRainyDayNos().isEmpty());
+    }
+
+    private List<PlaceResponse> selectReachableFallbackDayPlaces(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            int dayItemCount
+    ) {
+        List<PlaceResponse> startCandidates = new ArrayList<>(candidatePlaces);
+        PlaceResponse preferredStart = findFallbackStartPlace(trip, candidatePlaces);
+        startCandidates.remove(preferredStart);
+        startCandidates.addFirst(preferredStart);
+
+        for (PlaceResponse startCandidate : startCandidates) {
+            List<PlaceResponse> route = new ArrayList<>();
+            List<PlaceResponse> remainingPlaces = new ArrayList<>(candidatePlaces);
+            route.add(startCandidate);
+            remainingPlaces.remove(startCandidate);
+
+            while (route.size() < dayItemCount) {
+                PlaceResponse currentPlace = route.getLast();
+                PlaceResponse nextPlace = findReachableFallbackPlace(currentPlace, remainingPlaces);
+                if (nextPlace == null) {
+                    break;
+                }
+                route.add(nextPlace);
+                remainingPlaces.remove(nextPlace);
+            }
+
+            if (route.size() == dayItemCount) {
+                return route;
+            }
+        }
+
+        throw new IllegalArgumentException(
+                "Fallback itinerary cannot find enough places within maximum travel time."
+        );
+    }
+
+    private PlaceResponse findReachableFallbackPlace(
+            PlaceResponse currentPlace,
+            List<PlaceResponse> candidatePlaces
+    ) {
+        return candidatePlaces.stream()
+                .filter(place -> routeCalculationAdapter.calculateTravelMinutes(currentPlace, place)
+                        <= MAX_TRAVEL_MINUTES_BETWEEN_PLACES)
+                .min(Comparator.comparingInt((PlaceResponse place) ->
+                                routeCalculationAdapter.calculateTravelMinutes(currentPlace, place))
+                        .thenComparing(place -> !isSameRegion(currentPlace, place))
+                        .thenComparing(PlaceResponse::placeId))
+                .orElse(null);
     }
 
     private List<PlaceResponse> selectFallbackPlacesByRoute(
@@ -1252,7 +1317,8 @@ public class ItineraryGenerateService {
     private List<PlaceResponse> selectLlmCandidatePlaces(
             Trip trip,
             List<PlaceResponse> candidatePlaces,
-            ItineraryGenerateRequest request
+            ItineraryGenerateRequest request,
+            Integer targetDayNo
     ) {
         List<PlaceResponse> filteredCandidatePlaces = filterExcludedCandidatePlaces(candidatePlaces, request);
         Set<Long> mustVisitPlaceIds = request == null
@@ -1268,7 +1334,8 @@ public class ItineraryGenerateService {
                 .sorted(candidatePlaceComparator(trip, request))
                 .toList();
 
-        int ordinaryPlaceLimit = Math.max(0, MAX_LLM_CANDIDATE_PLACE_COUNT - mustVisitPlaces.size());
+        int candidatePlaceLimit = calculateLlmCandidatePlaceLimit(trip, request, targetDayNo);
+        int ordinaryPlaceLimit = Math.max(0, candidatePlaceLimit - mustVisitPlaces.size());
 
         List<PlaceResponse> selectedCandidatePlaces = java.util.stream.Stream.concat(
                         mustVisitPlaces.stream(),
@@ -1287,6 +1354,21 @@ public class ItineraryGenerateService {
                 mustVisitPlaceIds,
                 candidatePlaceComparator(trip, request)
         );
+    }
+
+    private int calculateLlmCandidatePlaceLimit(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            Integer targetDayNo
+    ) {
+        ItineraryPace pace = request == null ? ItineraryPace.NORMAL : request.normalizedPace();
+        PaceItineraryPolicy policy = PaceItineraryPolicy.findByPace(pace)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Pace itinerary policy is not defined. pace=" + pace
+                ));
+        int generationDaysWithBuffer = generationDayCount(trip, targetDayNo) + 1;
+        int requiredCandidateCount = generationDaysWithBuffer * policy.maxItemsPerDay();
+        return Math.max(DEFAULT_LLM_CANDIDATE_PLACE_COUNT, requiredCandidateCount);
     }
 
     private List<PlaceResponse> filterExcludedCandidatePlaces(

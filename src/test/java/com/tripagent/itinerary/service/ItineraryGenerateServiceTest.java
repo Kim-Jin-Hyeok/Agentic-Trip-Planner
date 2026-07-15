@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -733,6 +734,46 @@ class ItineraryGenerateServiceTest {
         assertThat(candidateCaptor.getValue()).extracting(PlaceResponse::placeId)
                 .contains(35L)
                 .doesNotContain(1L, 2L, 3L, 4L, 5L);
+    }
+
+    @Test
+    void generateDraftItinerariesExpandsCandidatesForSevenDayBusyPace() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 7),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = java.util.stream.IntStream.rangeClosed(1, 60)
+                .mapToObj(placeId -> placeWithFoodScore((long) placeId, "NATURE", placeId))
+                .toList();
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.BUSY);
+        List<LlmItineraryItemResponse> parsedItems = new java.util.ArrayList<>();
+        List<ItineraryCreateRequest> createRequests = new java.util.ArrayList<>();
+        for (int index = 0; index < 35; index++) {
+            long placeId = 12L + index;
+            int dayNo = (index / 5) + 1;
+            int orderNo = (index % 5) + 1;
+            LocalTime startTime = LocalTime.of(9, 0).plusMinutes((index % 5) * 90L);
+            LocalTime endTime = startTime.plusMinutes(60);
+            int travelMinutes = orderNo == 1 ? 0 : 30;
+            parsedItems.add(llmItem(placeId, dayNo, orderNo, startTime, endTime, travelMinutes));
+            createRequests.add(request(placeId, dayNo, orderNo, startTime, endTime, travelMinutes));
+        }
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn("prompt");
+        when(llmClient.generate("prompt")).thenReturn("raw response");
+        when(llmItineraryJsonParser.parse("raw response")).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        itineraryGenerateService.generateDraftItineraries(1L, request);
+
+        ArgumentCaptor<List<PlaceResponse>> candidateCaptor = ArgumentCaptor.forClass(List.class);
+        verify(itineraryPromptGenerator).generate(eq(trip), candidateCaptor.capture(), eq(request));
+        assertThat(candidateCaptor.getValue()).hasSize(56);
     }
 
     @Test
@@ -1616,6 +1657,59 @@ class ItineraryGenerateServiceTest {
         verify(llmClient, times(3)).generate(anyString());
         verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 10L));
         verify(itineraryService).createItinerary(eq(1L), any());
+    }
+
+    @Test
+    void generateItinerariesFallbackSelectsReachablePlacesForEachDay() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 2),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                placeWithFoodScoreAndRegion(10L, "NATURE", 80, "EAST"),
+                placeWithFoodScoreAndRegion(20L, "NATURE", 70, "EAST"),
+                placeWithFoodScoreAndRegion(30L, "NATURE", 60, "EAST"),
+                placeWithFoodScoreAndRegion(40L, "NATURE", 50, "EAST"),
+                placeWithFoodScoreAndRegion(50L, "NATURE", 40, "WEST"),
+                placeWithFoodScoreAndRegion(60L, "NATURE", 30, "WEST"),
+                placeWithFoodScoreAndRegion(70L, "NATURE", 20, "WEST"),
+                placeWithFoodScoreAndRegion(80L, "NATURE", 10, "WEST")
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.RELAXED);
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        List<ItineraryCreateRequest> invalidCreateRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn("prompt");
+        when(llmClient.generate(anyString())).thenReturn("raw response");
+        when(llmItineraryJsonParser.parse("raw response")).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(invalidCreateRequests);
+        when(routeCalculationAdapter.calculateTravelMinutes(nullable(PlaceResponse.class), any(PlaceResponse.class)))
+                .thenAnswer(invocation -> {
+                    PlaceResponse previous = invocation.getArgument(0);
+                    PlaceResponse current = invocation.getArgument(1);
+                    if (previous == null) {
+                        return 0;
+                    }
+                    return previous.region().equals(current.region()) ? 30 : 108;
+                });
+
+        itineraryGenerateService.generateItineraries(1L, request);
+
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor = ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService, times(6)).createItinerary(eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues())
+                .filteredOn(item -> item.orderNo() > 1)
+                .allSatisfy(item -> assertThat(item.travelMinutesFromPrevious()).isLessThanOrEqualTo(90));
     }
 
     @Test

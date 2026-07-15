@@ -48,7 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TripService {
 
     private static final long MIN_NIGHTS = 1;
-    private static final long MAX_NIGHTS = 3;
+    private static final long MAX_NIGHTS = 6;
     private static final int DEFAULT_PUBLIC_TRIP_PAGE = 0;
     private static final int DEFAULT_PUBLIC_TRIP_PAGE_SIZE = 20;
     private static final int MAX_PUBLIC_TRIP_PAGE_SIZE = 50;
@@ -572,7 +572,7 @@ public class TripService {
         }
         long nights = ChronoUnit.DAYS.between(request.startDate(), request.endDate());
         if (nights < MIN_NIGHTS || nights > MAX_NIGHTS) {
-            throw new IllegalArgumentException("Trip duration must be 1 night 2 days to 3 nights 4 days.");
+            throw new IllegalArgumentException("Trip duration must be 1 night 2 days to 6 nights 7 days.");
         }
         if (request.dailyStartTime() == null) {
             throw new IllegalArgumentException("Trip dailyStartTime is required.");
@@ -600,7 +600,7 @@ public class TripService {
         }
         long nights = ChronoUnit.DAYS.between(request.startDate(), request.endDate());
         if (nights < MIN_NIGHTS || nights > MAX_NIGHTS) {
-            throw new IllegalArgumentException("Trip duration must be 1 night 2 days to 3 nights 4 days.");
+            throw new IllegalArgumentException("Trip duration must be 1 night 2 days to 6 nights 7 days.");
         }
         if (request.dailyStartTime() == null) {
             throw new IllegalArgumentException("Trip dailyStartTime is required.");
@@ -797,7 +797,7 @@ public class TripService {
             return;
         }
         if (nights < MIN_NIGHTS || nights > MAX_NIGHTS) {
-            throw new IllegalArgumentException("Trip nights must be between 1 and 3.");
+            throw new IllegalArgumentException("Trip nights must be between 1 and 6.");
         }
     }
 
