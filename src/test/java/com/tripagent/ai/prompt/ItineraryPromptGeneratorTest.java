@@ -15,6 +15,7 @@ import com.tripagent.route.SimpleRouteCalculationAdapter;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ItineraryPromptGeneratorTest {
@@ -299,6 +300,24 @@ class ItineraryPromptGeneratorTest {
         assertThatThrownBy(() -> generator.generate(trip, List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Candidate places are required.");
+    }
+
+    @Test
+    void appendAccommodationRoutePreferencesAddsDailyStartAndEndRegions() {
+        String prompt = generator.appendAccommodationRoutePreferences(
+                "base prompt",
+                trip(),
+                Map.of(1, "WEST", 2, "EAST"),
+                null
+        );
+
+        assertThat(prompt)
+                .contains("Accommodation route preferences:")
+                .contains("dayNo: 1\n  preferredEndRegion: WEST")
+                .contains("dayNo: 2\n  preferredStartRegion: WEST\n  preferredEndRegion: EAST")
+                .contains("dayNo: 3\n  preferredStartRegion: EAST")
+                .contains("Never add an accommodation as an itinerary place.")
+                .contains("Use candidatePlaces only.");
     }
 
     private Trip trip() {

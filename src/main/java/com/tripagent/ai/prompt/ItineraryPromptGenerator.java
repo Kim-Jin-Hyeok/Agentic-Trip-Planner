@@ -153,6 +153,41 @@ public class ItineraryPromptGenerator {
         return prompt.toString();
     }
 
+    public String appendAccommodationRoutePreferences(
+            String prompt,
+            Trip trip,
+            Map<Integer, String> accommodationRegionByDayNo,
+            Integer targetDayNo
+    ) {
+        if (accommodationRegionByDayNo == null || accommodationRegionByDayNo.isEmpty()) {
+            return prompt;
+        }
+
+        int firstDayNo = targetDayNo == null ? 1 : targetDayNo;
+        int lastDayNo = targetDayNo == null ? Math.toIntExact(calculateTripDays(trip)) : targetDayNo;
+        StringBuilder preferences = new StringBuilder(prompt);
+        preferences.append("\nAccommodation route preferences:\n");
+        for (int dayNo = firstDayNo; dayNo <= lastDayNo; dayNo++) {
+            String startRegion = accommodationRegionByDayNo.get(dayNo - 1);
+            String endRegion = accommodationRegionByDayNo.get(dayNo);
+            if (startRegion == null && endRegion == null) {
+                continue;
+            }
+            preferences.append("- dayNo: ").append(dayNo).append("\n");
+            if (startRegion != null) {
+                preferences.append("  preferredStartRegion: ").append(startRegion).append("\n");
+            }
+            if (endRegion != null) {
+                preferences.append("  preferredEndRegion: ").append(endRegion).append("\n");
+            }
+        }
+        preferences.append("Prefer the first place of a day in preferredStartRegion and the last place "
+                + "in preferredEndRegion when matching candidate places exist.\n");
+        preferences.append("Never add an accommodation as an itinerary place. Use candidatePlaces only.\n");
+        preferences.append("Return JSON only. Do not include markdown or explanation outside JSON.\n");
+        return preferences.toString();
+    }
+
     private List<Long> recommendedNextPlaceIds(
             PlaceResponse currentPlace,
             List<PlaceResponse> candidatePlaces

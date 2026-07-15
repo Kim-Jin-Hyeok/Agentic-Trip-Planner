@@ -21,8 +21,11 @@ import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Trip;
+import com.tripagent.trip.domain.TripAccommodation;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.repository.TripAccommodationRepository;
 import com.tripagent.trip.repository.TripRepository;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -68,6 +71,7 @@ public class ItineraryGenerateService {
     private final CandidatePlaceValidator candidatePlaceValidator;
     private final ItineraryService itineraryService;
     private final ItineraryRepository itineraryRepository;
+    private final TripAccommodationRepository tripAccommodationRepository;
     private final RouteCalculationAdapter routeCalculationAdapter;
     private final AccommodationAreaRegionMapper accommodationAreaRegionMapper;
 
@@ -81,6 +85,7 @@ public class ItineraryGenerateService {
             CandidatePlaceValidator candidatePlaceValidator,
             ItineraryService itineraryService,
             ItineraryRepository itineraryRepository,
+            TripAccommodationRepository tripAccommodationRepository,
             RouteCalculationAdapter routeCalculationAdapter,
             AccommodationAreaRegionMapper accommodationAreaRegionMapper
     ) {
@@ -93,6 +98,7 @@ public class ItineraryGenerateService {
         this.candidatePlaceValidator = candidatePlaceValidator;
         this.itineraryService = itineraryService;
         this.itineraryRepository = itineraryRepository;
+        this.tripAccommodationRepository = tripAccommodationRepository;
         this.routeCalculationAdapter = routeCalculationAdapter;
         this.accommodationAreaRegionMapper = accommodationAreaRegionMapper;
     }
@@ -251,6 +257,7 @@ public class ItineraryGenerateService {
 
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
+        Map<Integer, String> accommodationRegionByDayNo = findAccommodationRegionsByDayNo(trip);
         List<PlaceResponse> allCandidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
         validateGenerateRequest(trip, allCandidatePlaces, request);
         List<PlaceResponse> availableCandidatePlaces = allCandidatePlaces.stream()
@@ -260,7 +267,8 @@ public class ItineraryGenerateService {
                 trip,
                 availableCandidatePlaces,
                 request,
-                targetDayNo
+                targetDayNo,
+                accommodationRegionByDayNo
         );
         validateCandidatePlacesEnoughForTripDays(trip, selectedCandidatePlaces, targetDayNo);
         validateCandidatePlacesEnoughForPace(trip, request, selectedCandidatePlaces, targetDayNo);
@@ -273,6 +281,14 @@ public class ItineraryGenerateService {
         } else {
             prompt = itineraryPromptGenerator.generate(trip, selectedCandidatePlaces, request);
         }
+        if (!accommodationRegionByDayNo.isEmpty()) {
+            prompt = itineraryPromptGenerator.appendAccommodationRoutePreferences(
+                    prompt,
+                    trip,
+                    accommodationRegionByDayNo,
+                    targetDayNo
+            );
+        }
 
         return generateValidatedDraftItineraries(
                 trip,
@@ -280,7 +296,8 @@ public class ItineraryGenerateService {
                 request,
                 prompt,
                 operation,
-                targetDayNo
+                targetDayNo,
+                accommodationRegionByDayNo
         );
     }
 
@@ -290,7 +307,8 @@ public class ItineraryGenerateService {
             ItineraryGenerateRequest request,
             String prompt,
             String operation,
-            Integer targetDayNo
+            Integer targetDayNo,
+            Map<Integer, String> accommodationRegionByDayNo
     ) {
         IllegalArgumentException lastValidationException = null;
         int maxAttemptCount = MAX_LLM_VALIDATION_RETRY_COUNT + 1;
@@ -311,7 +329,8 @@ public class ItineraryGenerateService {
             } catch (LlmException exception) {
                 logLlmFailure(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces, exception);
                 return generateFallbackDraftItinerariesOrThrow(
-                        trip, candidatePlaces, request, operation, exception, targetDayNo
+                        trip, candidatePlaces, request, operation, exception, targetDayNo,
+                        accommodationRegionByDayNo
                 );
             } catch (IllegalArgumentException exception) {
                 boolean repeatedValidationFailure = lastValidationException != null
@@ -344,7 +363,8 @@ public class ItineraryGenerateService {
                             request,
                             operation,
                             lastValidationException,
-                            targetDayNo
+                            targetDayNo,
+                            accommodationRegionByDayNo
                     );
                 }
             }
@@ -357,7 +377,8 @@ public class ItineraryGenerateService {
                 request,
                 operation,
                 lastValidationException,
-                targetDayNo
+                targetDayNo,
+                accommodationRegionByDayNo
         );
     }
 
@@ -380,7 +401,8 @@ public class ItineraryGenerateService {
             ItineraryGenerateRequest request,
             String operation,
             RuntimeException originalException,
-            Integer targetDayNo
+            Integer targetDayNo,
+            Map<Integer, String> accommodationRegionByDayNo
     ) {
         if (!supportsFallback(operation)) {
             throw originalException;
@@ -391,7 +413,8 @@ public class ItineraryGenerateService {
                     trip,
                     candidatePlaces,
                     request,
-                    targetDayNo
+                    targetDayNo,
+                    accommodationRegionByDayNo
             );
             logFallbackDraftGenerationSuccess(trip, operation, request, candidatePlaces, originalException);
             return fallbackCreateRequests;
@@ -418,7 +441,8 @@ public class ItineraryGenerateService {
             Trip trip,
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
-            Integer targetDayNo
+            Integer targetDayNo,
+            Map<Integer, String> accommodationRegionByDayNo
     ) {
         int tripDays = generationDayCount(trip, targetDayNo);
         PaceItineraryPolicy pacePolicy = request == null || request.pace() == null ? null : pacePolicy(request);
@@ -430,7 +454,8 @@ public class ItineraryGenerateService {
                 trip,
                 request,
                 candidatePlaces,
-                targetItemCount
+                targetItemCount,
+                accommodationRegionByDayNo
         );
         List<ItineraryCreateRequest> fallbackCreateRequests = new ArrayList<>();
         boolean routeFlexibleSelection = hasNoFallbackPlaceControls(request);
@@ -451,8 +476,16 @@ public class ItineraryGenerateService {
                     maxItemsPerDay
             );
             List<PlaceResponse> dayPlaces;
+            String preferredStartRegion = preferredStartRegion(trip, accommodationRegionByDayNo, dayNo);
+            String preferredEndRegion = accommodationRegionByDayNo.get(dayNo);
             if (routeFlexibleSelection) {
-                dayPlaces = selectReachableFallbackDayPlaces(trip, remainingSelectedPlaces, dayItemCount);
+                dayPlaces = selectReachableFallbackDayPlaces(
+                        trip,
+                        remainingSelectedPlaces,
+                        dayItemCount,
+                        preferredStartRegion,
+                        preferredEndRegion
+                );
             } else {
                 List<PlaceResponse> selectedDayPlaces = selectFallbackDayPlaces(
                         request,
@@ -460,7 +493,12 @@ public class ItineraryGenerateService {
                         remainingSelectedPlaces,
                         dayItemCount
                 );
-                dayPlaces = orderFallbackDayPlacesByRoute(trip, selectedDayPlaces);
+                dayPlaces = orderFallbackDayPlacesByRoute(
+                        trip,
+                        selectedDayPlaces,
+                        preferredStartRegion,
+                        preferredEndRegion
+                );
             }
             fallbackCreateRequests.addAll(createFallbackDayItineraries(trip, request, dayNo, dayPlaces));
             remainingSelectedPlaces.removeAll(dayPlaces);
@@ -486,10 +524,15 @@ public class ItineraryGenerateService {
     private List<PlaceResponse> selectReachableFallbackDayPlaces(
             Trip trip,
             List<PlaceResponse> candidatePlaces,
-            int dayItemCount
+            int dayItemCount,
+            String preferredStartRegion,
+            String preferredEndRegion
     ) {
         List<PlaceResponse> startCandidates = new ArrayList<>(candidatePlaces);
-        PlaceResponse preferredStart = findFallbackStartPlace(trip, candidatePlaces);
+        PlaceResponse preferredStart = findFallbackStartPlace(trip, candidatePlaces, preferredStartRegion);
+        if (dayItemCount == 1 && preferredEndRegion != null) {
+            preferredStart = findFallbackStartPlace(trip, candidatePlaces, preferredEndRegion);
+        }
         startCandidates.remove(preferredStart);
         startCandidates.addFirst(preferredStart);
 
@@ -501,7 +544,12 @@ public class ItineraryGenerateService {
 
             while (route.size() < dayItemCount) {
                 PlaceResponse currentPlace = route.getLast();
-                PlaceResponse nextPlace = findReachableFallbackPlace(currentPlace, remainingPlaces);
+                boolean finalPlace = route.size() == dayItemCount - 1;
+                PlaceResponse nextPlace = findReachableFallbackPlace(
+                        currentPlace,
+                        remainingPlaces,
+                        finalPlace ? preferredEndRegion : null
+                );
                 if (nextPlace == null) {
                     break;
                 }
@@ -521,12 +569,15 @@ public class ItineraryGenerateService {
 
     private PlaceResponse findReachableFallbackPlace(
             PlaceResponse currentPlace,
-            List<PlaceResponse> candidatePlaces
+            List<PlaceResponse> candidatePlaces,
+            String preferredRegion
     ) {
         return candidatePlaces.stream()
                 .filter(place -> routeCalculationAdapter.calculateTravelMinutes(currentPlace, place)
                         <= MAX_TRAVEL_MINUTES_BETWEEN_PLACES)
-                .min(Comparator.comparingInt((PlaceResponse place) ->
+                .min(Comparator.comparing((PlaceResponse place) -> isSameArea(preferredRegion, place.region()))
+                        .reversed()
+                        .thenComparingInt(place ->
                                 routeCalculationAdapter.calculateTravelMinutes(currentPlace, place))
                         .thenComparing(place -> !isSameRegion(currentPlace, place))
                         .thenComparing(PlaceResponse::placeId))
@@ -537,7 +588,8 @@ public class ItineraryGenerateService {
             Trip trip,
             ItineraryGenerateRequest request,
             List<PlaceResponse> candidatePlaces,
-            int targetItemCount
+            int targetItemCount,
+            Map<Integer, String> accommodationRegionByDayNo
     ) {
         Set<Long> mustVisitPlaceIds = request == null
                 ? Set.of()
@@ -545,6 +597,7 @@ public class ItineraryGenerateService {
         List<PlaceResponse> remainingPlaces = new ArrayList<>(candidatePlaces);
         List<PlaceResponse> selectedPlaces = new ArrayList<>();
         PlaceResponse currentPlace = null;
+        Set<String> accommodationRegions = new HashSet<>(accommodationRegionByDayNo.values());
 
         while (selectedPlaces.size() < targetItemCount && !remainingPlaces.isEmpty()) {
             List<PlaceResponse> selectablePlaces = remainingPlaces;
@@ -558,7 +611,12 @@ public class ItineraryGenerateService {
                         .toList();
             }
 
-            PlaceResponse nextPlace = findNextFallbackPlace(trip, currentPlace, selectablePlaces);
+            PlaceResponse nextPlace = findNextFallbackPlace(
+                    trip,
+                    currentPlace,
+                    selectablePlaces,
+                    accommodationRegions
+            );
             selectedPlaces.add(nextPlace);
             remainingPlaces.remove(nextPlace);
             currentPlace = nextPlace;
@@ -614,16 +672,34 @@ public class ItineraryGenerateService {
         return Math.min(maxItemsPerDay, Math.max(minItemsPerDay, itemCount));
     }
 
-    private List<PlaceResponse> orderFallbackDayPlacesByRoute(Trip trip, List<PlaceResponse> dayPlaces) {
+    private List<PlaceResponse> orderFallbackDayPlacesByRoute(
+            Trip trip,
+            List<PlaceResponse> dayPlaces,
+            String preferredStartRegion,
+            String preferredEndRegion
+    ) {
         List<PlaceResponse> remainingPlaces = new ArrayList<>(dayPlaces);
         List<PlaceResponse> orderedPlaces = new ArrayList<>();
         PlaceResponse currentPlace = null;
+        PlaceResponse preferredEndPlace = null;
+        if (remainingPlaces.size() > 1 && preferredEndRegion != null) {
+            preferredEndPlace = remainingPlaces.stream()
+                    .filter(place -> isSameArea(preferredEndRegion, place.region()))
+                    .findFirst()
+                    .orElse(null);
+            remainingPlaces.remove(preferredEndPlace);
+        }
 
         while (!remainingPlaces.isEmpty()) {
-            PlaceResponse nextPlace = findNextFallbackPlace(trip, currentPlace, remainingPlaces);
+            PlaceResponse nextPlace = currentPlace == null
+                    ? findFallbackStartPlace(trip, remainingPlaces, preferredStartRegion)
+                    : findNextFallbackPlace(trip, currentPlace, remainingPlaces);
             orderedPlaces.add(nextPlace);
             remainingPlaces.remove(nextPlace);
             currentPlace = nextPlace;
+        }
+        if (preferredEndPlace != null) {
+            orderedPlaces.add(preferredEndPlace);
         }
 
         return orderedPlaces;
@@ -634,12 +710,24 @@ public class ItineraryGenerateService {
             PlaceResponse currentPlace,
             List<PlaceResponse> candidatePlaces
     ) {
+        return findNextFallbackPlace(trip, currentPlace, candidatePlaces, Set.of());
+    }
+
+    private PlaceResponse findNextFallbackPlace(
+            Trip trip,
+            PlaceResponse currentPlace,
+            List<PlaceResponse> candidatePlaces,
+            Set<String> preferredRegions
+    ) {
         if (currentPlace == null) {
-            return findFallbackStartPlace(trip, candidatePlaces);
+            return findFallbackStartPlace(trip, candidatePlaces, null);
         }
 
         return candidatePlaces.stream()
-                .min(Comparator.comparingInt((PlaceResponse place) ->
+                .min(Comparator.comparing((PlaceResponse place) -> preferredRegions.stream()
+                                .anyMatch(region -> isSameArea(region, place.region())))
+                        .reversed()
+                        .thenComparingInt(place ->
                                 routeCalculationAdapter.calculateTravelMinutes(currentPlace, place))
                         .thenComparing(place -> !isSameRegion(currentPlace, place))
                         .thenComparing(PlaceResponse::placeId))
@@ -647,6 +735,23 @@ public class ItineraryGenerateService {
     }
 
     private PlaceResponse findFallbackStartPlace(Trip trip, List<PlaceResponse> candidatePlaces) {
+        return findFallbackStartPlace(trip, candidatePlaces, null);
+    }
+
+    private PlaceResponse findFallbackStartPlace(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces,
+            String preferredRegion
+    ) {
+        if (preferredRegion != null) {
+            PlaceResponse preferredRegionPlace = candidatePlaces.stream()
+                    .filter(place -> isSameArea(preferredRegion, place.region()))
+                    .findFirst()
+                    .orElse(null);
+            if (preferredRegionPlace != null) {
+                return preferredRegionPlace;
+            }
+        }
         PlaceResponse sameAreaPlace = candidatePlaces.stream()
                 .filter(place -> isSameArea(trip.getLastAccommodationArea(), place.region()))
                 .findFirst()
@@ -664,6 +769,41 @@ public class ItineraryGenerateService {
         }
 
         return candidatePlaces.getFirst();
+    }
+
+    private Map<Integer, String> findAccommodationRegionsByDayNo(Trip trip) {
+        Map<Integer, String> accommodationRegionByDayNo = new HashMap<>();
+        List<TripAccommodation> tripAccommodations =
+                tripAccommodationRepository.findByTripIdOrderByStayDate(trip.getTripId());
+
+        for (TripAccommodation tripAccommodation : tripAccommodations) {
+            LocalDate stayDate = tripAccommodation.getStayDate();
+            if (stayDate.isBefore(trip.getStartDate()) || !stayDate.isBefore(trip.getEndDate())) {
+                continue;
+            }
+            String region = normalizeArea(tripAccommodation.getAccommodation().getRegion());
+            if (region == null) {
+                continue;
+            }
+            int dayNo = Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), stayDate) + 1);
+            accommodationRegionByDayNo.put(dayNo, region);
+        }
+
+        return accommodationRegionByDayNo;
+    }
+
+    private String preferredStartRegion(
+            Trip trip,
+            Map<Integer, String> accommodationRegionByDayNo,
+            int dayNo
+    ) {
+        if (dayNo > 1) {
+            String previousAccommodationRegion = accommodationRegionByDayNo.get(dayNo - 1);
+            if (previousAccommodationRegion != null) {
+                return previousAccommodationRegion;
+            }
+        }
+        return accommodationAreaRegionMapper.toPlaceRegion(trip.getLastAccommodationArea());
     }
 
     private String normalizeArea(String area) {
@@ -1318,7 +1458,8 @@ public class ItineraryGenerateService {
             Trip trip,
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
-            Integer targetDayNo
+            Integer targetDayNo,
+            Map<Integer, String> accommodationRegionByDayNo
     ) {
         List<PlaceResponse> filteredCandidatePlaces = filterExcludedCandidatePlaces(candidatePlaces, request);
         Set<Long> mustVisitPlaceIds = request == null
@@ -1327,11 +1468,11 @@ public class ItineraryGenerateService {
 
         List<PlaceResponse> mustVisitPlaces = filteredCandidatePlaces.stream()
                 .filter(candidatePlace -> mustVisitPlaceIds.contains(candidatePlace.placeId()))
-                .sorted(candidatePlaceComparator(trip, request))
+                .sorted(candidatePlaceComparator(trip, request, accommodationRegionByDayNo))
                 .toList();
         List<PlaceResponse> ordinaryPlaces = filteredCandidatePlaces.stream()
                 .filter(candidatePlace -> !mustVisitPlaceIds.contains(candidatePlace.placeId()))
-                .sorted(candidatePlaceComparator(trip, request))
+                .sorted(candidatePlaceComparator(trip, request, accommodationRegionByDayNo))
                 .toList();
 
         int candidatePlaceLimit = calculateLlmCandidatePlaceLimit(trip, request, targetDayNo);
@@ -1346,13 +1487,13 @@ public class ItineraryGenerateService {
                 selectedCandidatePlaces,
                 filteredCandidatePlaces,
                 mustVisitPlaceIds,
-                candidatePlaceComparator(trip, request)
+                candidatePlaceComparator(trip, request, accommodationRegionByDayNo)
         );
         return includeRegionBalanceCandidates(
                 categoryBalancedCandidatePlaces,
                 filteredCandidatePlaces,
                 mustVisitPlaceIds,
-                candidatePlaceComparator(trip, request)
+                candidatePlaceComparator(trip, request, accommodationRegionByDayNo)
         );
     }
 
@@ -1690,13 +1831,20 @@ public class ItineraryGenerateService {
         return Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1);
     }
 
-    private Comparator<PlaceResponse> candidatePlaceComparator(Trip trip, ItineraryGenerateRequest request) {
+    private Comparator<PlaceResponse> candidatePlaceComparator(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            Map<Integer, String> accommodationRegionByDayNo
+    ) {
         return Comparator
                 .comparing((PlaceResponse place) -> isPreferredCategory(place, request))
                 .reversed()
                 .thenComparing(Comparator.comparing((PlaceResponse place) -> rainyDayScore(place, request)).reversed())
                 .thenComparing(Comparator.comparing((PlaceResponse place) -> conceptScore(place, trip.getConcept())).reversed())
-                .thenComparing(Comparator.comparing((PlaceResponse place) -> isAccommodationRegion(place, trip)).reversed())
+                .thenComparing(Comparator.comparing((PlaceResponse place) ->
+                        isDailyAccommodationRegion(place, accommodationRegionByDayNo)).reversed())
+                .thenComparing(Comparator.comparing((PlaceResponse place) ->
+                        isLastAccommodationRegion(place, trip)).reversed())
                 .thenComparing(PlaceResponse::placeId);
     }
 
@@ -1726,7 +1874,15 @@ public class ItineraryGenerateService {
                 && request.normalizedRainyDayNos().stream().anyMatch(rainyDayNo -> rainyDayNo > dayNo);
     }
 
-    private boolean isAccommodationRegion(PlaceResponse place, Trip trip) {
+    private boolean isDailyAccommodationRegion(
+            PlaceResponse place,
+            Map<Integer, String> accommodationRegionByDayNo
+    ) {
+        return accommodationRegionByDayNo.values().stream()
+                .anyMatch(region -> isSameArea(region, place.region()));
+    }
+
+    private boolean isLastAccommodationRegion(PlaceResponse place, Trip trip) {
         String accommodationRegion = accommodationAreaRegionMapper.toPlaceRegion(trip.getLastAccommodationArea());
         return accommodationRegion != null && accommodationRegion.equals(place.region());
     }

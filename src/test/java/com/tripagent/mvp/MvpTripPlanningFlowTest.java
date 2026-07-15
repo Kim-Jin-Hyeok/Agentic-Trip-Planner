@@ -122,6 +122,7 @@ class MvpTripPlanningFlowTest {
                 new CandidatePlaceValidator(),
                 itineraryService,
                 itineraryRepository,
+                tripAccommodationRepository,
                 new SimpleRouteCalculationAdapter(),
                 new AccommodationAreaRegionMapper()
         );
