@@ -317,12 +317,14 @@ public class ItineraryGenerateService {
             int attemptNumber = attempt + 1;
             String attemptPrompt = promptForValidationAttempt(prompt, lastValidationException);
             try {
+                boolean repairDuplicatedPlaces = attempt > 0;
                 List<ItineraryCreateRequest> createRequests = generateValidatedDraftItinerary(
                         trip,
                         candidatePlaces,
                         request,
                         attemptPrompt,
-                        targetDayNo
+                        targetDayNo,
+                        repairDuplicatedPlaces
                 );
                 logDraftGenerationSuccess(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces);
                 return createRequests;
@@ -898,11 +900,15 @@ public class ItineraryGenerateService {
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
             String prompt,
-            Integer targetDayNo
+            Integer targetDayNo,
+            boolean repairDuplicatedPlaces
     ) {
         String rawResponse = llmClient.generate(prompt);
         List<LlmItineraryItemResponse> parsedItems = llmItineraryJsonParser.parse(rawResponse);
         List<ItineraryCreateRequest> createRequests = llmItineraryResponseConverter.toCreateRequests(parsedItems);
+        if (repairDuplicatedPlaces) {
+            createRequests = replaceDuplicatedPlaces(candidatePlaces, createRequests);
+        }
         List<Long> selectedPlaceIds = createRequests.stream()
                 .map(ItineraryCreateRequest::placeId)
                 .toList();
@@ -914,6 +920,156 @@ public class ItineraryGenerateService {
         validateDraftItineraries(trip, request, createRequests, targetDayNo);
 
         return createRequests;
+    }
+
+    private List<ItineraryCreateRequest> replaceDuplicatedPlaces(
+            List<PlaceResponse> candidatePlaces,
+            List<ItineraryCreateRequest> createRequests
+    ) {
+        List<ItineraryCreateRequest> sortedRequests = createRequests.stream()
+                .sorted(Comparator.comparing(ItineraryCreateRequest::dayNo)
+                        .thenComparing(ItineraryCreateRequest::orderNo))
+                .toList();
+        Map<Long, PlaceResponse> candidatePlaceById = candidatePlaces.stream()
+                .collect(Collectors.toMap(PlaceResponse::placeId, Function.identity()));
+        Set<Long> reservedPlaceIds = sortedRequests.stream()
+                .map(ItineraryCreateRequest::placeId)
+                .collect(Collectors.toSet());
+        Set<Long> usedPlaceIds = new HashSet<>();
+        List<ItineraryCreateRequest> repairedRequests = new ArrayList<>();
+
+        for (int index = 0; index < sortedRequests.size(); index++) {
+            ItineraryCreateRequest currentRequest = sortedRequests.get(index);
+            if (usedPlaceIds.add(currentRequest.placeId())) {
+                repairedRequests.add(currentRequest);
+                continue;
+            }
+
+            PlaceResponse duplicatedPlace = candidatePlaceById.get(currentRequest.placeId());
+            PlaceResponse previousPlace = previousPlaceOnSameDay(repairedRequests, candidatePlaceById, currentRequest);
+            PlaceResponse nextPlace = nextPlaceOnSameDay(sortedRequests, candidatePlaceById, currentRequest, index);
+            PlaceResponse replacement = findDuplicateReplacement(
+                    candidatePlaces,
+                    reservedPlaceIds,
+                    usedPlaceIds,
+                    duplicatedPlace,
+                    previousPlace,
+                    nextPlace
+            );
+            if (replacement == null) {
+                repairedRequests.add(currentRequest);
+                continue;
+            }
+
+            usedPlaceIds.add(replacement.placeId());
+            reservedPlaceIds.add(replacement.placeId());
+            repairedRequests.add(new ItineraryCreateRequest(
+                    replacement.placeId(),
+                    currentRequest.dayNo(),
+                    currentRequest.orderNo(),
+                    currentRequest.startTime(),
+                    currentRequest.endTime(),
+                    currentRequest.travelMinutesFromPrevious(),
+                    repairedDuplicateReason(currentRequest.reason())
+            ));
+        }
+
+        return repairedRequests;
+    }
+
+    private PlaceResponse previousPlaceOnSameDay(
+            List<ItineraryCreateRequest> repairedRequests,
+            Map<Long, PlaceResponse> candidatePlaceById,
+            ItineraryCreateRequest currentRequest
+    ) {
+        if (repairedRequests.isEmpty()) {
+            return null;
+        }
+        ItineraryCreateRequest previousRequest = repairedRequests.getLast();
+        if (!previousRequest.dayNo().equals(currentRequest.dayNo())) {
+            return null;
+        }
+        return candidatePlaceById.get(previousRequest.placeId());
+    }
+
+    private PlaceResponse nextPlaceOnSameDay(
+            List<ItineraryCreateRequest> sortedRequests,
+            Map<Long, PlaceResponse> candidatePlaceById,
+            ItineraryCreateRequest currentRequest,
+            int currentIndex
+    ) {
+        if (currentIndex + 1 >= sortedRequests.size()) {
+            return null;
+        }
+        ItineraryCreateRequest nextRequest = sortedRequests.get(currentIndex + 1);
+        if (!nextRequest.dayNo().equals(currentRequest.dayNo())) {
+            return null;
+        }
+        return candidatePlaceById.get(nextRequest.placeId());
+    }
+
+    private PlaceResponse findDuplicateReplacement(
+            List<PlaceResponse> candidatePlaces,
+            Set<Long> reservedPlaceIds,
+            Set<Long> usedPlaceIds,
+            PlaceResponse duplicatedPlace,
+            PlaceResponse previousPlace,
+            PlaceResponse nextPlace
+    ) {
+        return candidatePlaces.stream()
+                .filter(candidatePlace -> !reservedPlaceIds.contains(candidatePlace.placeId()))
+                .filter(candidatePlace -> !usedPlaceIds.contains(candidatePlace.placeId()))
+                .min(Comparator
+                        .comparing((PlaceResponse candidatePlace) ->
+                                isReachableReplacement(previousPlace, candidatePlace, nextPlace)).reversed()
+                        .thenComparing(Comparator.comparing((PlaceResponse candidatePlace) ->
+                                hasSameCategory(duplicatedPlace, candidatePlace)).reversed())
+                        .thenComparing(Comparator.comparing((PlaceResponse candidatePlace) ->
+                                hasSameRegion(duplicatedPlace, candidatePlace)).reversed())
+                        .thenComparingInt(candidatePlace ->
+                                replacementTravelMinutes(previousPlace, candidatePlace, nextPlace))
+                        .thenComparing(PlaceResponse::placeId))
+                .orElse(null);
+    }
+
+    private String repairedDuplicateReason(String reason) {
+        String repairReason = "중복 장소를 다른 후보 장소로 조정했습니다.";
+        if (reason == null || reason.isBlank()) {
+            return repairReason;
+        }
+        return reason + " " + repairReason;
+    }
+
+    private boolean hasSameCategory(PlaceResponse firstPlace, PlaceResponse secondPlace) {
+        return firstPlace != null && Objects.equals(firstPlace.category(), secondPlace.category());
+    }
+
+    private boolean hasSameRegion(PlaceResponse firstPlace, PlaceResponse secondPlace) {
+        return firstPlace != null && isSameArea(firstPlace.region(), secondPlace.region());
+    }
+
+    private boolean isReachableReplacement(
+            PlaceResponse previousPlace,
+            PlaceResponse replacement,
+            PlaceResponse nextPlace
+    ) {
+        return travelMinutes(previousPlace, replacement) <= MAX_TRAVEL_MINUTES_BETWEEN_PLACES
+                && travelMinutes(replacement, nextPlace) <= MAX_TRAVEL_MINUTES_BETWEEN_PLACES;
+    }
+
+    private int replacementTravelMinutes(
+            PlaceResponse previousPlace,
+            PlaceResponse replacement,
+            PlaceResponse nextPlace
+    ) {
+        return travelMinutes(previousPlace, replacement) + travelMinutes(replacement, nextPlace);
+    }
+
+    private int travelMinutes(PlaceResponse from, PlaceResponse to) {
+        if (from == null || to == null) {
+            return 0;
+        }
+        return routeCalculationAdapter.calculateTravelMinutes(from, to);
     }
 
     private List<ItineraryCreateRequest> applyCalculatedTravelMinutes(
@@ -1487,7 +1643,8 @@ public class ItineraryGenerateService {
                 selectedCandidatePlaces,
                 filteredCandidatePlaces,
                 mustVisitPlaceIds,
-                candidatePlaceComparator(trip, request, accommodationRegionByDayNo)
+                candidatePlaceComparator(trip, request, accommodationRegionByDayNo),
+                generationDayCount(trip, targetDayNo)
         );
         return includeRegionBalanceCandidates(
                 categoryBalancedCandidatePlaces,
@@ -1529,78 +1686,85 @@ public class ItineraryGenerateService {
             List<PlaceResponse> selectedCandidatePlaces,
             List<PlaceResponse> candidatePlaces,
             Set<Long> mustVisitPlaceIds,
-            Comparator<PlaceResponse> comparator
+            Comparator<PlaceResponse> comparator,
+            int generationDayCount
     ) {
         if (selectedCandidatePlaces.size() >= candidatePlaces.size()) {
             return selectedCandidatePlaces;
         }
 
         List<PlaceResponse> balancedCandidatePlaces = new ArrayList<>(selectedCandidatePlaces);
-        includeCategoryGroupCandidate(
+        includeCategoryGroupCandidates(
                 balancedCandidatePlaces,
                 candidatePlaces,
                 mustVisitPlaceIds,
                 comparator,
-                Set.of("FOOD")
+                Set.of("CAFE"),
+                1
         );
-        includeCategoryGroupCandidate(
+        includeCategoryGroupCandidates(
                 balancedCandidatePlaces,
                 candidatePlaces,
                 mustVisitPlaceIds,
                 comparator,
-                Set.of("CAFE")
+                TOUR_CATEGORY_NAMES,
+                1
         );
-        includeCategoryGroupCandidate(
+        includeCategoryGroupCandidates(
                 balancedCandidatePlaces,
                 candidatePlaces,
                 mustVisitPlaceIds,
                 comparator,
-                TOUR_CATEGORY_NAMES
+                Set.of("FOOD"),
+                generationDayCount
         );
         return balancedCandidatePlaces;
     }
 
-    private void includeCategoryGroupCandidate(
+    private void includeCategoryGroupCandidates(
             List<PlaceResponse> selectedCandidatePlaces,
             List<PlaceResponse> candidatePlaces,
             Set<Long> mustVisitPlaceIds,
             Comparator<PlaceResponse> comparator,
-            Set<String> categoryNames
+            Set<String> categoryNames,
+            int requiredCount
     ) {
-        if (containsCategory(selectedCandidatePlaces, categoryNames)) {
-            return;
+        while (countCategory(selectedCandidatePlaces, categoryNames) < requiredCount) {
+            Set<Long> selectedPlaceIds = selectedCandidatePlaces.stream()
+                    .map(PlaceResponse::placeId)
+                    .collect(Collectors.toSet());
+
+            PlaceResponse categoryCandidate = candidatePlaces.stream()
+                    .filter(candidatePlace -> !selectedPlaceIds.contains(candidatePlace.placeId()))
+                    .filter(candidatePlace -> categoryNames.contains(candidatePlace.category()))
+                    .min(comparator)
+                    .orElse(null);
+            if (categoryCandidate == null) {
+                return;
+            }
+
+            int replacementIndex = lastReplaceableCandidateIndex(
+                    selectedCandidatePlaces,
+                    mustVisitPlaceIds,
+                    categoryNames
+            );
+            if (replacementIndex < 0) {
+                return;
+            }
+
+            selectedCandidatePlaces.set(replacementIndex, categoryCandidate);
         }
-
-        Set<Long> selectedPlaceIds = selectedCandidatePlaces.stream()
-                .map(PlaceResponse::placeId)
-                .collect(Collectors.toSet());
-
-        PlaceResponse categoryCandidate = candidatePlaces.stream()
-                .filter(candidatePlace -> !selectedPlaceIds.contains(candidatePlace.placeId()))
-                .filter(candidatePlace -> categoryNames.contains(candidatePlace.category()))
-                .min(comparator)
-                .orElse(null);
-        if (categoryCandidate == null) {
-            return;
-        }
-
-        int replacementIndex = lastReplaceableCandidateIndex(selectedCandidatePlaces, mustVisitPlaceIds);
-        if (replacementIndex < 0) {
-            return;
-        }
-
-        selectedCandidatePlaces.set(replacementIndex, categoryCandidate);
     }
 
-    private boolean containsCategory(List<PlaceResponse> places, Set<String> categoryNames) {
-        return places.stream()
-                .anyMatch(place -> categoryNames.contains(place.category()));
-    }
-
-    private int lastReplaceableCandidateIndex(List<PlaceResponse> selectedCandidatePlaces, Set<Long> mustVisitPlaceIds) {
+    private int lastReplaceableCandidateIndex(
+            List<PlaceResponse> selectedCandidatePlaces,
+            Set<Long> mustVisitPlaceIds,
+            Set<String> protectedCategoryNames
+    ) {
         for (int index = selectedCandidatePlaces.size() - 1; index >= 0; index--) {
             PlaceResponse candidatePlace = selectedCandidatePlaces.get(index);
             if (!mustVisitPlaceIds.contains(candidatePlace.placeId())
+                    && !protectedCategoryNames.contains(candidatePlace.category())
                     && !MEAL_AND_REST_CATEGORY_NAMES.contains(candidatePlace.category())
                     && !TOUR_CATEGORY_NAMES.contains(candidatePlace.category())) {
                 return index;
@@ -1610,6 +1774,7 @@ public class ItineraryGenerateService {
         for (int index = selectedCandidatePlaces.size() - 1; index >= 0; index--) {
             PlaceResponse candidatePlace = selectedCandidatePlaces.get(index);
             if (!mustVisitPlaceIds.contains(candidatePlace.placeId())
+                    && !protectedCategoryNames.contains(candidatePlace.category())
                     && keepsExistingBalanceCategory(selectedCandidatePlaces, candidatePlace)) {
                 return index;
             }
@@ -1710,6 +1875,7 @@ public class ItineraryGenerateService {
             PlaceResponse candidatePlace = selectedCandidatePlaces.get(index);
             if (!mustVisitPlaceIds.contains(candidatePlace.placeId())
                     && countRegion(selectedCandidatePlaces, candidatePlace.region()) > 1
+                    && !MEAL_AND_REST_CATEGORY_NAMES.contains(candidatePlace.category())
                     && keepsExistingBalanceCategory(selectedCandidatePlaces, candidatePlace)) {
                 return index;
             }

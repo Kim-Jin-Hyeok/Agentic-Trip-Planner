@@ -822,6 +822,50 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateDraftItinerariesIncludesDistinctFoodCandidateForEachTripDay() {
+        Trip trip = trip(
+                1L,
+                TripConcept.HEALING,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = new java.util.ArrayList<>(
+                java.util.stream.IntStream.rangeClosed(1, 30)
+                        .mapToObj(placeId -> placeWithFoodScore((long) placeId, "NATURE", 1_000 - placeId))
+                        .toList()
+        );
+        candidatePlaces.add(placeWithFoodScore(31L, "FOOD", 1));
+        candidatePlaces.add(placeWithFoodScore(32L, "FOOD", 1));
+        candidatePlaces.add(placeWithFoodScore(33L, "FOOD", 1));
+        candidatePlaces.add(placeWithFoodScore(34L, "CAFE", 1));
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(1L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(2L, 2, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(3L, 3, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.HEALING)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList())).thenReturn("prompt");
+        when(llmClient.generate(anyString())).thenReturn("raw response");
+        when(llmItineraryJsonParser.parse("raw response")).thenReturn(List.of(
+                llmItem(1L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(2L, 2, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(3L, 3, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0)
+        ));
+        when(llmItineraryResponseConverter.toCreateRequests(anyList())).thenReturn(createRequests);
+
+        itineraryGenerateService.generateDraftItineraries(1L);
+
+        ArgumentCaptor<List<PlaceResponse>> candidateCaptor = ArgumentCaptor.forClass(List.class);
+        verify(itineraryPromptGenerator).generate(eq(trip), candidateCaptor.capture());
+        assertThat(candidateCaptor.getValue()).filteredOn(place -> "FOOD".equals(place.category()))
+                .extracting(PlaceResponse::placeId)
+                .containsExactlyInAnyOrder(31L, 32L, 33L);
+    }
+
+    @Test
     void generateDraftItinerariesIncludesRegionBalanceCandidatesWhenTopThirtyUsesOneRegion() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = new java.util.ArrayList<>(
@@ -1741,7 +1785,7 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesSavesFallbackWhenAllRetriesFailValidation() {
+    void generateItinerariesRepairsDuplicatedPlacesOnRetry() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -1767,10 +1811,15 @@ class ItineraryGenerateServiceTest {
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
 
-        assertThat(responses).hasSize(1);
-        verify(llmClient, times(3)).generate(anyString());
-        verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 10L));
-        verify(itineraryService).createItinerary(eq(1L), any());
+        assertThat(responses).hasSize(2);
+        verify(llmClient, times(2)).generate(anyString());
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 10L));
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor =
+                ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService, times(2)).createItinerary(eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues()).extracting(ItineraryCreateRequest::placeId)
+                .containsExactly(10L, 20L);
     }
 
     @Test
