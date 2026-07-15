@@ -35,6 +35,7 @@ import com.tripagent.trip.dto.TripCreateRequest;
 import com.tripagent.trip.dto.TripDetailResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripLikeRepository;
+import com.tripagent.trip.repository.TripAccommodationRepository;
 import com.tripagent.trip.repository.TripRepository;
 import com.tripagent.trip.repository.TripViewRepository;
 import com.tripagent.trip.service.TripService;
@@ -65,6 +66,9 @@ class MvpTripPlanningFlowTest {
 
     @Mock
     private ItineraryRepository itineraryRepository;
+
+    @Mock
+    private TripAccommodationRepository tripAccommodationRepository;
 
     @Mock
     private TripLikeRepository tripLikeRepository;
@@ -103,6 +107,7 @@ class MvpTripPlanningFlowTest {
         tripService = new TripService(
                 tripRepository,
                 itineraryRepository,
+                tripAccommodationRepository,
                 tripLikeRepository,
                 tripViewRepository,
                 memberRepository

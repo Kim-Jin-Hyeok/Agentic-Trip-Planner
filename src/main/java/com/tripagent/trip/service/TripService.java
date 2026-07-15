@@ -23,6 +23,7 @@ import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripPlaceSummaryResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripLikeRepository;
+import com.tripagent.trip.repository.TripAccommodationRepository;
 import com.tripagent.trip.repository.TripRepository;
 import com.tripagent.trip.repository.TripViewRepository;
 import java.time.LocalDate;
@@ -56,6 +57,7 @@ public class TripService {
 
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
+    private final TripAccommodationRepository tripAccommodationRepository;
     private final TripLikeRepository tripLikeRepository;
     private final TripViewRepository tripViewRepository;
     private final MemberRepository memberRepository;
@@ -63,12 +65,14 @@ public class TripService {
     public TripService(
             TripRepository tripRepository,
             ItineraryRepository itineraryRepository,
+            TripAccommodationRepository tripAccommodationRepository,
             TripLikeRepository tripLikeRepository,
             TripViewRepository tripViewRepository,
             MemberRepository memberRepository
     ) {
         this.tripRepository = tripRepository;
         this.itineraryRepository = itineraryRepository;
+        this.tripAccommodationRepository = tripAccommodationRepository;
         this.tripLikeRepository = tripLikeRepository;
         this.tripViewRepository = tripViewRepository;
         this.memberRepository = memberRepository;
@@ -504,6 +508,8 @@ public class TripService {
         validateTripOwner(trip, ownerId);
 
         String lastAccommodationArea = normalizeAccommodationArea(request.lastAccommodationArea());
+        boolean dateRangeChanged = !Objects.equals(trip.getStartDate(), request.startDate())
+                || !Objects.equals(trip.getEndDate(), request.endDate());
         boolean conditionsChanged = !Objects.equals(trip.getStartDate(), request.startDate())
                 || !Objects.equals(trip.getEndDate(), request.endDate())
                 || !Objects.equals(trip.getDailyStartTime(), request.dailyStartTime())
@@ -526,6 +532,13 @@ public class TripService {
         if (itineraryRepository.existsByTrip_TripId(tripId)) {
             itineraryRepository.deleteByTrip_TripId(tripId);
             trip.changeVisibility(TripVisibility.PRIVATE);
+        }
+        if (dateRangeChanged) {
+            tripAccommodationRepository.deleteOutsideStayRange(
+                    tripId,
+                    request.startDate(),
+                    request.endDate()
+            );
         }
 
         return TripResponse.from(trip);
@@ -557,6 +570,7 @@ public class TripService {
         validateTripOwner(trip, ownerId);
 
         itineraryRepository.deleteByTrip_TripId(tripId);
+        tripAccommodationRepository.deleteByTripId(tripId);
         tripRepository.delete(trip);
     }
 

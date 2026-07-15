@@ -33,6 +33,7 @@ import com.tripagent.trip.dto.TripLikeResponse;
 import com.tripagent.trip.dto.TripPlaceSummaryResponse;
 import com.tripagent.trip.dto.TripResponse;
 import com.tripagent.trip.repository.TripLikeRepository;
+import com.tripagent.trip.repository.TripAccommodationRepository;
 import com.tripagent.trip.repository.TripRepository;
 import com.tripagent.trip.repository.TripViewRepository;
 import java.lang.reflect.Field;
@@ -62,6 +63,9 @@ class TripServiceTest {
 
     @Mock
     private ItineraryRepository itineraryRepository;
+
+    @Mock
+    private TripAccommodationRepository tripAccommodationRepository;
 
     @Mock
     private TripLikeRepository tripLikeRepository;
@@ -1386,6 +1390,11 @@ class TripServiceTest {
         assertThat(response.lastAccommodationArea()).isEqualTo("JEJU_CITY");
         assertThat(response.visibility()).isEqualTo(TripVisibility.PRIVATE);
         verify(itineraryRepository).deleteByTrip_TripId(1L);
+        verify(tripAccommodationRepository).deleteOutsideStayRange(
+                1L,
+                LocalDate.of(2026, 7, 2),
+                LocalDate.of(2026, 7, 5)
+        );
     }
 
     @Test
@@ -1425,6 +1434,7 @@ class TripServiceTest {
         assertThat(response.nights()).isEqualTo(2);
         verify(itineraryRepository, never()).existsByTrip_TripId(1L);
         verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+        verify(tripAccommodationRepository, never()).deleteOutsideStayRange(any(), any(), any());
     }
 
     @Test
@@ -1592,8 +1602,9 @@ class TripServiceTest {
 
         tripService.deleteTrip(1L);
 
-        InOrder inOrder = inOrder(itineraryRepository, tripRepository);
+        InOrder inOrder = inOrder(itineraryRepository, tripAccommodationRepository, tripRepository);
         inOrder.verify(itineraryRepository).deleteByTrip_TripId(1L);
+        inOrder.verify(tripAccommodationRepository).deleteByTripId(1L);
         inOrder.verify(tripRepository).delete(trip);
     }
 
@@ -1613,6 +1624,7 @@ class TripServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip owner does not match. tripId=1");
         verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+        verify(tripAccommodationRepository, never()).deleteByTripId(1L);
         verify(tripRepository, never()).delete(trip);
     }
 
