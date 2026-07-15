@@ -141,6 +141,7 @@ export function TripCreatePage() {
   const [candidatePlaces, setCandidatePlaces] = useState<PlaceResponse[]>([]);
   const [tripWeather, setTripWeather] = useState<TripWeatherForecast | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(false);
+  const [isSavingAccommodations, setIsSavingAccommodations] = useState(false);
   const [pendingItineraryId, setPendingItineraryId] = useState<number | null>(null);
   const [editingItineraryId, setEditingItineraryId] = useState<number | null>(null);
   const [itineraryEditError, setItineraryEditError] = useState('');
@@ -446,7 +447,10 @@ export function TripCreatePage() {
   }
 
   async function handleGenerateItinerary() {
-    if (trip == null) {
+    if (trip == null || isSavingAccommodations) {
+      if (isSavingAccommodations) {
+        setMessage('숙소 선택을 저장한 뒤 일정을 생성해 주세요.');
+      }
       return;
     }
 
@@ -473,6 +477,7 @@ export function TripCreatePage() {
   async function handleRegenerateItinerary() {
     if (
       trip == null ||
+      isSavingAccommodations ||
       itineraries.length === 0 ||
       !window.confirm('현재 일정을 모두 새 일정으로 교체할까요? 기존 일정은 복구할 수 없습니다.')
     ) {
@@ -519,6 +524,7 @@ export function TripCreatePage() {
     if (
       trip == null
       || regeneratingDayNo != null
+      || isSavingAccommodations
     ) {
       return;
     }
@@ -1345,6 +1351,7 @@ export function TripCreatePage() {
           isLoadingCandidatePlaces={isLoadingCandidatePlaces}
           tripWeather={tripWeather}
           isLoadingWeather={isLoadingWeather}
+          isSavingAccommodations={isSavingAccommodations}
           isUpdatingVisibility={isUpdatingVisibility}
           isUpdatingLike={isUpdatingLike}
           isCopyingPublicTrip={isCopyingPublicTrip}
@@ -1372,6 +1379,7 @@ export function TripCreatePage() {
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onRefreshWeather={() => trip != null && void loadTripWeather(trip.tripId)}
           onApplyRainyDays={(rainyDayNos) => setGenerateOptions((current) => ({ ...current, rainyDayNos }))}
+          onAccommodationBusyChange={setIsSavingAccommodations}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
           onStartTitleEdit={handleStartTitleEdit}
           onTitleDraftChange={handleTitleDraftChange}

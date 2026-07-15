@@ -23,6 +23,7 @@ import { ItineraryDaySection } from './ItineraryDaySection';
 import { ItineraryAddForm } from './ItineraryAddForm';
 import { ItineraryGenerateOptions } from './ItineraryGenerateOptions';
 import { ItineraryMapPanel } from './ItineraryMapPanel';
+import { TripAccommodationSelector } from './TripAccommodationSelector';
 import { TripConditionEditForm } from './TripConditionEditForm';
 import { TripWeatherPanel } from './TripWeatherPanel';
 
@@ -43,6 +44,7 @@ type TripDetailPanelProps = {
   isLoadingCandidatePlaces: boolean;
   tripWeather: TripWeatherForecast | null;
   isLoadingWeather: boolean;
+  isSavingAccommodations: boolean;
   isUpdatingVisibility: boolean;
   isUpdatingLike: boolean;
   isCopyingPublicTrip: boolean;
@@ -70,6 +72,7 @@ type TripDetailPanelProps = {
   onLoadCandidatePlaces: () => void;
   onRefreshWeather: () => void;
   onApplyRainyDays: (rainyDayNos: number[]) => void;
+  onAccommodationBusyChange: (busy: boolean) => void;
   onUpdateVisibility: (visibility: TripVisibility) => void;
   onStartTitleEdit: () => void;
   onTitleDraftChange: (title: string) => void;
@@ -112,6 +115,7 @@ export function TripDetailPanel({
   isLoadingCandidatePlaces,
   tripWeather,
   isLoadingWeather,
+  isSavingAccommodations,
   isUpdatingVisibility,
   isUpdatingLike,
   isCopyingPublicTrip,
@@ -139,6 +143,7 @@ export function TripDetailPanel({
   onLoadCandidatePlaces,
   onRefreshWeather,
   onApplyRainyDays,
+  onAccommodationBusyChange,
   onUpdateVisibility,
   onStartTitleEdit,
   onTitleDraftChange,
@@ -174,6 +179,7 @@ export function TripDetailPanel({
   const isChangingItinerary = isGenerating
     || isRegenerating
     || regeneratingDayNo != null
+    || isSavingAccommodations
     || isAddingItinerary
     || pendingItineraryId != null
     || editingItineraryId != null;
@@ -320,6 +326,16 @@ export function TripDetailPanel({
       )}
 
       {message.length > 0 && <p className="status-message">{message}</p>}
+
+      {viewMode === 'mine' && trip != null && (
+        <TripAccommodationSelector
+          tripId={trip.tripId}
+          startDate={trip.startDate}
+          endDate={trip.endDate}
+          disabled={isChangingItinerary}
+          onBusyChange={onAccommodationBusyChange}
+        />
+      )}
 
       {viewMode === 'mine' && trip != null && (
         <TripWeatherPanel
