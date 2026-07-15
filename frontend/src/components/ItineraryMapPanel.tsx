@@ -30,14 +30,26 @@ export function ItineraryMapPanel({
     () => dayItineraries.filter(hasValidCoordinates),
     [dayItineraries]
   );
-  const selectedAccommodation = useMemo(() => {
+  const startAccommodation = useMemo(() => {
+    const stayDate = stayDateForDay(tripStartDate, selectedDay - 1);
+    return tripAccommodations.find((item) => item.stayDate === stayDate) ?? null;
+  }, [selectedDay, tripAccommodations, tripStartDate]);
+  const endAccommodation = useMemo(() => {
     const stayDate = stayDateForDay(tripStartDate, selectedDay);
     return tripAccommodations.find((item) => item.stayDate === stayDate) ?? null;
   }, [selectedDay, tripAccommodations, tripStartDate]);
-  const mappableAccommodation = selectedAccommodation != null
-    && hasValidAccommodationCoordinates(selectedAccommodation)
-    ? selectedAccommodation
+  const mappableStartAccommodation = startAccommodation != null
+    && hasValidAccommodationCoordinates(startAccommodation)
+    ? startAccommodation
     : null;
+  const mappableEndAccommodation = endAccommodation != null
+    && hasValidAccommodationCoordinates(endAccommodation)
+    ? endAccommodation
+    : null;
+  const hasSameStartAndEndAccommodation = mappableStartAccommodation != null
+    && mappableEndAccommodation != null
+    && mappableStartAccommodation.accommodation.accommodationId
+      === mappableEndAccommodation.accommodation.accommodationId;
 
   useEffect(() => {
     if (mapContainerRef.current == null || mappableItineraries.length === 0) {
@@ -55,11 +67,18 @@ export function ItineraryMapPanel({
     const itineraryCoordinates = mappableItineraries.map((itinerary) =>
       L.latLng(itinerary.place.latitude, itinerary.place.longitude)
     );
-    const routeCoordinates = [...itineraryCoordinates];
-    if (mappableAccommodation != null) {
+    const routeCoordinates: L.LatLng[] = [];
+    if (mappableStartAccommodation != null) {
       routeCoordinates.push(L.latLng(
-        mappableAccommodation.accommodation.latitude,
-        mappableAccommodation.accommodation.longitude
+        mappableStartAccommodation.accommodation.latitude,
+        mappableStartAccommodation.accommodation.longitude
+      ));
+    }
+    routeCoordinates.push(...itineraryCoordinates);
+    if (mappableEndAccommodation != null) {
+      routeCoordinates.push(L.latLng(
+        mappableEndAccommodation.accommodation.latitude,
+        mappableEndAccommodation.accommodation.longitude
       ));
     }
     if (routeCoordinates.length > 1) {
@@ -99,8 +118,28 @@ export function ItineraryMapPanel({
       }
     });
 
-    if (mappableAccommodation != null) {
-      const accommodation = mappableAccommodation.accommodation;
+    if (mappableStartAccommodation != null) {
+      const accommodation = mappableStartAccommodation.accommodation;
+      const markerLabel = hasSameStartAndEndAccommodation ? '숙' : '출';
+      const markerClassName = hasSameStartAndEndAccommodation ? 'accommodation' : 'departure';
+      const marker = L.marker([accommodation.latitude, accommodation.longitude], {
+        icon: L.divIcon({
+          className: 'route-marker-shell',
+          html: `<span class="route-marker ${markerClassName}"><b>${markerLabel}</b></span>`,
+          iconAnchor: [18, 18],
+          iconSize: [36, 36]
+        }),
+        keyboard: true,
+        title: `${hasSameStartAndEndAccommodation ? '출발·도착 숙소' : '출발 숙소'}. ${accommodation.name}`,
+        zIndexOffset: 500
+      }).addTo(map);
+      const tooltip = document.createElement('span');
+      tooltip.textContent = `${hasSameStartAndEndAccommodation ? '출발·도착 숙소' : '출발 숙소'} · ${accommodation.name}`;
+      marker.bindTooltip(tooltip, { direction: 'top', offset: [0, -16] });
+    }
+
+    if (mappableEndAccommodation != null && !hasSameStartAndEndAccommodation) {
+      const accommodation = mappableEndAccommodation.accommodation;
       const marker = L.marker([accommodation.latitude, accommodation.longitude], {
         icon: L.divIcon({
           className: 'route-marker-shell',
@@ -109,10 +148,11 @@ export function ItineraryMapPanel({
           iconSize: [36, 36]
         }),
         keyboard: true,
-        title: `숙소. ${accommodation.name}`
+        title: `도착 숙소. ${accommodation.name}`,
+        zIndexOffset: 500
       }).addTo(map);
       const tooltip = document.createElement('span');
-      tooltip.textContent = `숙소 · ${accommodation.name}`;
+      tooltip.textContent = `도착 숙소 · ${accommodation.name}`;
       marker.bindTooltip(tooltip, { direction: 'top', offset: [0, -16] });
     }
 
@@ -121,7 +161,14 @@ export function ItineraryMapPanel({
       window.cancelAnimationFrame(resizeFrame);
       map.remove();
     };
-  }, [mappableAccommodation, mappableItineraries, onItinerarySelect, selectedItineraryId]);
+  }, [
+    hasSameStartAndEndAccommodation,
+    mappableEndAccommodation,
+    mappableItineraries,
+    mappableStartAccommodation,
+    onItinerarySelect,
+    selectedItineraryId
+  ]);
 
   return (
     <section className="itinerary-map-panel" aria-labelledby="itinerary-map-title">
@@ -160,6 +207,17 @@ export function ItineraryMapPanel({
         )}
 
         <ol className="itinerary-map-stops">
+          {startAccommodation != null && (
+            <li className="map-departure-stop">
+              <div>
+                <span className="map-stop-number departure">출</span>
+                <span className="map-stop-copy">
+                  <strong>{startAccommodation.accommodation.name}</strong>
+                  <small>출발 숙소 · {startAccommodation.accommodation.region}</small>
+                </span>
+              </div>
+            </li>
+          )}
           {dayItineraries.map((itinerary, index) => {
             const isSelected = itinerary.itineraryId === selectedItineraryId;
             return (
@@ -179,13 +237,13 @@ export function ItineraryMapPanel({
               </li>
             );
           })}
-          {selectedAccommodation != null && (
+          {endAccommodation != null && (
             <li className="map-accommodation-stop">
               <div>
                 <span className="map-stop-number accommodation">숙</span>
                 <span className="map-stop-copy">
-                  <strong>{selectedAccommodation.accommodation.name}</strong>
-                  <small>일정 종료 숙소 · {selectedAccommodation.accommodation.region}</small>
+                  <strong>{endAccommodation.accommodation.name}</strong>
+                  <small>일정 종료 숙소 · {endAccommodation.accommodation.region}</small>
                 </span>
               </div>
             </li>
