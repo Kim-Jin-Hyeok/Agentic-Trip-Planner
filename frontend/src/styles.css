@@ -708,11 +708,21 @@ button:disabled {
   padding: 12px;
 }
 
-.admin-place-candidate-item > div {
+.admin-place-candidate-item.duplicate {
+  border-color: #e6b8b4;
+  background: #fffafa;
+}
+
+.admin-place-candidate-item-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.admin-place-candidate-item-heading > div {
+  display: grid;
+  gap: 3px;
 }
 
 .admin-place-candidate-item strong {
@@ -720,15 +730,24 @@ button:disabled {
   font-size: 13px;
 }
 
-.admin-place-candidate-item span,
+.admin-place-candidate-item-heading span,
 .admin-place-candidate-item small,
 .admin-place-candidate-source {
   color: var(--muted);
   font-size: 10px;
 }
 
-.admin-place-candidate-item span {
-  text-align: right;
+.admin-place-candidate-item-heading > div > span {
+  text-align: left;
+}
+
+.admin-place-duplicate-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #fdeceb;
+  color: #9b403a !important;
+  font-weight: 800;
+  padding: 4px 8px;
 }
 
 .admin-place-candidate-item p {
@@ -736,6 +755,19 @@ button:disabled {
   font-size: 12px;
   line-height: 1.5;
   margin: 0;
+}
+
+.admin-place-candidate-item .admin-place-duplicate-message {
+  display: grid;
+  gap: 3px;
+  border-radius: 8px;
+  background: #fdeceb;
+  color: #8e3934;
+  padding: 9px 10px;
+}
+
+.admin-place-duplicate-message strong {
+  font-size: 10px;
 }
 
 .admin-place-candidate-item a {

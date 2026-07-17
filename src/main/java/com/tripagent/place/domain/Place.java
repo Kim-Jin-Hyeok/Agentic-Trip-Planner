@@ -6,9 +6,16 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "places")
+@Table(
+        name = "places",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_places_external_provider_place_id",
+                columnNames = {"external_provider", "external_place_id"}
+        )
+)
 public class Place {
 
     @Id
@@ -68,6 +75,12 @@ public class Place {
 
     @Column(nullable = false)
     private Boolean useYn;
+
+    @Column(name = "external_provider", length = 30)
+    private String externalProvider;
+
+    @Column(name = "external_place_id", length = 100)
+    private String externalPlaceId;
 
     protected Place() {
     }
@@ -228,5 +241,32 @@ public class Place {
 
     public Boolean getUseYn() {
         return useYn;
+    }
+
+    public void linkExternalReference(String externalProvider, String externalPlaceId) {
+        if (externalProvider == null || externalProvider.isBlank()) {
+            throw new IllegalArgumentException("External place provider is required.");
+        }
+        if (externalPlaceId == null || externalPlaceId.isBlank()) {
+            throw new IllegalArgumentException("External place id is required.");
+        }
+        String normalizedProvider = externalProvider.trim();
+        String normalizedPlaceId = externalPlaceId.trim();
+        if (normalizedProvider.length() > 30) {
+            throw new IllegalArgumentException("External place provider must be 30 characters or less.");
+        }
+        if (normalizedPlaceId.length() > 100) {
+            throw new IllegalArgumentException("External place id must be 100 characters or less.");
+        }
+        this.externalProvider = normalizedProvider;
+        this.externalPlaceId = normalizedPlaceId;
+    }
+
+    public String getExternalProvider() {
+        return externalProvider;
+    }
+
+    public String getExternalPlaceId() {
+        return externalPlaceId;
     }
 }

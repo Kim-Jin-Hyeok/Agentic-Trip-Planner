@@ -10,10 +10,18 @@ public record PlaceSearchCandidateResponse(
         Double latitude,
         Double longitude,
         String category,
-        String placeUrl
+        String placeUrl,
+        boolean alreadyRegistered,
+        Long duplicatePlaceId,
+        PlaceDuplicateReason duplicateReason
 ) {
 
-    public static PlaceSearchCandidateResponse from(PlaceSearchCandidate candidate) {
+    public static PlaceSearchCandidateResponse from(
+            PlaceSearchCandidate candidate,
+            boolean alreadyRegistered,
+            Long duplicatePlaceId,
+            PlaceDuplicateReason duplicateReason
+    ) {
         return new PlaceSearchCandidateResponse(
                 candidate.externalPlaceId(),
                 candidate.name(),
@@ -22,7 +30,10 @@ public record PlaceSearchCandidateResponse(
                 candidate.latitude(),
                 candidate.longitude(),
                 candidate.category(),
-                candidate.placeUrl()
+                candidate.placeUrl(),
+                alreadyRegistered,
+                duplicatePlaceId,
+                duplicateReason
         );
     }
 }

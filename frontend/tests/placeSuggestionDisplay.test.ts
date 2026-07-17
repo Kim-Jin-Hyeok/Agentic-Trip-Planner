@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   placeSuggestionStatusLabel,
+  placeDuplicateReasonLabel,
   validatePlaceSuggestion,
   validatePlaceSuggestionRejection
 } from '../src/utils/placeSuggestionDisplay.ts';
@@ -35,4 +36,11 @@ test('requires a rejection reason with at most 500 characters', () => {
   assert.equal(validatePlaceSuggestionRejection(' '), '거절 사유를 입력해 주세요.');
   assert.equal(validatePlaceSuggestionRejection('a'.repeat(501)), '거절 사유는 500자 이하여야 합니다.');
   assert.equal(validatePlaceSuggestionRejection('주소 정보가 부족합니다.'), '');
+});
+
+test('explains why an external place candidate is duplicated', () => {
+  assert.equal(placeDuplicateReasonLabel('EXTERNAL_PLACE_ID'), '동일한 카카오 장소 ID가 등록되어 있습니다.');
+  assert.equal(placeDuplicateReasonLabel('NAME_AND_ADDRESS'), '동일한 이름과 주소의 장소가 등록되어 있습니다.');
+  assert.equal(placeDuplicateReasonLabel('NEARBY_NAME'), '50m 이내에 이름이 같은 장소가 등록되어 있습니다.');
+  assert.equal(placeDuplicateReasonLabel(null), '기존 장소와 중복됩니다.');
 });

@@ -1,4 +1,8 @@
-import type { PlaceSuggestionCreateRequest, PlaceSuggestionStatus } from '../types/placeSuggestion';
+import type {
+  PlaceDuplicateReason,
+  PlaceSuggestionCreateRequest,
+  PlaceSuggestionStatus
+} from '../types/placeSuggestion';
 
 const statusLabels: Record<PlaceSuggestionStatus, string> = {
   PENDING: '검토 대기',
@@ -6,8 +10,18 @@ const statusLabels: Record<PlaceSuggestionStatus, string> = {
   REJECTED: '거절'
 };
 
+const duplicateReasonLabels: Record<PlaceDuplicateReason, string> = {
+  EXTERNAL_PLACE_ID: '동일한 카카오 장소 ID가 등록되어 있습니다.',
+  NAME_AND_ADDRESS: '동일한 이름과 주소의 장소가 등록되어 있습니다.',
+  NEARBY_NAME: '50m 이내에 이름이 같은 장소가 등록되어 있습니다.'
+};
+
 export function placeSuggestionStatusLabel(status: PlaceSuggestionStatus): string {
   return statusLabels[status];
+}
+
+export function placeDuplicateReasonLabel(reason: PlaceDuplicateReason | null): string {
+  return reason == null ? '기존 장소와 중복됩니다.' : duplicateReasonLabels[reason];
 }
 
 export function validatePlaceSuggestion(form: PlaceSuggestionCreateRequest): string {

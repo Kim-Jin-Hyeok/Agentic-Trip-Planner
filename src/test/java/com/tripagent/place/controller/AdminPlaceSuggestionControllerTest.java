@@ -13,6 +13,7 @@ import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
+import com.tripagent.place.dto.PlaceDuplicateReason;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.service.AdminPlaceSuggestionService;
 import java.time.LocalDateTime;
@@ -119,7 +120,10 @@ class AdminPlaceSuggestionControllerTest {
                         33.3661276358495,
                         126.3577306657398,
                         "여행 > 관광,명소 > 오름",
-                        "http://place.map.kakao.com/7936768"
+                        "http://place.map.kakao.com/7936768",
+                        true,
+                        200L,
+                        PlaceDuplicateReason.EXTERNAL_PLACE_ID
                 )
         ));
 
@@ -128,7 +132,10 @@ class AdminPlaceSuggestionControllerTest {
                 .andExpect(jsonPath("$.data[0].externalPlaceId").value("7936768"))
                 .andExpect(jsonPath("$.data[0].name").value("새별오름"))
                 .andExpect(jsonPath("$.data[0].latitude").value(33.3661276358495))
-                .andExpect(jsonPath("$.data[0].longitude").value(126.3577306657398));
+                .andExpect(jsonPath("$.data[0].longitude").value(126.3577306657398))
+                .andExpect(jsonPath("$.data[0].alreadyRegistered").value(true))
+                .andExpect(jsonPath("$.data[0].duplicatePlaceId").value(200L))
+                .andExpect(jsonPath("$.data[0].duplicateReason").value("EXTERNAL_PLACE_ID"));
 
         verify(adminPlaceSuggestionService).searchCandidates(1L, 10L);
     }

@@ -12,6 +12,7 @@ import type {
 import type { PageResponse } from '../types/trip';
 import {
   placeSuggestionStatusLabel,
+  placeDuplicateReasonLabel,
   validatePlaceSuggestionRejection
 } from '../utils/placeSuggestionDisplay';
 
@@ -226,15 +227,31 @@ export function AdminPlaceSuggestionPanel() {
                   ) : (
                     <div className="admin-place-candidate-list">
                       {placeCandidates.map((candidate) => (
-                        <article className="admin-place-candidate-item" key={candidate.externalPlaceId}>
-                          <div>
-                            <strong>{candidate.name}</strong>
-                            <span>{candidate.category || '카테고리 정보 없음'}</span>
+                        <article
+                          className={candidate.alreadyRegistered
+                            ? 'admin-place-candidate-item duplicate'
+                            : 'admin-place-candidate-item'}
+                          key={candidate.externalPlaceId}
+                        >
+                          <div className="admin-place-candidate-item-heading">
+                            <div>
+                              <strong>{candidate.name}</strong>
+                              <span>{candidate.category || '카테고리 정보 없음'}</span>
+                            </div>
+                            {candidate.alreadyRegistered && (
+                              <span className="admin-place-duplicate-badge">이미 등록됨</span>
+                            )}
                           </div>
                           <p>{candidate.roadAddress || candidate.address}</p>
                           <small>
                             위도 {candidate.latitude.toFixed(6)} · 경도 {candidate.longitude.toFixed(6)}
                           </small>
+                          {candidate.alreadyRegistered && (
+                            <p className="admin-place-duplicate-message">
+                              <strong>기존 장소 #{candidate.duplicatePlaceId}</strong>
+                              {placeDuplicateReasonLabel(candidate.duplicateReason)}
+                            </p>
+                          )}
                           {candidate.placeUrl != null && (
                             <a href={candidate.placeUrl} target="_blank" rel="noreferrer">
                               카카오맵에서 확인

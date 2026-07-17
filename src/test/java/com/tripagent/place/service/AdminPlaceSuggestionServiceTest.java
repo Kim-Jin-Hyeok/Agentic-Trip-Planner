@@ -3,6 +3,7 @@ package com.tripagent.place.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,11 +13,14 @@ import com.tripagent.common.response.PageResponse;
 import com.tripagent.member.domain.Member;
 import com.tripagent.place.adapter.PlaceSearchAdapter;
 import com.tripagent.place.adapter.PlaceSearchCandidate;
+import com.tripagent.place.domain.Place;
 import com.tripagent.place.domain.PlaceSuggestion;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
+import com.tripagent.place.dto.PlaceDuplicateReason;
+import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.place.repository.PlaceSuggestionRepository;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +36,7 @@ class AdminPlaceSuggestionServiceTest {
     private PlaceSuggestionRepository placeSuggestionRepository;
     private AdminAuthorizationService adminAuthorizationService;
     private PlaceSearchAdapter placeSearchAdapter;
+    private PlaceRepository placeRepository;
     private AdminPlaceSuggestionService adminPlaceSuggestionService;
 
     @BeforeEach
@@ -39,10 +44,12 @@ class AdminPlaceSuggestionServiceTest {
         placeSuggestionRepository = org.mockito.Mockito.mock(PlaceSuggestionRepository.class);
         adminAuthorizationService = org.mockito.Mockito.mock(AdminAuthorizationService.class);
         placeSearchAdapter = org.mockito.Mockito.mock(PlaceSearchAdapter.class);
+        placeRepository = org.mockito.Mockito.mock(PlaceRepository.class);
         adminPlaceSuggestionService = new AdminPlaceSuggestionService(
                 placeSuggestionRepository,
                 adminAuthorizationService,
-                placeSearchAdapter
+                placeSearchAdapter,
+                placeRepository
         );
     }
 
@@ -143,6 +150,7 @@ class AdminPlaceSuggestionServiceTest {
         assertThat(response).hasSize(1);
         assertThat(response.getFirst().externalPlaceId()).isEqualTo("1");
         assertThat(response.getFirst().latitude()).isEqualTo(33.3661);
+        assertThat(response.getFirst().alreadyRegistered()).isFalse();
         verify(adminAuthorizationService).requireAdmin(1L);
     }
 
@@ -159,6 +167,71 @@ class AdminPlaceSuggestionServiceTest {
 
         assertThat(response).hasSize(1);
         verify(placeSearchAdapter).search("제주 새별오름", 5);
+    }
+
+    @Test
+    void searchCandidatesDetectsDuplicateByExternalPlaceId() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        Place duplicatePlace = place(200L, "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577);
+        duplicatePlace.linkExternalReference("KAKAO_LOCAL", "1");
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        when(placeSearchAdapter.search("새별오름 제주특별자치도 제주시", 5)).thenReturn(List.of(
+                candidate("1", "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577)
+        ));
+        when(placeRepository.findFirstByExternalProviderAndExternalPlaceId("KAKAO_LOCAL", "1"))
+                .thenReturn(Optional.of(duplicatePlace));
+
+        PlaceSearchCandidateResponse response = adminPlaceSuggestionService
+                .searchCandidates(1L, 10L)
+                .getFirst();
+
+        assertThat(response.alreadyRegistered()).isTrue();
+        assertThat(response.duplicatePlaceId()).isEqualTo(200L);
+        assertThat(response.duplicateReason()).isEqualTo(PlaceDuplicateReason.EXTERNAL_PLACE_ID);
+    }
+
+    @Test
+    void searchCandidatesDetectsDuplicateByNameAndAddress() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        Place duplicatePlace = place(201L, "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577);
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        when(placeSearchAdapter.search("새별오름 제주특별자치도 제주시", 5)).thenReturn(List.of(
+                candidate("1", "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577)
+        ));
+        when(placeRepository.findFirstByNameIgnoreCaseAndAddressIgnoreCaseOrderByPlaceIdDesc(
+                "새별오름",
+                "제주특별자치도 제주시"
+        )).thenReturn(Optional.of(duplicatePlace));
+
+        PlaceSearchCandidateResponse response = adminPlaceSuggestionService
+                .searchCandidates(1L, 10L)
+                .getFirst();
+
+        assertThat(response.alreadyRegistered()).isTrue();
+        assertThat(response.duplicateReason()).isEqualTo(PlaceDuplicateReason.NAME_AND_ADDRESS);
+    }
+
+    @Test
+    void searchCandidatesDetectsSameNameWithinFiftyMeters() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        Place duplicatePlace = place(202L, "새별 오름", "제주특별자치도 제주시 다른 주소", 33.3663, 126.3578);
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        when(placeSearchAdapter.search("새별오름 제주특별자치도 제주시", 5)).thenReturn(List.of(
+                candidate("1", "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577)
+        ));
+        when(placeRepository.findByLatitudeBetweenAndLongitudeBetween(
+                anyDouble(),
+                anyDouble(),
+                anyDouble(),
+                anyDouble()
+        )).thenReturn(List.of(duplicatePlace));
+
+        PlaceSearchCandidateResponse response = adminPlaceSuggestionService
+                .searchCandidates(1L, 10L)
+                .getFirst();
+
+        assertThat(response.alreadyRegistered()).isTrue();
+        assertThat(response.duplicateReason()).isEqualTo(PlaceDuplicateReason.NEARBY_NAME);
     }
 
     private PlaceSuggestion suggestion(Long suggestionId, Long memberId) {
@@ -191,5 +264,36 @@ class AdminPlaceSuggestionServiceTest {
                 "여행 > 관광",
                 "https://place.map.kakao.com/" + externalPlaceId
         );
+    }
+
+    private Place place(
+            Long placeId,
+            String name,
+            String address,
+            double latitude,
+            double longitude
+    ) {
+        Place place = Place.create(
+                name,
+                "NATURE",
+                "WEST",
+                address,
+                latitude,
+                longitude,
+                60,
+                false,
+                true,
+                1,
+                5,
+                1,
+                1,
+                5,
+                4,
+                4,
+                "설명",
+                true
+        );
+        ReflectionTestUtils.setField(place, "placeId", placeId);
+        return place;
     }
 }

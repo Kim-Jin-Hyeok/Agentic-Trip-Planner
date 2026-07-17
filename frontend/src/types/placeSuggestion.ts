@@ -1,4 +1,5 @@
 export type PlaceSuggestionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type PlaceDuplicateReason = 'EXTERNAL_PLACE_ID' | 'NAME_AND_ADDRESS' | 'NEARBY_NAME';
 
 export type PlaceSuggestionCreateRequest = {
   name: string;
@@ -36,4 +37,7 @@ export type PlaceSearchCandidate = {
   longitude: number;
   category: string | null;
   placeUrl: string | null;
+  alreadyRegistered: boolean;
+  duplicatePlaceId: number | null;
+  duplicateReason: PlaceDuplicateReason | null;
 };

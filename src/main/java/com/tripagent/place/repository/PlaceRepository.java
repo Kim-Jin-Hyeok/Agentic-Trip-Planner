@@ -59,4 +59,21 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     boolean existsByNameAndAddress(String name, String address);
 
     Optional<Place> findFirstByNameAndUseYnTrueOrderByPlaceIdDesc(String name);
+
+    Optional<Place> findFirstByExternalProviderAndExternalPlaceId(
+            String externalProvider,
+            String externalPlaceId
+    );
+
+    Optional<Place> findFirstByNameIgnoreCaseAndAddressIgnoreCaseOrderByPlaceIdDesc(
+            String name,
+            String address
+    );
+
+    List<Place> findByLatitudeBetweenAndLongitudeBetween(
+            Double minimumLatitude,
+            Double maximumLatitude,
+            Double minimumLongitude,
+            Double maximumLongitude
+    );
 }
