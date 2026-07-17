@@ -118,7 +118,9 @@ class PlaceSuggestionControllerTest {
                 "제주특별자치도 제주시",
                 "설명",
                 PlaceSuggestionStatus.PENDING,
-                LocalDateTime.of(2026, 7, 17, 10, 0)
+                LocalDateTime.of(2026, 7, 17, 10, 0),
+                null,
+                null
         );
     }
 

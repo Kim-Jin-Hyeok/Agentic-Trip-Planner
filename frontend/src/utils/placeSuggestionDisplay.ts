@@ -28,3 +28,14 @@ export function validatePlaceSuggestion(form: PlaceSuggestionCreateRequest): str
   }
   return '';
 }
+
+export function validatePlaceSuggestionRejection(rejectionReason: string): string {
+  const normalizedReason = rejectionReason.trim();
+  if (normalizedReason.length === 0) {
+    return '거절 사유를 입력해 주세요.';
+  }
+  if (normalizedReason.length > 500) {
+    return '거절 사유는 500자 이하여야 합니다.';
+  }
+  return '';
+}

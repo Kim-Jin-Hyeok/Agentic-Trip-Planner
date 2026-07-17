@@ -454,6 +454,19 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+.place-suggestion-item .place-suggestion-rejection-reason {
+  display: grid;
+  gap: 3px;
+  border-radius: 8px;
+  background: #fdeceb;
+  color: #8e3934;
+  padding: 9px 10px;
+}
+
+.place-suggestion-rejection-reason strong {
+  font-size: 10px;
+}
+
 .place-suggestion-status {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -573,6 +586,16 @@ button:disabled {
   padding: 12px 14px;
 }
 
+.admin-suggestion-feedback {
+  border-radius: 10px;
+  background: #fff7df;
+  color: #765517;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 12px 14px;
+}
+
 .admin-suggestion-list {
   display: grid;
   gap: 12px;
@@ -642,6 +665,69 @@ button:disabled {
   margin: 0;
   padding: 12px 14px;
   white-space: pre-wrap;
+}
+
+.admin-rejection-summary {
+  display: grid;
+  gap: 5px;
+  border-radius: 10px;
+  background: #fdeceb;
+  color: #8e3934;
+  padding: 12px 14px;
+}
+
+.admin-rejection-summary strong,
+.admin-rejection-summary p,
+.admin-rejection-summary time {
+  margin: 0;
+}
+
+.admin-rejection-summary strong {
+  font-size: 11px;
+}
+
+.admin-rejection-summary p {
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.admin-rejection-summary time {
+  color: #a65b56;
+  font-size: 10px;
+}
+
+.admin-rejection-form {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 15px;
+}
+
+.admin-rejection-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-rejection-form textarea {
+  min-height: 92px;
+}
+
+.admin-rejection-actions,
+.admin-suggestion-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-rejection-actions button,
+.admin-suggestion-actions button {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 11px;
 }
 
 .admin-pagination {

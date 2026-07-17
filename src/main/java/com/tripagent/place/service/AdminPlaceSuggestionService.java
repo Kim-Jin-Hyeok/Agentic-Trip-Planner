@@ -5,7 +5,9 @@ import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.domain.PlaceSuggestion;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
+import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
 import com.tripagent.place.repository.PlaceSuggestionRepository;
+import java.util.NoSuchElementException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +47,21 @@ public class AdminPlaceSuggestionService {
         Page<PlaceSuggestion> suggestionPage = placeSuggestionRepository
                 .findByStatusOrderByPlaceSuggestionIdDesc(normalizedStatus, pageable);
         return PageResponse.from(suggestionPage.map(AdminPlaceSuggestionResponse::from));
+    }
+
+    @Transactional
+    public AdminPlaceSuggestionResponse rejectSuggestion(
+            Long memberId,
+            Long placeSuggestionId,
+            PlaceSuggestionRejectRequest request
+    ) {
+        adminAuthorizationService.requireAdmin(memberId);
+        PlaceSuggestion suggestion = placeSuggestionRepository.findById(placeSuggestionId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Place suggestion not found. placeSuggestionId=" + placeSuggestionId
+                ));
+        suggestion.reject(request.rejectionReason());
+        return AdminPlaceSuggestionResponse.from(suggestion);
     }
 
     private int normalizePage(Integer page) {

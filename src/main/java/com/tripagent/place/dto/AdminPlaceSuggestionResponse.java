@@ -14,7 +14,9 @@ public record AdminPlaceSuggestionResponse(
         String address,
         String description,
         PlaceSuggestionStatus status,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        String rejectionReason,
+        LocalDateTime reviewedAt
 ) {
 
     public static AdminPlaceSuggestionResponse from(PlaceSuggestion placeSuggestion) {
@@ -28,7 +30,9 @@ public record AdminPlaceSuggestionResponse(
                 placeSuggestion.getAddress(),
                 placeSuggestion.getDescription(),
                 placeSuggestion.getStatus(),
-                placeSuggestion.getCreatedAt()
+                placeSuggestion.getCreatedAt(),
+                placeSuggestion.getRejectionReason(),
+                placeSuggestion.getReviewedAt()
         );
     }
 }

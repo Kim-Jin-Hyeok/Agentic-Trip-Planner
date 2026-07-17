@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
-import { getAdminPlaceSuggestions } from '../api/placeSuggestionApi';
+import { type FormEvent, useEffect, useState } from 'react';
+import { getAdminPlaceSuggestions, rejectPlaceSuggestion } from '../api/placeSuggestionApi';
 import type { AdminPlaceSuggestionResponse, PlaceSuggestionStatus } from '../types/placeSuggestion';
 import type { PageResponse } from '../types/trip';
-import { placeSuggestionStatusLabel } from '../utils/placeSuggestionDisplay';
+import {
+  placeSuggestionStatusLabel,
+  validatePlaceSuggestionRejection
+} from '../utils/placeSuggestionDisplay';
 
 const pageSize = 20;
 
@@ -13,6 +16,10 @@ export function AdminPlaceSuggestionPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [rejectingSuggestionId, setRejectingSuggestionId] = useState<number | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +54,46 @@ export function AdminPlaceSuggestionPanel() {
   function changeStatus(nextStatus: PlaceSuggestionStatus) {
     setStatus(nextStatus);
     setPage(0);
+    cancelRejection();
+    setActionFeedback('');
+  }
+
+  function startRejection(placeSuggestionId: number) {
+    setRejectingSuggestionId(placeSuggestionId);
+    setRejectionReason('');
+    setActionFeedback('');
+  }
+
+  function cancelRejection() {
+    setRejectingSuggestionId(null);
+    setRejectionReason('');
+  }
+
+  async function handleReject(event: FormEvent<HTMLFormElement>, placeSuggestionId: number) {
+    event.preventDefault();
+    const validationMessage = validatePlaceSuggestionRejection(rejectionReason);
+    if (validationMessage.length > 0) {
+      setActionFeedback(validationMessage);
+      return;
+    }
+
+    setIsRejecting(true);
+    setActionFeedback('');
+    try {
+      await rejectPlaceSuggestion(placeSuggestionId, {
+        rejectionReason: rejectionReason.trim()
+      });
+      cancelRejection();
+      setSuggestionPage(null);
+      setActionFeedback('장소 제안을 거절 처리했습니다.');
+      setRefreshKey((current) => current + 1);
+    } catch (requestError) {
+      setActionFeedback(requestError instanceof Error
+        ? requestError.message
+        : '장소 제안을 거절 처리하지 못했습니다.');
+    } finally {
+      setIsRejecting(false);
+    }
   }
 
   return (
@@ -83,6 +130,7 @@ export function AdminPlaceSuggestionPanel() {
       </div>
 
       {error.length > 0 && <p className="admin-suggestion-error">{error}</p>}
+      {actionFeedback.length > 0 && <p className="admin-suggestion-feedback">{actionFeedback}</p>}
 
       {isLoading && suggestionPage == null ? (
         <div className="compact-empty">장소 제안 목록을 불러오는 중입니다.</div>
@@ -117,6 +165,65 @@ export function AdminPlaceSuggestionPanel() {
               </dl>
               {suggestion.description != null && (
                 <p className="admin-suggestion-description">{suggestion.description}</p>
+              )}
+              {suggestion.status === 'REJECTED' && suggestion.rejectionReason != null && (
+                <div className="admin-rejection-summary">
+                  <strong>거절 사유</strong>
+                  <p>{suggestion.rejectionReason}</p>
+                  {suggestion.reviewedAt != null && (
+                    <time dateTime={suggestion.reviewedAt}>
+                      검토일 {formatSubmittedAt(suggestion.reviewedAt)}
+                    </time>
+                  )}
+                </div>
+              )}
+              {suggestion.status === 'PENDING' && (
+                rejectingSuggestionId === suggestion.placeSuggestionId ? (
+                  <form
+                    className="admin-rejection-form"
+                    onSubmit={(event) => void handleReject(event, suggestion.placeSuggestionId)}
+                  >
+                    <label>
+                      거절 사유
+                      <textarea
+                        value={rejectionReason}
+                        onChange={(event) => {
+                          setRejectionReason(event.target.value);
+                          setActionFeedback('');
+                        }}
+                        placeholder="사용자가 이해할 수 있도록 거절 사유를 입력해 주세요."
+                        maxLength={500}
+                        disabled={isRejecting}
+                        autoFocus
+                        required
+                      />
+                    </label>
+                    <div className="admin-rejection-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={cancelRejection}
+                        disabled={isRejecting}
+                      >
+                        취소
+                      </button>
+                      <button type="submit" className="danger-button" disabled={isRejecting}>
+                        {isRejecting ? '처리 중...' : '거절 확정'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="admin-suggestion-actions">
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() => startRejection(suggestion.placeSuggestionId)}
+                      disabled={isRejecting}
+                    >
+                      거절하기
+                    </button>
+                  </div>
+                )
               )}
             </article>
           ))}

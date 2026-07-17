@@ -3,6 +3,7 @@ import type { PageResponse } from '../types/trip';
 import type {
   AdminPlaceSuggestionResponse,
   PlaceSuggestionCreateRequest,
+  PlaceSuggestionRejectRequest,
   PlaceSuggestionResponse,
   PlaceSuggestionStatus
 } from '../types/placeSuggestion';
@@ -32,5 +33,18 @@ export function getAdminPlaceSuggestions(
   });
   return apiRequest<PageResponse<AdminPlaceSuggestionResponse>>(
     `/api/admin/place-suggestions?${searchParams.toString()}`
+  );
+}
+
+export function rejectPlaceSuggestion(
+  placeSuggestionId: number,
+  request: PlaceSuggestionRejectRequest
+): Promise<AdminPlaceSuggestionResponse> {
+  return apiRequest<AdminPlaceSuggestionResponse>(
+    `/api/admin/place-suggestions/${placeSuggestionId}/reject`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(request)
+    }
   );
 }

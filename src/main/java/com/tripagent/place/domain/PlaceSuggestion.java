@@ -42,6 +42,11 @@ public class PlaceSuggestion {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(length = 500)
+    private String rejectionReason;
+
+    private LocalDateTime reviewedAt;
+
     protected PlaceSuggestion() {
     }
 
@@ -115,5 +120,30 @@ public class PlaceSuggestion {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public void reject(String rejectionReason) {
+        if (status != PlaceSuggestionStatus.PENDING) {
+            throw new IllegalArgumentException("Only pending place suggestions can be rejected.");
+        }
+        if (rejectionReason == null || rejectionReason.isBlank()) {
+            throw new IllegalArgumentException("Place suggestion rejection reason is required.");
+        }
+        String normalizedReason = rejectionReason.trim();
+        if (normalizedReason.length() > 500) {
+            throw new IllegalArgumentException("Place suggestion rejection reason must be 500 characters or less.");
+        }
+
+        status = PlaceSuggestionStatus.REJECTED;
+        this.rejectionReason = normalizedReason;
+        reviewedAt = LocalDateTime.now();
+    }
+
+    public String getRejectionReason() {
+        return rejectionReason;
+    }
+
+    public LocalDateTime getReviewedAt() {
+        return reviewedAt;
     }
 }

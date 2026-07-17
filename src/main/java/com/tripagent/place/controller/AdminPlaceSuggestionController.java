@@ -5,8 +5,13 @@ import com.tripagent.common.response.ApiResponse;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
+import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
 import com.tripagent.place.service.AdminPlaceSuggestionService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,5 +34,16 @@ public class AdminPlaceSuggestionController {
             @RequestParam(required = false) Integer size
     ) {
         return ApiResponse.success(adminPlaceSuggestionService.getSuggestions(memberId, status, page, size));
+    }
+
+    @PatchMapping("/{placeSuggestionId}/reject")
+    public ApiResponse<AdminPlaceSuggestionResponse> rejectSuggestion(
+            @LoginMemberId Long memberId,
+            @PathVariable Long placeSuggestionId,
+            @Valid @RequestBody PlaceSuggestionRejectRequest request
+    ) {
+        return ApiResponse.success(
+                adminPlaceSuggestionService.rejectSuggestion(memberId, placeSuggestionId, request)
+        );
     }
 }

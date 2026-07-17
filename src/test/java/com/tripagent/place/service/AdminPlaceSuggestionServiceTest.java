@@ -13,8 +13,10 @@ import com.tripagent.member.domain.Member;
 import com.tripagent.place.domain.PlaceSuggestion;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
+import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
 import com.tripagent.place.repository.PlaceSuggestionRepository;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -89,6 +91,36 @@ class AdminPlaceSuggestionServiceTest {
         assertThatThrownBy(() -> adminPlaceSuggestionService.getSuggestions(1L, null, 0, 51))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Page size must be between 1 and 50.");
+    }
+
+    @Test
+    void rejectSuggestionChangesPendingSuggestionToRejected() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+
+        AdminPlaceSuggestionResponse response = adminPlaceSuggestionService.rejectSuggestion(
+                1L,
+                10L,
+                new PlaceSuggestionRejectRequest("  주소가 제주 지역이 아닙니다.  ")
+        );
+
+        verify(adminAuthorizationService).requireAdmin(1L);
+        assertThat(response.status()).isEqualTo(PlaceSuggestionStatus.REJECTED);
+        assertThat(response.rejectionReason()).isEqualTo("주소가 제주 지역이 아닙니다.");
+        assertThat(response.reviewedAt()).isNotNull();
+    }
+
+    @Test
+    void rejectSuggestionRejectsMissingSuggestion() {
+        when(placeSuggestionRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> adminPlaceSuggestionService.rejectSuggestion(
+                1L,
+                999L,
+                new PlaceSuggestionRejectRequest("등록 정보가 부족합니다.")
+        ))
+                .isInstanceOf(java.util.NoSuchElementException.class)
+                .hasMessage("Place suggestion not found. placeSuggestionId=999");
     }
 
     private PlaceSuggestion suggestion(Long suggestionId, Long memberId) {

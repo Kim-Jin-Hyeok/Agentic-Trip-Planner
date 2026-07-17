@@ -180,6 +180,12 @@ export function PlaceSuggestionPanel({ session }: PlaceSuggestionPanelProps) {
                       </div>
                       <span>{suggestion.address}</span>
                       {suggestion.description != null && <p>{suggestion.description}</p>}
+                      {suggestion.status === 'REJECTED' && suggestion.rejectionReason != null && (
+                        <p className="place-suggestion-rejection-reason">
+                          <strong>거절 사유</strong>
+                          {suggestion.rejectionReason}
+                        </p>
+                      )}
                       <time dateTime={suggestion.createdAt}>{formatSubmittedAt(suggestion.createdAt)}</time>
                     </article>
                   ))}

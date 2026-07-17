@@ -3,6 +3,7 @@ package com.tripagent.place.controller;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,6 +12,7 @@ import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
+import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
 import com.tripagent.place.service.AdminPlaceSuggestionService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -71,6 +73,40 @@ class AdminPlaceSuggestionControllerTest {
         verify(adminPlaceSuggestionService).getSuggestions(1L, PlaceSuggestionStatus.REJECTED, 2, 10);
     }
 
+    @Test
+    void rejectSuggestionReturnsRejectedSuggestion() throws Exception {
+        when(adminPlaceSuggestionService.rejectSuggestion(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(10L),
+                org.mockito.ArgumentMatchers.any(PlaceSuggestionRejectRequest.class)
+        )).thenReturn(rejectedResponse());
+
+        mockMvc.perform(patch("/api/admin/place-suggestions/10/reject")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "rejectionReason": "주소가 제주 지역이 아닙니다."
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REJECTED"))
+                .andExpect(jsonPath("$.data.rejectionReason").value("주소가 제주 지역이 아닙니다."))
+                .andExpect(jsonPath("$.data.reviewedAt").exists());
+    }
+
+    @Test
+    void rejectSuggestionRejectsBlankReason() throws Exception {
+        mockMvc.perform(patch("/api/admin/place-suggestions/10/reject")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "rejectionReason": " "
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
     private PageResponse<AdminPlaceSuggestionResponse> pageResponse() {
         AdminPlaceSuggestionResponse suggestion = new AdminPlaceSuggestionResponse(
                 10L,
@@ -81,9 +117,27 @@ class AdminPlaceSuggestionControllerTest {
                 "제주특별자치도 제주시",
                 "노을 명소",
                 PlaceSuggestionStatus.PENDING,
-                LocalDateTime.of(2026, 7, 17, 10, 0)
+                LocalDateTime.of(2026, 7, 17, 10, 0),
+                null,
+                null
         );
         return new PageResponse<>(List.of(suggestion), 0, 20, 1, 1, true, true);
+    }
+
+    private AdminPlaceSuggestionResponse rejectedResponse() {
+        return new AdminPlaceSuggestionResponse(
+                10L,
+                100L,
+                "user@example.com",
+                "여행자",
+                "새별오름",
+                "제주특별자치도 제주시",
+                "노을 명소",
+                PlaceSuggestionStatus.REJECTED,
+                LocalDateTime.of(2026, 7, 17, 10, 0),
+                "주소가 제주 지역이 아닙니다.",
+                LocalDateTime.of(2026, 7, 17, 11, 0)
+        );
     }
 
     private PageResponse<AdminPlaceSuggestionResponse> emptyPageResponse(int page, int size) {

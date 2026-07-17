@@ -13,6 +13,12 @@ export type PlaceSuggestionResponse = {
   description: string | null;
   status: PlaceSuggestionStatus;
   createdAt: string;
+  rejectionReason: string | null;
+  reviewedAt: string | null;
+};
+
+export type PlaceSuggestionRejectRequest = {
+  rejectionReason: string;
 };
 
 export type AdminPlaceSuggestionResponse = PlaceSuggestionResponse & {
