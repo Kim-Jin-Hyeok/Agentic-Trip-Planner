@@ -1480,6 +1480,49 @@ button.trip-list-item:hover:not(:disabled),
   padding: 11px 13px;
 }
 
+.day-start-route {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid #cdddeb;
+  border-radius: 12px;
+  background: #f2f8fc;
+  margin-bottom: 12px;
+  padding: 11px 13px;
+}
+
+.day-start-route > div {
+  display: grid;
+  gap: 3px;
+}
+
+.day-start-route strong {
+  color: #285f82;
+  font-size: 12px;
+}
+
+.day-start-route span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.day-start-route.warning {
+  border-color: #e5b7ad;
+  background: #fff3f0;
+}
+
+.day-start-route.warning strong,
+.day-start-route.warning b {
+  color: #a54135;
+}
+
+.day-start-route b {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+
 .day-end-route > div {
   display: grid;
   gap: 3px;

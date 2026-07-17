@@ -19,6 +19,7 @@ import com.tripagent.trip.domain.TripView;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.PublicTripDetailResponse;
 import com.tripagent.trip.dto.DayEndRouteResponse;
+import com.tripagent.trip.dto.DayStartRouteResponse;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.TripAuthorResponse;
@@ -66,6 +67,8 @@ public class TripService {
     private static final String DEFAULT_JEJU_ENDPOINT_NAME = "제주국제공항";
     private static final String DAY_END_ACCOMMODATION = "ACCOMMODATION";
     private static final String DAY_END_TRIP_ENDPOINT = "TRIP_END";
+    private static final String DAY_START_ACCOMMODATION = "ACCOMMODATION";
+    private static final String DAY_START_TRIP_ENDPOINT = "TRIP_START";
 
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
@@ -241,8 +244,84 @@ public class TripService {
                 .map(ItineraryResponse::from)
                 .toList();
         List<DayEndRouteResponse> dayEndRoutes = calculateDayEndRoutes(trip, itineraryEntities);
+        List<DayStartRouteResponse> dayStartRoutes = calculateDayStartRoutes(trip, itineraryEntities);
 
-        return TripDetailResponse.from(trip, itineraries, dayEndRoutes);
+        return TripDetailResponse.from(trip, itineraries, dayStartRoutes, dayEndRoutes);
+    }
+
+    private List<DayStartRouteResponse> calculateDayStartRoutes(
+            Trip trip,
+            List<Itinerary> itineraries
+    ) {
+        if (itineraries.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Integer, Itinerary> firstItineraryByDayNo = new HashMap<>();
+        for (Itinerary itinerary : itineraries) {
+            firstItineraryByDayNo.merge(
+                    itinerary.getDayNo(),
+                    itinerary,
+                    (current, candidate) -> candidate.getOrderNo() < current.getOrderNo() ? candidate : current
+            );
+        }
+        Map<LocalDate, TripAccommodation> accommodationByStayDate = tripAccommodationRepository
+                .findByTripIdOrderByStayDate(trip.getTripId())
+                .stream()
+                .collect(Collectors.toMap(
+                        TripAccommodation::getStayDate,
+                        tripAccommodation -> tripAccommodation
+                ));
+        Place startPlace = findTripStartPlace(trip);
+        List<Integer> dayNos = firstItineraryByDayNo.keySet().stream().sorted().toList();
+
+        List<DayStartRouteResponse> responses = new ArrayList<>();
+        for (Integer dayNo : dayNos) {
+            Itinerary firstItinerary = firstItineraryByDayNo.get(dayNo);
+            DayStartOrigin origin = dayNo == 1
+                    ? DayStartOrigin.from(startPlace)
+                    : DayStartOrigin.from(accommodationByStayDate.get(
+                            trip.getStartDate().plusDays(dayNo - 2L)
+                    ));
+            if (origin == null) {
+                continue;
+            }
+
+            int travelMinutes = origin.placeId() != null
+                    && origin.placeId().equals(firstItinerary.getPlace().getPlaceId())
+                    ? 0
+                    : routeCalculationAdapter.calculateTravelMinutes(
+                            origin.latitude(),
+                            origin.longitude(),
+                            firstItinerary.getPlace().getLatitude(),
+                            firstItinerary.getPlace().getLongitude()
+                    );
+            long departureMinuteOfDay = firstItinerary.getStartTime().toSecondOfDay() / 60L - travelMinutes;
+            long dailyStartMinuteOfDay = trip.getDailyStartTime().toSecondOfDay() / 60L;
+            responses.add(new DayStartRouteResponse(
+                    dayNo,
+                    origin.originType(),
+                    origin.originName(),
+                    travelMinutes,
+                    firstItinerary.getStartTime().minusMinutes(travelMinutes),
+                    departureMinuteOfDay < dailyStartMinuteOfDay
+            ));
+        }
+
+        return responses;
+    }
+
+    private Place findTripStartPlace(Trip trip) {
+        if (placeRepository == null) {
+            return null;
+        }
+        if (trip.getStartPlaceId() != null) {
+            return placeRepository.findById(trip.getStartPlaceId())
+                    .filter(place -> Boolean.TRUE.equals(place.getUseYn()))
+                    .orElse(null);
+        }
+        return placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc(DEFAULT_JEJU_ENDPOINT_NAME)
+                .orElse(null);
     }
 
     private List<DayEndRouteResponse> calculateDayEndRoutes(
@@ -546,6 +625,7 @@ public class TripService {
                 itineraries,
                 liked,
                 author,
+                calculateDayStartRoutes(trip, itineraryEntities),
                 calculateDayEndRoutes(trip, itineraryEntities)
         );
     }
@@ -1052,6 +1132,41 @@ public class TripService {
             }
             return new DayEndDestination(
                     DAY_END_ACCOMMODATION,
+                    tripAccommodation.getAccommodation().getName(),
+                    tripAccommodation.getAccommodation().getLatitude(),
+                    tripAccommodation.getAccommodation().getLongitude(),
+                    null
+            );
+        }
+    }
+
+    private record DayStartOrigin(
+            String originType,
+            String originName,
+            Double latitude,
+            Double longitude,
+            Long placeId
+    ) {
+
+        private static DayStartOrigin from(Place place) {
+            if (place == null) {
+                return null;
+            }
+            return new DayStartOrigin(
+                    DAY_START_TRIP_ENDPOINT,
+                    place.getName(),
+                    place.getLatitude(),
+                    place.getLongitude(),
+                    place.getPlaceId()
+            );
+        }
+
+        private static DayStartOrigin from(TripAccommodation tripAccommodation) {
+            if (tripAccommodation == null) {
+                return null;
+            }
+            return new DayStartOrigin(
+                    DAY_START_ACCOMMODATION,
                     tripAccommodation.getAccommodation().getName(),
                     tripAccommodation.getAccommodation().getLatitude(),
                     tripAccommodation.getAccommodation().getLongitude(),

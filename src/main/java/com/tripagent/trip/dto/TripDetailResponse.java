@@ -14,6 +14,7 @@ public record TripDetailResponse(
         LocalTime dailyStartTime, LocalTime dailyEndTime, TripConcept concept, Transportation transportation,
         String lastAccommodationArea, Long likeCount, Long viewCount, TripVisibility visibility,
         List<ItineraryResponse> itineraries, String title, Long startPlaceId, Long endPlaceId,
+        List<DayStartRouteResponse> dayStartRoutes,
         List<DayEndRouteResponse> dayEndRoutes
 ) {
 
@@ -24,7 +25,8 @@ public record TripDetailResponse(
             List<ItineraryResponse> itineraries, String title
     ) {
         this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
-                lastAccommodationArea, likeCount, viewCount, visibility, itineraries, title, null, null, List.of());
+                lastAccommodationArea, likeCount, viewCount, visibility, itineraries, title,
+                null, null, List.of(), List.of());
     }
 
     public TripDetailResponse(
@@ -35,7 +37,7 @@ public record TripDetailResponse(
     ) {
         this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
                 lastAccommodationArea, likeCount, viewCount, visibility, itineraries, destination + " 여행",
-                null, null, List.of());
+                null, null, List.of(), List.of());
     }
 
     public TripDetailResponse(
@@ -46,23 +48,25 @@ public record TripDetailResponse(
     ) {
         this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
                 lastAccommodationArea, likeCount, 0L, visibility, itineraries, destination + " 여행",
-                null, null, List.of());
+                null, null, List.of(), List.of());
     }
 
     public static TripDetailResponse from(Trip trip, List<ItineraryResponse> itineraries) {
-        return from(trip, itineraries, List.of());
+        return from(trip, itineraries, List.of(), List.of());
     }
 
     public static TripDetailResponse from(
             Trip trip,
             List<ItineraryResponse> itineraries,
+            List<DayStartRouteResponse> dayStartRoutes,
             List<DayEndRouteResponse> dayEndRoutes
     ) {
         return new TripDetailResponse(
                 trip.getTripId(), trip.getDestination(), trip.getStartDate(), trip.getEndDate(), trip.getNights(),
                 trip.getDailyStartTime(), trip.getDailyEndTime(), trip.getConcept(), trip.getTransportation(),
                 trip.getLastAccommodationArea(), trip.getLikeCount(), trip.getViewCount(), trip.getVisibility(),
-                itineraries, trip.getTitle(), trip.getStartPlaceId(), trip.getEndPlaceId(), dayEndRoutes
+                itineraries, trip.getTitle(), trip.getStartPlaceId(), trip.getEndPlaceId(),
+                dayStartRoutes, dayEndRoutes
         );
     }
 }

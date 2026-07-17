@@ -446,6 +446,7 @@ export function TripDetailPanel({
               key={dayNo}
               dayNo={dayNo}
               dayItineraries={dayItineraries}
+              dayStartRoute={(selectedTrip?.dayStartRoutes ?? []).find((route) => route.dayNo === Number(dayNo))}
               dayEndRoute={(selectedTrip?.dayEndRoutes ?? []).find((route) => route.dayNo === Number(dayNo))}
               viewMode={viewMode}
               editingItems={editingItems}

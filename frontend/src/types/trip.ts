@@ -146,8 +146,18 @@ export type DayEndRoute = {
   arrivalAfterDailyEndTime: boolean;
 };
 
+export type DayStartRoute = {
+  dayNo: number;
+  originType: 'ACCOMMODATION' | 'TRIP_START';
+  originName: string;
+  travelMinutes: number;
+  estimatedDepartureTime: string;
+  departureBeforeDailyStartTime: boolean;
+};
+
 export type TripDetail = TripResponse & {
   itineraries: Itinerary[];
+  dayStartRoutes?: DayStartRoute[];
   dayEndRoutes?: DayEndRoute[];
 };
 
@@ -195,6 +205,7 @@ export type PublicTripDetail = TripResponse & {
   liked: boolean;
   author: TripAuthor;
   itineraries: Itinerary[];
+  dayStartRoutes?: DayStartRoute[];
   dayEndRoutes?: DayEndRoute[];
 };
 

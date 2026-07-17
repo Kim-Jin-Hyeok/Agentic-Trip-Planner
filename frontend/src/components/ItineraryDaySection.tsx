@@ -1,9 +1,10 @@
-import type { DayEndRoute, Itinerary, PlaceResponse } from '../types/trip';
+import type { DayEndRoute, DayStartRoute, Itinerary, PlaceResponse } from '../types/trip';
 import { itineraryForm, type ItineraryEditForm, type ViewMode } from '../utils/tripDisplay';
 
 type ItineraryDaySectionProps = {
   dayNo: string;
   dayItineraries: Itinerary[];
+  dayStartRoute?: DayStartRoute;
   dayEndRoute?: DayEndRoute;
   viewMode: ViewMode;
   editingItems: Record<number, ItineraryEditForm>;
@@ -31,6 +32,7 @@ type ItineraryDaySectionProps = {
 export function ItineraryDaySection({
   dayNo,
   dayItineraries,
+  dayStartRoute,
   dayEndRoute,
   viewMode,
   editingItems,
@@ -101,6 +103,18 @@ export function ItineraryDaySection({
           </a>
         </div>
       </div>
+      {dayStartRoute != null && (
+        <div className={dayStartRoute.departureBeforeDailyStartTime ? 'day-start-route warning' : 'day-start-route'}>
+          <div>
+            <strong>
+              {dayStartRoute.originType === 'ACCOMMODATION' ? '숙소' : '여행 시작지'}에서 첫 장소까지{' '}
+              {dayStartRoute.travelMinutes}분
+            </strong>
+            <span>{dayStartRoute.originName} · 예상 출발 {dayStartRoute.estimatedDepartureTime}</span>
+          </div>
+          {dayStartRoute.departureBeforeDailyStartTime && <b>하루 시작 시간보다 일찍 출발해야 합니다</b>}
+        </div>
+      )}
       <ol>
         {dayItineraries.map((itinerary, index) => {
           const editForm = itineraryForm(itinerary, editingItems);

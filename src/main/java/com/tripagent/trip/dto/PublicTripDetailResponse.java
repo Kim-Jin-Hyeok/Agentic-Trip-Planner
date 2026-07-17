@@ -14,7 +14,8 @@ public record PublicTripDetailResponse(
         LocalTime dailyStartTime, LocalTime dailyEndTime, TripConcept concept, Transportation transportation,
         String lastAccommodationArea, Long likeCount, Long viewCount, TripVisibility visibility, boolean liked,
         TripAuthorResponse author, List<ItineraryResponse> itineraries, String title,
-        Long startPlaceId, Long endPlaceId, List<DayEndRouteResponse> dayEndRoutes
+        Long startPlaceId, Long endPlaceId, List<DayStartRouteResponse> dayStartRoutes,
+        List<DayEndRouteResponse> dayEndRoutes
 ) {
 
     public PublicTripDetailResponse(
@@ -25,7 +26,7 @@ public record PublicTripDetailResponse(
     ) {
         this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
                 lastAccommodationArea, likeCount, viewCount, visibility, liked, author, itineraries,
-                destination + " 여행", null, null, List.of());
+                destination + " 여행", null, null, List.of(), List.of());
     }
 
     public static PublicTripDetailResponse from(
@@ -34,7 +35,7 @@ public record PublicTripDetailResponse(
             boolean liked,
             TripAuthorResponse author
     ) {
-        return from(trip, itineraries, liked, author, List.of());
+        return from(trip, itineraries, liked, author, List.of(), List.of());
     }
 
     public static PublicTripDetailResponse from(
@@ -42,13 +43,15 @@ public record PublicTripDetailResponse(
             List<ItineraryResponse> itineraries,
             boolean liked,
             TripAuthorResponse author,
+            List<DayStartRouteResponse> dayStartRoutes,
             List<DayEndRouteResponse> dayEndRoutes
     ) {
         return new PublicTripDetailResponse(
                 trip.getTripId(), trip.getDestination(), trip.getStartDate(), trip.getEndDate(), trip.getNights(),
                 trip.getDailyStartTime(), trip.getDailyEndTime(), trip.getConcept(), trip.getTransportation(),
                 trip.getLastAccommodationArea(), trip.getLikeCount(), trip.getViewCount(), trip.getVisibility(),
-                liked, author, itineraries, trip.getTitle(), trip.getStartPlaceId(), trip.getEndPlaceId(), dayEndRoutes
+                liked, author, itineraries, trip.getTitle(), trip.getStartPlaceId(), trip.getEndPlaceId(),
+                dayStartRoutes, dayEndRoutes
         );
     }
 }

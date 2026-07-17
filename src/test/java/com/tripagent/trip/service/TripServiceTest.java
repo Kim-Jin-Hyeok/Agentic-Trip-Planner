@@ -640,6 +640,79 @@ class TripServiceTest {
     }
 
     @Test
+    void getTripReturnsTripStartAndAccommodationDepartureSummaries() {
+        Trip trip = Trip.create(
+                "제주 여행",
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 2),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                50L,
+                50L,
+                10L
+        );
+        setId(trip, "tripId", 1L);
+        Place dayOnePlace = place(20L, "Day One First Place");
+        Place dayTwoPlace = place(30L, "Day Two First Place");
+        Place airport = place(50L, "제주국제공항");
+        Itinerary dayOneItinerary = Itinerary.create(
+                trip,
+                dayOnePlace,
+                1,
+                1,
+                LocalTime.of(9, 40),
+                LocalTime.of(10, 40),
+                0,
+                "Day one"
+        );
+        Itinerary dayTwoItinerary = Itinerary.create(
+                trip,
+                dayTwoPlace,
+                2,
+                1,
+                LocalTime.of(9, 20),
+                LocalTime.of(10, 20),
+                0,
+                "Day two"
+        );
+        TripAccommodation tripAccommodation = org.mockito.Mockito.mock(TripAccommodation.class);
+        Accommodation accommodation = org.mockito.Mockito.mock(Accommodation.class);
+        when(tripAccommodation.getStayDate()).thenReturn(LocalDate.of(2026, 7, 1));
+        when(tripAccommodation.getAccommodation()).thenReturn(accommodation);
+        when(accommodation.getName()).thenReturn("첫날 숙소");
+        when(accommodation.getLatitude()).thenReturn(33.4);
+        when(accommodation.getLongitude()).thenReturn(126.5);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(dayOneItinerary, dayTwoItinerary));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(tripAccommodation));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(airport));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(20, 30, 40, 50);
+
+        TripDetailResponse response = tripService.getTrip(1L);
+
+        assertThat(response.dayStartRoutes()).hasSize(2);
+        assertThat(response.dayStartRoutes().get(0).dayNo()).isEqualTo(1);
+        assertThat(response.dayStartRoutes().get(0).originType()).isEqualTo("TRIP_START");
+        assertThat(response.dayStartRoutes().get(0).originName()).isEqualTo("제주국제공항");
+        assertThat(response.dayStartRoutes().get(0).travelMinutes()).isEqualTo(40);
+        assertThat(response.dayStartRoutes().get(0).estimatedDepartureTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(response.dayStartRoutes().get(0).departureBeforeDailyStartTime()).isFalse();
+        assertThat(response.dayStartRoutes().get(1).dayNo()).isEqualTo(2);
+        assertThat(response.dayStartRoutes().get(1).originType()).isEqualTo("ACCOMMODATION");
+        assertThat(response.dayStartRoutes().get(1).originName()).isEqualTo("첫날 숙소");
+        assertThat(response.dayStartRoutes().get(1).travelMinutes()).isEqualTo(50);
+        assertThat(response.dayStartRoutes().get(1).estimatedDepartureTime()).isEqualTo(LocalTime.of(8, 30));
+        assertThat(response.dayStartRoutes().get(1).departureBeforeDailyStartTime()).isTrue();
+    }
+
+    @Test
     void getTripWithOwnerIdRejectsDifferentOwner() {
         Trip trip = trip(
                 1L,
