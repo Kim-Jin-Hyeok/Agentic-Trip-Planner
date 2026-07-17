@@ -1260,6 +1260,81 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesFallbackReservesTravelTimeToCoordinateOnlyAccommodation() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 2),
+                LocalTime.of(9, 0),
+                LocalTime.of(14, 0)
+        );
+        TripAccommodation tripAccommodation = tripAccommodation(
+                trip,
+                LocalDate.of(2026, 7, 1),
+                "WEST",
+                33.2,
+                126.2
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 200, 33.0, 126.0),
+                place(20L, 200, 33.0, 126.0),
+                place(30L, 200, 33.0, 126.0),
+                place(40L, 200, 33.0, 126.0),
+                place(50L, 200, 33.0, 126.0),
+                place(60L, 200, 33.0, 126.0)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                null,
+                null,
+                ItineraryPace.RELAXED,
+                null,
+                null,
+                true,
+                null
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(tripAccommodation));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList(), eq(request))).thenReturn("base prompt");
+        when(itineraryPromptGenerator.appendAccommodationRoutePreferences(
+                "base prompt",
+                trip,
+                Map.of(1, "WEST"),
+                null
+        )).thenReturn("accommodation prompt");
+        when(llmClient.generate("accommodation prompt")).thenThrow(
+                LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
+        );
+        when(itineraryService.createItinerary(eq(1L), any()))
+                .thenReturn(response(100L, 1L, 10L, 1));
+
+        itineraryGenerateService.generateItineraries(1L, request);
+
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor =
+                ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService, times(6)).createItinerary(eq(1L), requestCaptor.capture());
+        ItineraryCreateRequest lastDayOneRequest = requestCaptor.getAllValues().stream()
+                .filter(item -> item.dayNo().equals(1))
+                .max(java.util.Comparator.comparing(ItineraryCreateRequest::orderNo))
+                .orElseThrow();
+        PlaceResponse lastDayOnePlace = candidatePlaces.stream()
+                .filter(place -> place.placeId().equals(lastDayOneRequest.placeId()))
+                .findFirst()
+                .orElseThrow();
+        int travelMinutesToAccommodation = routeCalculationAdapter.calculateTravelMinutes(
+                lastDayOnePlace.latitude(),
+                lastDayOnePlace.longitude(),
+                tripAccommodation.getAccommodation().getLatitude(),
+                tripAccommodation.getAccommodation().getLongitude()
+        );
+        assertThat(lastDayOneRequest.endTime().plusMinutes(travelMinutesToAccommodation))
+                .isBeforeOrEqualTo(trip.getDailyEndTime());
+    }
+
+    @Test
     void generateItinerariesFallbackReservesTimeToReturnToTripEndPlace() {
         Trip trip = trip(
                 1L,
@@ -1415,6 +1490,79 @@ class ItineraryGenerateServiceTest {
                 1L,
                 request(20L, 2, LocalTime.of(10, 35), LocalTime.of(11, 35), 15)
         );
+    }
+
+    @Test
+    void generateItinerariesCompactsScheduleToReachTripEndPlaceByDailyEndTime() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 18),
+                LocalDate.of(2026, 7, 18),
+                LocalTime.of(9, 0),
+                LocalTime.of(12, 0)
+        );
+        setId(trip, "startPlaceId", 1550L);
+        setId(trip, "endPlaceId", 1550L);
+        PlaceResponse airport = place(1550L, 30, 33.5063, 126.4953);
+        PlaceResponse firstPlace = place(10L, 60, 33.45, 126.55);
+        PlaceResponse secondPlace = place(20L, 30, 33.42, 126.57);
+        List<PlaceResponse> candidatePlaces = List.of(airport, firstPlace, secondPlace);
+        List<PlaceResponse> llmCandidatePlaces = List.of(firstPlace, secondPlace);
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                llmItem(20L, 2, LocalTime.of(11, 30), LocalTime.of(12, 0), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(10, 0), LocalTime.of(11, 0), 0),
+                request(20L, 2, LocalTime.of(11, 30), LocalTime.of(12, 0), 0)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, llmCandidatePlaces)).thenReturn("base prompt");
+        when(itineraryPromptGenerator.appendAccommodationRoutePreferences(
+                "base prompt",
+                trip,
+                Map.of(0, "EAST", 1, "EAST"),
+                null
+        )).thenReturn("endpoint prompt");
+        when(llmClient.generate("endpoint prompt")).thenReturn("raw response");
+        when(llmItineraryJsonParser.parse("raw response")).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+        doReturn(20).when(routeCalculationAdapter).calculateTravelMinutes(
+                airport.latitude(), airport.longitude(), firstPlace.latitude(), firstPlace.longitude()
+        );
+        doReturn(15).when(routeCalculationAdapter).calculateTravelMinutes(firstPlace, secondPlace);
+        doReturn(30).when(routeCalculationAdapter).calculateTravelMinutes(
+                secondPlace.latitude(), secondPlace.longitude(), airport.latitude(), airport.longitude()
+        );
+        when(itineraryService.createItinerary(eq(1L), any()))
+                .thenReturn(response(100L, 1L, 10L, 1));
+
+        itineraryGenerateService.generateItineraries(1L);
+
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor =
+                ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService, times(2)).createItinerary(eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues())
+                .extracting(
+                        ItineraryCreateRequest::placeId,
+                        ItineraryCreateRequest::startTime,
+                        ItineraryCreateRequest::endTime,
+                        ItineraryCreateRequest::travelMinutesFromPrevious
+                )
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                10L, LocalTime.of(9, 20), LocalTime.of(10, 20), 0
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                20L, LocalTime.of(10, 35), LocalTime.of(11, 5), 15
+                        )
+                );
+        assertThat(requestCaptor.getAllValues().getLast().endTime().plusMinutes(30))
+                .isBeforeOrEqualTo(trip.getDailyEndTime());
+        verify(llmClient).generate("endpoint prompt");
     }
 
     @Test
