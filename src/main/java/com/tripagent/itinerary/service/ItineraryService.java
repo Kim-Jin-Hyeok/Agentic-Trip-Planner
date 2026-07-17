@@ -178,28 +178,43 @@ public class ItineraryService {
             return requestedValues;
         }
 
-        RouteOrigin routeOrigin = findRouteOrigin(trip, request.dayNo());
-        if (routeOrigin == null) {
-            return requestedValues;
-        }
-
-        int travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
-                routeOrigin.latitude(),
-                routeOrigin.longitude(),
-                place.getLatitude(),
-                place.getLongitude()
+        LocalTime resolvedStartTime = resolveFirstStartTime(
+                trip,
+                request.dayNo(),
+                place,
+                request.startTime()
         );
-        LocalTime earliestStartTime = trip.getDailyStartTime().plusMinutes(travelMinutes);
-        if (!request.startTime().isBefore(earliestStartTime)) {
+        if (resolvedStartTime.equals(request.startTime())) {
             return requestedValues;
         }
 
         int stayMinutes = (int) ChronoUnit.MINUTES.between(request.startTime(), request.endTime());
         return new ItineraryCreateValues(
-                earliestStartTime,
-                earliestStartTime.plusMinutes(stayMinutes),
+                resolvedStartTime,
+                resolvedStartTime.plusMinutes(stayMinutes),
                 0
         );
+    }
+
+    private LocalTime resolveFirstStartTime(
+            Trip trip,
+            Integer dayNo,
+            Place firstPlace,
+            LocalTime requestedStartTime
+    ) {
+        RouteOrigin routeOrigin = findRouteOrigin(trip, dayNo);
+        if (routeOrigin == null) {
+            return requestedStartTime;
+        }
+
+        int travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                routeOrigin.latitude(),
+                routeOrigin.longitude(),
+                firstPlace.getLatitude(),
+                firstPlace.getLongitude()
+        );
+        LocalTime earliestStartTime = trip.getDailyStartTime().plusMinutes(travelMinutes);
+        return requestedStartTime.isBefore(earliestStartTime) ? earliestStartTime : requestedStartTime;
     }
 
     private RouteOrigin findRouteOrigin(Trip trip, Integer dayNo) {
@@ -371,6 +386,7 @@ public class ItineraryService {
                 .toList();
         int targetIndex = findItineraryIndex(dayItineraries, targetItinerary.getItineraryId());
         List<ReorderState> recalculatedStates = buildPlaceUpdateStates(
+                trip,
                 dayItineraries,
                 targetIndex,
                 updatedPlace,
@@ -418,6 +434,7 @@ public class ItineraryService {
     }
 
     private List<ReorderState> buildPlaceUpdateStates(
+            Trip trip,
             List<Itinerary> dayItineraries,
             int targetIndex,
             Place updatedPlace,
@@ -439,7 +456,12 @@ public class ItineraryService {
                                 currentItinerary.getEndTime()
                         );
                 if (index == 0) {
-                    startTime = requestedStartTime;
+                    startTime = resolveFirstStartTime(
+                            trip,
+                            currentItinerary.getDayNo(),
+                            updatedPlace,
+                            requestedStartTime
+                    );
                     travelMinutes = 0;
                 } else {
                     Itinerary previousItinerary = dayItineraries.get(index - 1);
