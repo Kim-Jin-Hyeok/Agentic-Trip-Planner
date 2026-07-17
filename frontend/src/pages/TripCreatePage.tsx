@@ -27,6 +27,7 @@ import { getTripWeather } from '../api/weatherApi';
 import { AuthPanel } from '../components/AuthPanel';
 import { MyTripList } from '../components/MyTripList';
 import { PublicTripList } from '../components/PublicTripList';
+import { PlaceSuggestionPanel } from '../components/PlaceSuggestionPanel';
 import { TripCreateForm } from '../components/TripCreateForm';
 import { TripDetailPanel } from '../components/TripDetailPanel';
 import type { AuthSession } from '../types/auth';
@@ -1352,6 +1353,8 @@ export function TripCreatePage() {
             onLogout={handleLogout}
             onMessage={setMessage}
           />
+
+          <PlaceSuggestionPanel session={session} />
 
           <div className="view-tabs" role="tablist" aria-label="여행 보기 방식">
             <button
