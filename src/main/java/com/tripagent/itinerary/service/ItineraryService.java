@@ -355,49 +355,92 @@ public class ItineraryService {
                 itinerary.getTrip().getTripId(),
                 itinerary.getDayNo()
         );
-        itineraryRepository.delete(itinerary);
-
         List<Itinerary> remainingItineraries = dayItineraries.stream()
                 .filter(dayItinerary -> !dayItinerary.getItineraryId().equals(itinerary.getItineraryId()))
                 .sorted(Comparator.comparing(Itinerary::getOrderNo))
                 .toList();
-        Long successorItineraryId = remainingItineraries.stream()
-                .filter(remainingItinerary -> remainingItinerary.getOrderNo() > itinerary.getOrderNo())
-                .min(Comparator.comparing(Itinerary::getOrderNo))
-                .map(Itinerary::getItineraryId)
-                .orElse(null);
-        for (int index = 0; index < remainingItineraries.size(); index++) {
-            Itinerary remainingItinerary = remainingItineraries.get(index);
-            int normalizedOrderNo = index + 1;
-            int normalizedTravelMinutes = remainingItinerary.getTravelMinutesFromPrevious();
-            if (normalizedOrderNo == 1) {
-                normalizedTravelMinutes = 0;
-            } else if (remainingItinerary.getItineraryId().equals(successorItineraryId)) {
-                Place previousPlace = remainingItineraries.get(index - 1).getPlace();
-                Place currentPlace = remainingItinerary.getPlace();
-                normalizedTravelMinutes = routeCalculationAdapter.calculateTravelMinutes(
-                        previousPlace.getLatitude(),
-                        previousPlace.getLongitude(),
-                        currentPlace.getLatitude(),
-                        currentPlace.getLongitude()
-                );
-            }
-            if (remainingItinerary.getOrderNo().equals(normalizedOrderNo)
-                    && remainingItinerary.getTravelMinutesFromPrevious().equals(normalizedTravelMinutes)) {
+        List<ReorderState> normalizedStates = buildDeleteStates(itinerary, remainingItineraries);
+        for (ReorderState state : normalizedStates) {
+            validateTimeRange(state.startTime(), state.endTime());
+            validateFirstStartTime(itinerary.getTrip(), state.orderNo(), state.startTime());
+            validateDailyEndTime(itinerary.getTrip(), state.endTime());
+        }
+
+        itineraryRepository.delete(itinerary);
+        Map<Long, ReorderState> normalizedStateById = normalizedStates.stream()
+                .collect(java.util.stream.Collectors.toMap(ReorderState::itineraryId, state -> state));
+        for (Itinerary remainingItinerary : remainingItineraries) {
+            ReorderState state = normalizedStateById.get(remainingItinerary.getItineraryId());
+            if (hasSameState(remainingItinerary, state)) {
                 continue;
             }
 
             remainingItinerary.update(
                     remainingItinerary.getPlace(),
-                    remainingItinerary.getDayNo(),
-                    normalizedOrderNo,
-                    remainingItinerary.getStartTime(),
-                    remainingItinerary.getEndTime(),
-                    normalizedTravelMinutes,
+                    state.dayNo(),
+                    state.orderNo(),
+                    state.startTime(),
+                    state.endTime(),
+                    state.travelMinutesFromPrevious(),
                     remainingItinerary.getReason()
             );
             remainingItinerary.markAsUserAdjusted();
         }
+    }
+
+    private List<ReorderState> buildDeleteStates(
+            Itinerary deletedItinerary,
+            List<Itinerary> remainingItineraries
+    ) {
+        int successorIndex = -1;
+        for (int index = 0; index < remainingItineraries.size(); index++) {
+            if (remainingItineraries.get(index).getOrderNo() > deletedItinerary.getOrderNo()) {
+                successorIndex = index;
+                break;
+            }
+        }
+
+        List<ReorderState> states = new java.util.ArrayList<>();
+        for (int index = 0; index < remainingItineraries.size(); index++) {
+            Itinerary currentItinerary = remainingItineraries.get(index);
+            int orderNo = index + 1;
+            LocalTime startTime = currentItinerary.getStartTime();
+            LocalTime endTime = currentItinerary.getEndTime();
+            int travelMinutes = orderNo == 1 ? 0 : currentItinerary.getTravelMinutesFromPrevious();
+
+            if (successorIndex >= 0 && index >= successorIndex) {
+                int stayMinutes = (int) ChronoUnit.MINUTES.between(
+                        currentItinerary.getStartTime(),
+                        currentItinerary.getEndTime()
+                );
+                if (index == 0) {
+                    startTime = deletedItinerary.getStartTime();
+                    travelMinutes = 0;
+                } else {
+                    Itinerary previousItinerary = remainingItineraries.get(index - 1);
+                    Place previousPlace = previousItinerary.getPlace();
+                    Place currentPlace = currentItinerary.getPlace();
+                    travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                            previousPlace.getLatitude(),
+                            previousPlace.getLongitude(),
+                            currentPlace.getLatitude(),
+                            currentPlace.getLongitude()
+                    );
+                    startTime = states.get(index - 1).endTime().plusMinutes(travelMinutes);
+                }
+                endTime = startTime.plusMinutes(stayMinutes);
+            }
+
+            states.add(new ReorderState(
+                    currentItinerary.getItineraryId(),
+                    currentItinerary.getDayNo(),
+                    orderNo,
+                    startTime,
+                    endTime,
+                    travelMinutes
+            ));
+        }
+        return states;
     }
 
     public List<ItineraryResponse> getItineraries(Long tripId) {

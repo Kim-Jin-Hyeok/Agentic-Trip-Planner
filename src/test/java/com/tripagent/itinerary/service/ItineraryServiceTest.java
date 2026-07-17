@@ -900,26 +900,43 @@ class ItineraryServiceTest {
     }
 
     @Test
-    void deleteItineraryNormalizesRemainingDayOrderAndFirstTravelMinutes() {
+    void deleteFirstItineraryRecalculatesRemainingDaySchedule() {
         Trip trip = trip(1L);
-        Place place = place(10L);
-        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
-        Itinerary second = itinerary(200L, trip, place, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
-        Itinerary third = itinerary(300L, trip, place, 1, 3, LocalTime.of(12, 0), LocalTime.of(13, 0), 30);
+        Place firstPlace = place(10L, "First Place");
+        Place secondPlace = place(20L, "Second Place");
+        Place thirdPlace = place(30L, "Third Place");
+        Itinerary first = itinerary(100L, trip, firstPlace, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary second = itinerary(200L, trip, secondPlace, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        Itinerary third = itinerary(300L, trip, thirdPlace, 1, 3, LocalTime.of(12, 0), LocalTime.of(13, 0), 30);
         when(tripRepository.existsById(1L)).thenReturn(true);
         when(itineraryRepository.findById(100L)).thenReturn(Optional.of(first));
         when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1))
                 .thenReturn(List.of(third, first, second));
+        when(routeCalculationAdapter.calculateTravelMinutes(
+                secondPlace.getLatitude(),
+                secondPlace.getLongitude(),
+                thirdPlace.getLatitude(),
+                thirdPlace.getLongitude()
+        )).thenReturn(25);
 
         itineraryService.deleteItinerary(1L, 100L);
 
         assertThat(second.getOrderNo()).isEqualTo(1);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(second.getEndTime()).isEqualTo(LocalTime.of(10, 0));
         assertThat(second.getTravelMinutesFromPrevious()).isZero();
         assertThat(second.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
         assertThat(third.getOrderNo()).isEqualTo(2);
-        assertThat(third.getTravelMinutesFromPrevious()).isEqualTo(30);
+        assertThat(third.getStartTime()).isEqualTo(LocalTime.of(10, 25));
+        assertThat(third.getEndTime()).isEqualTo(LocalTime.of(11, 25));
+        assertThat(third.getTravelMinutesFromPrevious()).isEqualTo(25);
         assertThat(third.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
-        verify(routeCalculationAdapter, never()).calculateTravelMinutes(any(), any(), any(), any());
+        verify(routeCalculationAdapter).calculateTravelMinutes(
+                secondPlace.getLatitude(),
+                secondPlace.getLongitude(),
+                thirdPlace.getLatitude(),
+                thirdPlace.getLongitude()
+        );
         verify(itineraryRepository).delete(first);
     }
 
@@ -948,6 +965,8 @@ class ItineraryServiceTest {
         assertThat(first.getOrderNo()).isEqualTo(1);
         assertThat(first.getGenerationSource()).isEqualTo(ItineraryGenerationSource.MANUAL);
         assertThat(third.getOrderNo()).isEqualTo(2);
+        assertThat(third.getStartTime()).isEqualTo(LocalTime.of(10, 47));
+        assertThat(third.getEndTime()).isEqualTo(LocalTime.of(11, 47));
         assertThat(third.getTravelMinutesFromPrevious()).isEqualTo(47);
         assertThat(third.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
         verify(routeCalculationAdapter).calculateTravelMinutes(
@@ -972,6 +991,8 @@ class ItineraryServiceTest {
         itineraryService.deleteItinerary(1L, 200L);
 
         assertThat(first.getOrderNo()).isEqualTo(1);
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(first.getEndTime()).isEqualTo(LocalTime.of(10, 0));
         assertThat(first.getTravelMinutesFromPrevious()).isZero();
         assertThat(first.getGenerationSource()).isEqualTo(ItineraryGenerationSource.MANUAL);
         verify(routeCalculationAdapter, never()).calculateTravelMinutes(any(), any(), any(), any());
