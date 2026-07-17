@@ -1,5 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 const ACCESS_TOKEN_STORAGE_KEY = 'tripagent.accessToken';
+const NETWORK_ERROR_MESSAGE = '서버에 연결할 수 없습니다. 인터넷 연결과 서버 상태를 확인한 뒤 다시 시도해 주세요.';
 
 export type ApiResponse<T> = {
   success: boolean;
@@ -36,10 +37,18 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+    throw new Error(NETWORK_ERROR_MESSAGE);
+  }
 
   if (!response.ok) {
     throw new Error(await resolveErrorMessage(response));
