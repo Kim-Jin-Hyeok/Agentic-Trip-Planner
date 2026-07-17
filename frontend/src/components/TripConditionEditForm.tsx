@@ -32,7 +32,8 @@ export function TripConditionEditForm({
       </div>
 
       <p className="condition-edit-notice">
-        일정이 만들어진 상태에서 조건을 변경하면 기존 일정은 삭제되고 여행은 비공개로 전환됩니다.
+        시작·종료 지점만 변경하면 기존 일정이 유지됩니다. 날짜, 운영시간, 컨셉 또는 숙소 지역을 변경하면
+        기존 일정은 삭제되고 여행은 비공개로 전환됩니다.
       </p>
 
       <div className="field-grid">

@@ -7,6 +7,7 @@ import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.member.domain.Member;
 import com.tripagent.member.repository.MemberRepository;
 import com.tripagent.place.domain.Place;
+import com.tripagent.place.domain.TripEndpointPlace;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.route.SimpleRouteCalculationAdapter;
@@ -729,16 +730,29 @@ public class TripService {
                 : resolveEndpointPlaceId(request.endPlaceId());
         boolean dateRangeChanged = !Objects.equals(trip.getStartDate(), request.startDate())
                 || !Objects.equals(trip.getEndDate(), request.endDate());
+        boolean itineraryInvalidatingConditionsChanged = dateRangeChanged
+                || !Objects.equals(trip.getDailyStartTime(), request.dailyStartTime())
+                || !Objects.equals(trip.getDailyEndTime(), request.dailyEndTime())
+                || trip.getConcept() != request.concept()
+                || !Objects.equals(normalizeAccommodationArea(trip.getLastAccommodationArea()), lastAccommodationArea);
+        boolean startPlaceChanged = !Objects.equals(trip.getStartPlaceId(), startPlaceId);
+        boolean endPlaceChanged = !Objects.equals(trip.getEndPlaceId(), endPlaceId);
         boolean conditionsChanged = !Objects.equals(trip.getStartDate(), request.startDate())
                 || !Objects.equals(trip.getEndDate(), request.endDate())
                 || !Objects.equals(trip.getDailyStartTime(), request.dailyStartTime())
                 || !Objects.equals(trip.getDailyEndTime(), request.dailyEndTime())
                 || trip.getConcept() != request.concept()
                 || !Objects.equals(normalizeAccommodationArea(trip.getLastAccommodationArea()), lastAccommodationArea)
-                || !Objects.equals(trip.getStartPlaceId(), startPlaceId)
-                || !Objects.equals(trip.getEndPlaceId(), endPlaceId);
+                || startPlaceChanged
+                || endPlaceChanged;
         if (!conditionsChanged) {
             return TripResponse.from(trip);
+        }
+
+        boolean hasExistingItinerary = itineraryRepository.existsByTrip_TripId(tripId);
+        List<ItineraryScheduleUpdate> dayOneScheduleUpdates = List.of();
+        if (hasExistingItinerary && !itineraryInvalidatingConditionsChanged && startPlaceChanged) {
+            dayOneScheduleUpdates = calculateDayOneScheduleUpdates(trip, startPlaceId);
         }
 
         trip.changeConditions(
@@ -752,9 +766,11 @@ public class TripService {
                 endPlaceId
         );
 
-        if (itineraryRepository.existsByTrip_TripId(tripId)) {
+        if (hasExistingItinerary && itineraryInvalidatingConditionsChanged) {
             itineraryRepository.deleteByTrip_TripId(tripId);
             trip.changeVisibility(TripVisibility.PRIVATE);
+        } else {
+            applyItineraryScheduleUpdates(dayOneScheduleUpdates);
         }
         if (dateRangeChanged) {
             tripAccommodationRepository.deleteOutsideStayRange(
@@ -765,6 +781,83 @@ public class TripService {
         }
 
         return TripResponse.from(trip);
+    }
+
+    private List<ItineraryScheduleUpdate> calculateDayOneScheduleUpdates(Trip trip, Long startPlaceId) {
+        if (placeRepository == null) {
+            return List.of();
+        }
+        Place startPlace = placeRepository.findById(startPlaceId)
+                .filter(place -> Boolean.TRUE.equals(place.getUseYn()))
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Trip endpoint place not found. placeId=" + startPlaceId
+                ));
+        List<Itinerary> dayOneItineraries = itineraryRepository.findByTrip_TripIdAndDayNo(
+                        trip.getTripId(),
+                        1
+                ).stream()
+                .sorted(java.util.Comparator.comparing(Itinerary::getOrderNo))
+                .toList();
+        if (dayOneItineraries.isEmpty()) {
+            return List.of();
+        }
+
+        Itinerary firstItinerary = dayOneItineraries.getFirst();
+        int firstTravelMinutes = startPlace.getPlaceId().equals(firstItinerary.getPlace().getPlaceId())
+                ? 0
+                : routeCalculationAdapter.calculateTravelMinutes(
+                        startPlace.getLatitude(),
+                        startPlace.getLongitude(),
+                        firstItinerary.getPlace().getLatitude(),
+                        firstItinerary.getPlace().getLongitude()
+                );
+        LocalTime cursor = trip.getDailyStartTime().plusMinutes(firstTravelMinutes);
+        List<ItineraryScheduleUpdate> scheduleUpdates = new ArrayList<>();
+        Itinerary previousItinerary = null;
+
+        for (Itinerary itinerary : dayOneItineraries) {
+            int travelMinutes = 0;
+            if (previousItinerary != null) {
+                travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                        previousItinerary.getPlace().getLatitude(),
+                        previousItinerary.getPlace().getLongitude(),
+                        itinerary.getPlace().getLatitude(),
+                        itinerary.getPlace().getLongitude()
+                );
+                cursor = cursor.plusMinutes(travelMinutes);
+            }
+
+            int stayMinutes = (int) ChronoUnit.MINUTES.between(
+                    itinerary.getStartTime(),
+                    itinerary.getEndTime()
+            );
+            LocalTime endTime = cursor.plusMinutes(stayMinutes);
+            if (endTime.isAfter(trip.getDailyEndTime())) {
+                throw new IllegalArgumentException(
+                        "Itinerary endTime must be at or before trip dailyEndTime. dayNo=1"
+                );
+            }
+            scheduleUpdates.add(new ItineraryScheduleUpdate(itinerary, cursor, endTime, travelMinutes));
+            cursor = endTime;
+            previousItinerary = itinerary;
+        }
+        return scheduleUpdates;
+    }
+
+    private void applyItineraryScheduleUpdates(List<ItineraryScheduleUpdate> scheduleUpdates) {
+        for (ItineraryScheduleUpdate scheduleUpdate : scheduleUpdates) {
+            Itinerary itinerary = scheduleUpdate.itinerary();
+            itinerary.update(
+                    itinerary.getPlace(),
+                    itinerary.getDayNo(),
+                    itinerary.getOrderNo(),
+                    scheduleUpdate.startTime(),
+                    scheduleUpdate.endTime(),
+                    scheduleUpdate.travelMinutesFromPrevious(),
+                    itinerary.getReason()
+            );
+            itinerary.markAsUserAdjusted();
+        }
     }
 
     @Transactional
@@ -874,6 +967,11 @@ public class TripService {
                     ));
             if (!Boolean.TRUE.equals(place.getUseYn())) {
                 throw new NoSuchElementException("Trip endpoint place must be active. placeId=" + requestedPlaceId);
+            }
+            if (!TripEndpointPlace.supports(place.getName())) {
+                throw new IllegalArgumentException(
+                        "Trip endpoint place is not supported. placeId=" + requestedPlaceId
+                );
             }
             return place.getPlaceId();
         }
@@ -1107,6 +1205,14 @@ public class TripService {
 
         String normalizedDestination = destination.trim();
         return normalizedDestination.equals("제주") || normalizedDestination.equalsIgnoreCase("JEJU");
+    }
+
+    private record ItineraryScheduleUpdate(
+            Itinerary itinerary,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
     }
 
     private record DayEndDestination(

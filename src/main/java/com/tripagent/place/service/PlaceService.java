@@ -1,6 +1,7 @@
 package com.tripagent.place.service;
 
 import com.tripagent.place.domain.Place;
+import com.tripagent.place.domain.TripEndpointPlace;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceRecommendConcept;
 import com.tripagent.place.dto.PlaceResponse;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -20,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PlaceService {
 
-    private static final String DEFAULT_TRIP_ENDPOINT_NAME = "제주국제공항";
 
     private final PlaceRepository placeRepository;
 
@@ -103,9 +104,11 @@ public class PlaceService {
     }
 
     public List<PlaceResponse> findTripEndpointPlaces() {
-        return placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc(DEFAULT_TRIP_ENDPOINT_NAME)
-                .map(place -> List.of(PlaceResponse.from(place)))
-                .orElseGet(List::of);
+        return TripEndpointPlace.orderedNames().stream()
+                .map(placeRepository::findFirstByNameAndUseYnTrueOrderByPlaceIdDesc)
+                .flatMap(Optional::stream)
+                .map(PlaceResponse::from)
+                .toList();
     }
 
     private PlaceRecommendConcept toPlaceRecommendConcept(TripConcept concept) {

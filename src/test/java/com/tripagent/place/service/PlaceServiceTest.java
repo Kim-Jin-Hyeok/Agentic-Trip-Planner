@@ -408,6 +408,38 @@ class PlaceServiceTest {
                 .hasMessage("Place not found. placeId=10");
     }
 
+    @Test
+    void findTripEndpointPlacesReturnsAirportAndFerryTerminalInDisplayOrder() {
+        Place airport = place("제주국제공항");
+        Place ferryTerminal = place("제주항국제여객터미널");
+        setId(airport, "placeId", 1550L);
+        setId(ferryTerminal, "placeId", 1575L);
+        when(placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc("제주국제공항"))
+                .thenReturn(Optional.of(airport));
+        when(placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc("제주항국제여객터미널"))
+                .thenReturn(Optional.of(ferryTerminal));
+
+        List<PlaceResponse> responses = placeService.findTripEndpointPlaces();
+
+        assertThat(responses).extracting(PlaceResponse::placeId).containsExactly(1550L, 1575L);
+        assertThat(responses).extracting(PlaceResponse::name)
+                .containsExactly("제주국제공항", "제주항국제여객터미널");
+    }
+
+    @Test
+    void findTripEndpointPlacesOmitsUnavailableEndpoint() {
+        Place airport = place("제주국제공항");
+        setId(airport, "placeId", 1550L);
+        when(placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc("제주국제공항"))
+                .thenReturn(Optional.of(airport));
+        when(placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc("제주항국제여객터미널"))
+                .thenReturn(Optional.empty());
+
+        List<PlaceResponse> responses = placeService.findTripEndpointPlaces();
+
+        assertThat(responses).extracting(PlaceResponse::placeId).containsExactly(1550L);
+    }
+
     private Place place(String name) {
         return place(name, "NATURE", "JEJU", "description", true);
     }

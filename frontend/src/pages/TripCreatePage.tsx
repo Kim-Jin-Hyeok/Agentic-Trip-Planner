@@ -805,8 +805,10 @@ export function TripCreatePage() {
     }
 
     const hasExistingItinerary = itineraries.length > 0;
+    const invalidatesExistingItinerary = hasExistingItinerary
+      && haveItineraryInvalidatingConditionsChanged(trip, conditionForm);
     if (
-      hasExistingItinerary &&
+      invalidatesExistingItinerary &&
       !window.confirm('여행 조건을 변경하면 기존 일정이 삭제되고 비공개로 전환됩니다. 계속할까요?')
     ) {
       return;
@@ -822,27 +824,41 @@ export function TripCreatePage() {
         ...conditionForm,
         lastAccommodationArea: conditionForm.lastAccommodationArea.trim()
       });
-      const updatedDetail: TripDetail = {
+      let updatedDetail: TripDetail = {
         ...trip,
         ...updatedTrip,
-        itineraries: []
+        itineraries: invalidatesExistingItinerary ? [] : itineraries
       };
+      let refreshWarning = '';
+      if (hasExistingItinerary && !invalidatesExistingItinerary) {
+        try {
+          updatedDetail = await getTrip(trip.tripId);
+        } catch {
+          refreshWarning = '출발·종료 지점은 수정되었지만 일정 경로 조회에 실패했습니다. 화면을 새로고침해 주세요.';
+        }
+      }
       setTrip(updatedDetail);
       setTrips((currentTrips) =>
         currentTrips.map((currentTrip) => currentTrip.tripId === updatedTrip.tripId ? updatedTrip : currentTrip)
       );
-      setItineraries([]);
+      setItineraries(updatedDetail.itineraries);
       setEditingItems({});
       setEditingItineraryId(null);
       setItineraryEditError('');
-      setLockedPlaceIds([]);
-      setCandidatePlaces([]);
-      setGenerateOptions(createDefaultGenerateOptions(updatedDetail));
+      if (invalidatesExistingItinerary) {
+        setLockedPlaceIds([]);
+        setCandidatePlaces([]);
+        setGenerateOptions(createDefaultGenerateOptions(updatedDetail));
+      }
       setConditionForm(conditionFormFromTrip(updatedDetail));
       setIsEditingConditions(false);
       setMessage(
-        hasExistingItinerary
+        refreshWarning.length > 0
+          ? refreshWarning
+          : invalidatesExistingItinerary
           ? '여행 조건을 수정하고 기존 일정을 삭제했습니다. 새 조건으로 일정을 생성해 주세요.'
+          : hasExistingItinerary
+            ? '여행 시작·종료 지점을 수정하고 기존 일정을 유지했습니다.'
           : '여행 조건을 수정했습니다.'
       );
       setIsItineraryAddOpen(false);
@@ -1591,6 +1607,18 @@ function haveTripConditionsChanged(trip: TripDetail, form: TripConditionUpdateRe
     || (trip.lastAccommodationArea ?? '').trim() !== form.lastAccommodationArea.trim()
     || (trip.startPlaceId ?? null) !== form.startPlaceId
     || (trip.endPlaceId ?? null) !== form.endPlaceId;
+}
+
+function haveItineraryInvalidatingConditionsChanged(
+  trip: TripDetail,
+  form: TripConditionUpdateRequest
+): boolean {
+  return trip.startDate !== form.startDate
+    || trip.endDate !== form.endDate
+    || trip.dailyStartTime !== form.dailyStartTime
+    || trip.dailyEndTime !== form.dailyEndTime
+    || trip.concept !== form.concept
+    || (trip.lastAccommodationArea ?? '').trim() !== form.lastAccommodationArea.trim();
 }
 
 function validateConditionForm(form: TripConditionUpdateRequest): string | null {

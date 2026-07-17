@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.accommodation.domain.Accommodation;
 import com.tripagent.itinerary.domain.Itinerary;
+import com.tripagent.itinerary.domain.ItineraryGenerationSource;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.member.domain.Member;
@@ -1615,6 +1616,148 @@ class TripServiceTest {
     }
 
     @Test
+    void updateTripConditionsRecalculatesDayOneAndKeepsItineraryWhenOnlyStartPlaceChanges() {
+        Trip trip = tripWithEndpoints(1L, 100L, 1550L, 1550L, LocalTime.of(18, 0));
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        Place airport = place(1550L, "제주국제공항");
+        Place changedStartPlace = place(2000L, "제주항국제여객터미널");
+        Place firstPlace = place(10L, "First Place");
+        Place secondPlace = place(20L, "Second Place");
+        Itinerary first = Itinerary.create(
+                trip, firstPlace, 1, 1, LocalTime.of(9, 10), LocalTime.of(10, 10), 0, "reason"
+        );
+        Itinerary second = Itinerary.create(
+                trip, secondPlace, 1, 2, LocalTime.of(10, 40), LocalTime.of(11, 40), 30, "reason"
+        );
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                "SEOGWIPO",
+                2000L,
+                1550L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(1550L)).thenReturn(Optional.of(airport));
+        when(placeRepository.findById(2000L)).thenReturn(Optional.of(changedStartPlace));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(second, first));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(40, 15);
+
+        TripResponse response = tripService.updateTripConditions(1L, 100L, request);
+
+        assertThat(response.startPlaceId()).isEqualTo(2000L);
+        assertThat(response.endPlaceId()).isEqualTo(1550L);
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(9, 40));
+        assertThat(first.getEndTime()).isEqualTo(LocalTime.of(10, 40));
+        assertThat(first.getTravelMinutesFromPrevious()).isZero();
+        assertThat(first.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(10, 55));
+        assertThat(second.getEndTime()).isEqualTo(LocalTime.of(11, 55));
+        assertThat(second.getTravelMinutesFromPrevious()).isEqualTo(15);
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+    }
+
+    @Test
+    void updateTripConditionsKeepsItineraryWhenOnlyEndPlaceChanges() {
+        Trip trip = tripWithEndpoints(1L, 100L, 1550L, 1550L, LocalTime.of(18, 0));
+        trip.changeVisibility(TripVisibility.PUBLIC);
+        Place airport = place(1550L, "제주국제공항");
+        Place changedEndPlace = place(2000L, "제주항국제여객터미널");
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                "SEOGWIPO",
+                1550L,
+                2000L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(1550L)).thenReturn(Optional.of(airport));
+        when(placeRepository.findById(2000L)).thenReturn(Optional.of(changedEndPlace));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+
+        TripResponse response = tripService.updateTripConditions(1L, 100L, request);
+
+        assertThat(response.startPlaceId()).isEqualTo(1550L);
+        assertThat(response.endPlaceId()).isEqualTo(2000L);
+        assertThat(response.visibility()).isEqualTo(TripVisibility.PUBLIC);
+        verify(itineraryRepository, never()).findByTrip_TripIdAndDayNo(any(), any());
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+        verify(routeCalculationAdapter, never()).calculateTravelMinutes(any(), any(), any(), any());
+    }
+
+    @Test
+    void updateTripConditionsRejectsStartPlaceScheduleAfterDailyEndTime() {
+        Trip trip = tripWithEndpoints(1L, 100L, 1550L, 1550L, LocalTime.of(10, 30));
+        Place airport = place(1550L, "제주국제공항");
+        Place changedStartPlace = place(2000L, "제주항국제여객터미널");
+        Itinerary first = Itinerary.create(
+                trip,
+                place(10L, "First Place"),
+                1,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0),
+                0,
+                "reason"
+        );
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 30),
+                TripConcept.HEALING,
+                "SEOGWIPO",
+                2000L,
+                1550L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(1550L)).thenReturn(Optional.of(airport));
+        when(placeRepository.findById(2000L)).thenReturn(Optional.of(changedStartPlace));
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(true);
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(first));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(60);
+
+        assertThatThrownBy(() -> tripService.updateTripConditions(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime. dayNo=1");
+        assertThat(trip.getStartPlaceId()).isEqualTo(1550L);
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
+    }
+
+    @Test
+    void updateTripConditionsRejectsActivePlaceOutsideTripEndpointCandidates() {
+        Trip trip = tripWithEndpoints(1L, 100L, 1550L, 1550L, LocalTime.of(18, 0));
+        Place touristPlace = place(3000L, "Tourist Place");
+        TripConditionUpdateRequest request = new TripConditionUpdateRequest(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                "SEOGWIPO",
+                3000L,
+                1550L
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(3000L)).thenReturn(Optional.of(touristPlace));
+
+        assertThatThrownBy(() -> tripService.updateTripConditions(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Trip endpoint place is not supported. placeId=3000");
+        assertThat(trip.getStartPlaceId()).isEqualTo(1550L);
+        verify(itineraryRepository, never()).existsByTrip_TripId(1L);
+    }
+
+    @Test
     void updateTripConditionsRejectsUnsupportedDurationBeforeLookup() {
         TripConditionUpdateRequest request = new TripConditionUpdateRequest(
                 LocalDate.of(2026, 7, 1),
@@ -1886,6 +2029,31 @@ class TripServiceTest {
                 concept,
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
+                ownerId
+        );
+        setId(trip, "tripId", tripId);
+        return trip;
+    }
+
+    private Trip tripWithEndpoints(
+            Long tripId,
+            Long ownerId,
+            Long startPlaceId,
+            Long endPlaceId,
+            LocalTime dailyEndTime
+    ) {
+        Trip trip = Trip.create(
+                "JEJU 여행",
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                dailyEndTime,
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                startPlaceId,
+                endPlaceId,
                 ownerId
         );
         setId(trip, "tripId", tripId);
