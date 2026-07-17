@@ -233,18 +233,21 @@ public class ItineraryService {
         Trip trip = findTripAndValidateOwner(tripId, ownerId);
         Map<Long, ItineraryReorderRequestItem> reorderItems = validateAndMapReorderItems(tripId, request);
         List<Itinerary> tripItineraries = itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId);
-        List<ReorderState> finalStates = buildReorderStates(tripItineraries, reorderItems);
+        List<ReorderState> finalStates = recalculateSameDayReorderStates(
+                tripItineraries,
+                reorderItems,
+                buildReorderStates(tripItineraries, reorderItems)
+        );
 
         validateFinalReorderStates(trip, finalStates);
         Map<Long, ReorderState> finalStateByItineraryId = finalStates.stream()
                 .collect(java.util.stream.Collectors.toMap(ReorderState::itineraryId, state -> state));
 
         for (Itinerary itinerary : tripItineraries) {
-            ItineraryReorderRequestItem item = reorderItems.get(itinerary.getItineraryId());
-            if (item == null) {
+            ReorderState finalState = finalStateByItineraryId.get(itinerary.getItineraryId());
+            if (hasSameState(itinerary, finalState)) {
                 continue;
             }
-            ReorderState finalState = finalStateByItineraryId.get(itinerary.getItineraryId());
             itinerary.update(
                     itinerary.getPlace(),
                     finalState.dayNo(),
@@ -356,6 +359,14 @@ public class ItineraryService {
         return itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId).stream()
                 .map(ItineraryResponse::from)
                 .toList();
+    }
+
+    private boolean hasSameState(Itinerary itinerary, ReorderState state) {
+        return itinerary.getDayNo().equals(state.dayNo())
+                && itinerary.getOrderNo().equals(state.orderNo())
+                && itinerary.getStartTime().equals(state.startTime())
+                && itinerary.getEndTime().equals(state.endTime())
+                && itinerary.getTravelMinutesFromPrevious().equals(state.travelMinutesFromPrevious());
     }
 
     private void validateRequest(Long tripId, ItineraryCreateRequest request) {
@@ -622,6 +633,77 @@ public class ItineraryService {
                             timeSlot.getTravelMinutesFromPrevious()
                     );
                 })
+                .toList();
+    }
+
+    private List<ReorderState> recalculateSameDayReorderStates(
+            List<Itinerary> tripItineraries,
+            Map<Long, ItineraryReorderRequestItem> reorderItems,
+            List<ReorderState> reorderStates
+    ) {
+        Map<Long, Itinerary> itineraryById = tripItineraries.stream()
+                .collect(java.util.stream.Collectors.toMap(Itinerary::getItineraryId, itinerary -> itinerary));
+        Set<Integer> affectedDayNos = new HashSet<>();
+
+        for (ItineraryReorderRequestItem item : reorderItems.values()) {
+            Itinerary itinerary = itineraryById.get(item.itineraryId());
+            if (!itinerary.getDayNo().equals(item.dayNo())) {
+                return reorderStates;
+            }
+            if (!itinerary.getOrderNo().equals(item.orderNo())) {
+                affectedDayNos.add(item.dayNo());
+            }
+        }
+        if (affectedDayNos.isEmpty()) {
+            return reorderStates;
+        }
+
+        Map<Long, ReorderState> recalculatedStateById = new HashMap<>();
+        for (Integer dayNo : affectedDayNos) {
+            List<ReorderState> dayStates = reorderStates.stream()
+                    .filter(state -> state.dayNo().equals(dayNo))
+                    .sorted(Comparator.comparing(ReorderState::orderNo))
+                    .toList();
+            LocalTime cursor = dayStates.stream()
+                    .map(ReorderState::startTime)
+                    .min(LocalTime::compareTo)
+                    .orElseThrow();
+
+            Itinerary previousItinerary = null;
+            for (ReorderState state : dayStates) {
+                Itinerary currentItinerary = itineraryById.get(state.itineraryId());
+                int stayMinutes = (int) ChronoUnit.MINUTES.between(
+                        currentItinerary.getStartTime(),
+                        currentItinerary.getEndTime()
+                );
+                int travelMinutes = 0;
+                if (previousItinerary != null) {
+                    Place previousPlace = previousItinerary.getPlace();
+                    Place currentPlace = currentItinerary.getPlace();
+                    travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                            previousPlace.getLatitude(),
+                            previousPlace.getLongitude(),
+                            currentPlace.getLatitude(),
+                            currentPlace.getLongitude()
+                    );
+                    cursor = cursor.plusMinutes(travelMinutes);
+                }
+                LocalTime endTime = cursor.plusMinutes(stayMinutes);
+                recalculatedStateById.put(state.itineraryId(), new ReorderState(
+                        state.itineraryId(),
+                        state.dayNo(),
+                        state.orderNo(),
+                        cursor,
+                        endTime,
+                        travelMinutes
+                ));
+                cursor = endTime;
+                previousItinerary = currentItinerary;
+            }
+        }
+
+        return reorderStates.stream()
+                .map(state -> recalculatedStateById.getOrDefault(state.itineraryId(), state))
                 .toList();
     }
 
