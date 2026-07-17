@@ -1366,6 +1366,90 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void deleteFirstItineraryRecalculatesNewFirstVisitFromTripStartPlace() {
+        Trip trip = tripWithStartPlace(1L, 50L, LocalTime.of(18, 0));
+        Place startPlace = place(50L, "제주국제공항");
+        Place deletedPlace = place(10L, "Deleted Place");
+        Place secondPlace = place(20L, "Second Place");
+        Place thirdPlace = place(30L, "Third Place");
+        Itinerary deleted = itinerary(100L, trip, deletedPlace, 1, 1, LocalTime.of(9, 5), LocalTime.of(10, 5), 0);
+        Itinerary second = itinerary(200L, trip, secondPlace, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 25);
+        Itinerary third = itinerary(300L, trip, thirdPlace, 1, 3, LocalTime.of(12, 0), LocalTime.of(13, 0), 30);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(deleted));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1))
+                .thenReturn(List.of(third, deleted, second));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(startPlace));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(40, 15);
+
+        itineraryService.deleteItinerary(1L, 100L);
+
+        assertThat(second.getOrderNo()).isEqualTo(1);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(9, 40));
+        assertThat(second.getEndTime()).isEqualTo(LocalTime.of(10, 40));
+        assertThat(second.getTravelMinutesFromPrevious()).isZero();
+        assertThat(third.getOrderNo()).isEqualTo(2);
+        assertThat(third.getStartTime()).isEqualTo(LocalTime.of(10, 55));
+        assertThat(third.getEndTime()).isEqualTo(LocalTime.of(11, 55));
+        assertThat(third.getTravelMinutesFromPrevious()).isEqualTo(15);
+        verify(itineraryRepository).delete(deleted);
+    }
+
+    @Test
+    void deleteFirstItineraryRecalculatesNewFirstVisitFromPreviousAccommodation() {
+        Trip trip = trip(1L);
+        Place deletedPlace = place(10L, "Deleted Place");
+        Place secondPlace = place(20L, "Second Place");
+        Itinerary deleted = itinerary(100L, trip, deletedPlace, 2, 1, LocalTime.of(9, 5), LocalTime.of(10, 5), 0);
+        Itinerary second = itinerary(200L, trip, secondPlace, 2, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 25);
+        TripAccommodation tripAccommodation = org.mockito.Mockito.mock(TripAccommodation.class);
+        Accommodation accommodation = org.mockito.Mockito.mock(Accommodation.class);
+        when(tripAccommodation.getStayDate()).thenReturn(LocalDate.of(2026, 7, 1));
+        when(tripAccommodation.getAccommodation()).thenReturn(accommodation);
+        when(accommodation.getLatitude()).thenReturn(33.4);
+        when(accommodation.getLongitude()).thenReturn(126.5);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(deleted));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 2))
+                .thenReturn(List.of(second, deleted));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(tripAccommodation));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(35);
+
+        itineraryService.deleteItinerary(1L, 100L);
+
+        assertThat(second.getOrderNo()).isEqualTo(1);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(9, 35));
+        assertThat(second.getEndTime()).isEqualTo(LocalTime.of(10, 35));
+        assertThat(second.getTravelMinutesFromPrevious()).isZero();
+        verify(itineraryRepository).delete(deleted);
+    }
+
+    @Test
+    void deleteFirstItineraryRejectsRouteAdjustedScheduleAfterDailyEndTime() {
+        Trip trip = tripWithStartPlace(1L, 50L, LocalTime.of(10, 30));
+        Place startPlace = place(50L, "제주국제공항");
+        Place deletedPlace = place(10L, "Deleted Place");
+        Place secondPlace = place(20L, "Second Place");
+        Itinerary deleted = itinerary(100L, trip, deletedPlace, 1, 1, LocalTime.of(9, 0), LocalTime.of(9, 30), 0);
+        Itinerary second = itinerary(200L, trip, secondPlace, 1, 2, LocalTime.of(9, 40), LocalTime.of(10, 20), 10);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(deleted));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1))
+                .thenReturn(List.of(deleted, second));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(startPlace));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(60);
+
+        assertThatThrownBy(() -> itineraryService.deleteItinerary(1L, 100L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime.");
+        assertThat(second.getOrderNo()).isEqualTo(2);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(9, 40));
+        verify(itineraryRepository, never()).delete(deleted);
+    }
+
+    @Test
     void deleteItineraryRecalculatesTravelMinutesForImmediateSuccessor() {
         Trip trip = trip(1L);
         Place firstPlace = place(10L);

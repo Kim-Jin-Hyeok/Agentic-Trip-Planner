@@ -642,7 +642,14 @@ public class ItineraryService {
                         currentItinerary.getEndTime()
                 );
                 if (index == 0) {
-                    startTime = deletedItinerary.getStartTime();
+                    LocalTime routeBasedFirstStartTime = calculateRouteBasedFirstStartTime(
+                            deletedItinerary.getTrip(),
+                            deletedItinerary.getDayNo(),
+                            currentItinerary.getPlace()
+                    );
+                    startTime = routeBasedFirstStartTime == null
+                            ? deletedItinerary.getStartTime()
+                            : routeBasedFirstStartTime;
                     travelMinutes = 0;
                 } else {
                     Itinerary previousItinerary = remainingItineraries.get(index - 1);
