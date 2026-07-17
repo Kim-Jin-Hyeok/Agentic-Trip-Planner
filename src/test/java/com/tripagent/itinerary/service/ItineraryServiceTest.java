@@ -994,6 +994,106 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void reorderItinerariesRecalculatesFirstVisitFromTripStartPlace() {
+        Trip trip = tripWithStartPlace(1L, 50L, LocalTime.of(18, 0));
+        Place startPlace = place(50L, "제주국제공항");
+        Place firstPlace = place(10L, "First Place");
+        Place secondPlace = place(20L, "Second Place");
+        Itinerary first = itinerary(100L, trip, firstPlace, 1, 1, LocalTime.of(9, 52), LocalTime.of(10, 52), 0);
+        Itinerary second = itinerary(200L, trip, secondPlace, 1, 2, LocalTime.of(11, 20), LocalTime.of(12, 20), 28);
+        ItineraryReorderRequest request = reorderRequest(
+                item(100L, 1, 2),
+                item(200L, 1, 1)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(first));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(first, second));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(startPlace));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(39, 20);
+
+        List<ItineraryResponse> responses = itineraryService.reorderItineraries(1L, request);
+
+        assertThat(responses).extracting(ItineraryResponse::itineraryId)
+                .containsExactly(200L, 100L);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(9, 39));
+        assertThat(second.getEndTime()).isEqualTo(LocalTime.of(10, 39));
+        assertThat(second.getTravelMinutesFromPrevious()).isZero();
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(10, 59));
+        assertThat(first.getEndTime()).isEqualTo(LocalTime.of(11, 59));
+        assertThat(first.getTravelMinutesFromPrevious()).isEqualTo(20);
+    }
+
+    @Test
+    void reorderItinerariesRecalculatesFirstVisitFromPreviousAccommodation() {
+        Trip trip = trip(1L);
+        Place firstPlace = place(10L, "First Place");
+        Place secondPlace = place(20L, "Second Place");
+        Itinerary first = itinerary(100L, trip, firstPlace, 2, 1, LocalTime.of(9, 5), LocalTime.of(10, 5), 0);
+        Itinerary second = itinerary(200L, trip, secondPlace, 2, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 25);
+        ItineraryReorderRequest request = reorderRequest(
+                item(100L, 2, 2),
+                item(200L, 2, 1)
+        );
+        TripAccommodation tripAccommodation = org.mockito.Mockito.mock(TripAccommodation.class);
+        Accommodation accommodation = org.mockito.Mockito.mock(Accommodation.class);
+        when(tripAccommodation.getStayDate()).thenReturn(LocalDate.of(2026, 7, 1));
+        when(tripAccommodation.getAccommodation()).thenReturn(accommodation);
+        when(accommodation.getLatitude()).thenReturn(33.4);
+        when(accommodation.getLongitude()).thenReturn(126.5);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(first));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(first, second));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(tripAccommodation));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(30, 15);
+
+        itineraryService.reorderItineraries(1L, request);
+
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(9, 30));
+        assertThat(second.getEndTime()).isEqualTo(LocalTime.of(10, 30));
+        assertThat(second.getTravelMinutesFromPrevious()).isZero();
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(10, 45));
+        assertThat(first.getEndTime()).isEqualTo(LocalTime.of(11, 45));
+        assertThat(first.getTravelMinutesFromPrevious()).isEqualTo(15);
+    }
+
+    @Test
+    void reorderItinerariesRejectsStartRouteAdjustedScheduleAfterDailyEndTime() {
+        Trip trip = tripWithStartPlace(1L, 50L, LocalTime.of(11, 30));
+        Place startPlace = place(50L, "제주국제공항");
+        Place firstPlace = place(10L, "First Place");
+        Place secondPlace = place(20L, "Second Place");
+        Itinerary first = itinerary(100L, trip, firstPlace, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary second = itinerary(200L, trip, secondPlace, 1, 2, LocalTime.of(10, 20), LocalTime.of(11, 20), 20);
+        ItineraryReorderRequest request = reorderRequest(
+                item(100L, 1, 2),
+                item(200L, 1, 1)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(first));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(second));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(first, second));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(startPlace));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(40, 20);
+
+        assertThatThrownBy(() -> itineraryService.reorderItineraries(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime.");
+        assertThat(first.getOrderNo()).isEqualTo(1);
+        assertThat(second.getOrderNo()).isEqualTo(2);
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(10, 20));
+    }
+
+    @Test
     void reorderItinerariesRecalculatesUnmovedFollowingItinerary() {
         Trip trip = trip(1L);
         Place firstPlace = place(10L, "First Place");

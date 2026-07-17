@@ -202,9 +202,17 @@ public class ItineraryService {
             Place firstPlace,
             LocalTime requestedStartTime
     ) {
+        LocalTime earliestStartTime = calculateRouteBasedFirstStartTime(trip, dayNo, firstPlace);
+        if (earliestStartTime == null) {
+            return requestedStartTime;
+        }
+        return requestedStartTime.isBefore(earliestStartTime) ? earliestStartTime : requestedStartTime;
+    }
+
+    private LocalTime calculateRouteBasedFirstStartTime(Trip trip, Integer dayNo, Place firstPlace) {
         RouteOrigin routeOrigin = findRouteOrigin(trip, dayNo);
         if (routeOrigin == null) {
-            return requestedStartTime;
+            return null;
         }
 
         int travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
@@ -213,8 +221,7 @@ public class ItineraryService {
                 firstPlace.getLatitude(),
                 firstPlace.getLongitude()
         );
-        LocalTime earliestStartTime = trip.getDailyStartTime().plusMinutes(travelMinutes);
-        return requestedStartTime.isBefore(earliestStartTime) ? earliestStartTime : requestedStartTime;
+        return trip.getDailyStartTime().plusMinutes(travelMinutes);
     }
 
     private RouteOrigin findRouteOrigin(Trip trip, Integer dayNo) {
@@ -511,6 +518,7 @@ public class ItineraryService {
         Map<Long, ItineraryReorderRequestItem> reorderItems = validateAndMapReorderItems(tripId, request);
         List<Itinerary> tripItineraries = itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId);
         List<ReorderState> finalStates = recalculateSameDayReorderStates(
+                trip,
                 tripItineraries,
                 reorderItems,
                 buildReorderStates(tripItineraries, reorderItems)
@@ -957,6 +965,7 @@ public class ItineraryService {
     }
 
     private List<ReorderState> recalculateSameDayReorderStates(
+            Trip trip,
             List<Itinerary> tripItineraries,
             Map<Long, ItineraryReorderRequestItem> reorderItems,
             List<ReorderState> reorderStates
@@ -984,10 +993,19 @@ public class ItineraryService {
                     .filter(state -> state.dayNo().equals(dayNo))
                     .sorted(Comparator.comparing(ReorderState::orderNo))
                     .toList();
-            LocalTime cursor = dayStates.stream()
+            LocalTime requestedFirstStartTime = dayStates.stream()
                     .map(ReorderState::startTime)
                     .min(LocalTime::compareTo)
                     .orElseThrow();
+            Itinerary firstItinerary = itineraryById.get(dayStates.getFirst().itineraryId());
+            LocalTime routeBasedFirstStartTime = calculateRouteBasedFirstStartTime(
+                    trip,
+                    dayNo,
+                    firstItinerary.getPlace()
+            );
+            LocalTime cursor = routeBasedFirstStartTime == null
+                    ? requestedFirstStartTime
+                    : routeBasedFirstStartTime;
 
             Itinerary previousItinerary = null;
             for (ReorderState state : dayStates) {

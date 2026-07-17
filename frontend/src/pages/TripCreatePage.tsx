@@ -1262,15 +1262,24 @@ export function TripCreatePage() {
           }
         ]
       });
-      setItineraries(reordered);
-      setTrip({
+      let updatedItineraries = reordered;
+      let updatedTrip: TripDetail = {
         ...trip,
         itineraries: reordered
-      });
+      };
+      let refreshWarning = '';
+      try {
+        updatedTrip = await getTrip(trip.tripId);
+        updatedItineraries = updatedTrip.itineraries;
+      } catch {
+        refreshWarning = '일정 순서는 변경되었지만 이동 경로 조회에 실패했습니다. 화면을 새로고침해 주세요.';
+      }
+      setItineraries(updatedItineraries);
+      setTrip(updatedTrip);
       setEditingItems({});
       setEditingItineraryId(null);
       setItineraryEditError('');
-      setMessage('일정 순서가 변경되었습니다.');
+      setMessage(refreshWarning.length > 0 ? refreshWarning : '일정 순서가 변경되었습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '일정 순서 변경에 실패했습니다.');
     } finally {
