@@ -455,6 +455,83 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void updateItineraryRecalculatesFollowingScheduleWhenPlaceChanges() {
+        Trip trip = trip(1L);
+        Place firstPlace = place(10L, "First Place");
+        Place oldPlace = place(20L, "Old Place");
+        Place newPlace = place(30L, "New Place");
+        Place thirdPlace = place(40L, "Third Place");
+        Itinerary first = itinerary(100L, trip, firstPlace, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary target = itinerary(200L, trip, oldPlace, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        Itinerary third = itinerary(300L, trip, thirdPlace, 1, 3, LocalTime.of(12, 0), LocalTime.of(13, 0), 30);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(
+                30L,
+                1,
+                2,
+                LocalTime.of(10, 30),
+                LocalTime.of(11, 30),
+                30,
+                "Changed place"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(target));
+        when(placeRepository.findById(30L)).thenReturn(Optional.of(newPlace));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1))
+                .thenReturn(List.of(third, target, first));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(20, 25);
+
+        ItineraryResponse response = itineraryService.updateItinerary(1L, 200L, request);
+
+        assertThat(response.placeId()).isEqualTo(30L);
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(10, 20));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(11, 20));
+        assertThat(response.travelMinutesFromPrevious()).isEqualTo(20);
+        assertThat(response.reason()).isEqualTo("Changed place");
+        assertThat(third.getStartTime()).isEqualTo(LocalTime.of(11, 45));
+        assertThat(third.getEndTime()).isEqualTo(LocalTime.of(12, 45));
+        assertThat(third.getTravelMinutesFromPrevious()).isEqualTo(25);
+        assertThat(third.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
+        assertThat(first.getGenerationSource()).isEqualTo(ItineraryGenerationSource.MANUAL);
+        verify(routeCalculationAdapter, times(2)).calculateTravelMinutes(any(), any(), any(), any());
+    }
+
+    @Test
+    void updateItineraryRejectsPlaceChangeWhenFollowingScheduleExceedsDailyEndTime() {
+        Trip trip = trip(1L, LocalTime.of(9, 0), LocalTime.of(12, 30));
+        Place firstPlace = place(10L, "First Place");
+        Place oldPlace = place(20L, "Old Place");
+        Place newPlace = place(30L, "New Place");
+        Place thirdPlace = place(40L, "Third Place");
+        Itinerary first = itinerary(100L, trip, firstPlace, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary target = itinerary(200L, trip, oldPlace, 1, 2, LocalTime.of(10, 20), LocalTime.of(11, 20), 20);
+        Itinerary third = itinerary(300L, trip, thirdPlace, 1, 3, LocalTime.of(11, 30), LocalTime.of(12, 30), 10);
+        ItineraryUpdateRequest request = new ItineraryUpdateRequest(
+                30L,
+                1,
+                2,
+                LocalTime.of(10, 20),
+                LocalTime.of(11, 20),
+                20,
+                "Changed place"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(target));
+        when(placeRepository.findById(30L)).thenReturn(Optional.of(newPlace));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1))
+                .thenReturn(List.of(first, target, third));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(20, 30);
+
+        assertThatThrownBy(() -> itineraryService.updateItinerary(1L, 200L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime.");
+        assertThat(target.getPlace().getPlaceId()).isEqualTo(20L);
+        assertThat(third.getStartTime()).isEqualTo(LocalTime.of(11, 30));
+        assertThat(third.getEndTime()).isEqualTo(LocalTime.of(12, 30));
+    }
+
+    @Test
     void updateItineraryRejectsUnknownTrip() {
         ItineraryUpdateRequest request = new ItineraryUpdateRequest(null, null, null, null, null, null, null);
         when(tripRepository.findById(1L)).thenReturn(Optional.empty());

@@ -1130,17 +1130,30 @@ export function TripCreatePage() {
 
     try {
       const updatedItinerary = await updateItinerary(trip.tripId, itinerary.itineraryId, editForm);
-      const updatedItineraries = itineraries
+      let updatedItineraries = itineraries
         .map((current) => current.itineraryId === updatedItinerary.itineraryId ? updatedItinerary : current)
         .sort((left, right) => left.dayNo - right.dayNo || left.orderNo - right.orderNo);
-      setItineraries(updatedItineraries);
-      setTrip({
+      let updatedTrip: TripDetail = {
         ...trip,
         itineraries: updatedItineraries
-      });
+      };
+      let refreshWarning = '';
+      const recalculatedFollowingSchedule = editForm.placeId !== itinerary.placeId
+        && editForm.dayNo === itinerary.dayNo
+        && editForm.orderNo === itinerary.orderNo;
+      if (recalculatedFollowingSchedule) {
+        try {
+          updatedTrip = await getTrip(trip.tripId);
+          updatedItineraries = updatedTrip.itineraries;
+        } catch {
+          refreshWarning = '일정은 수정되었지만 후속 일정 조회에 실패했습니다. 화면을 새로고침해 주세요.';
+        }
+      }
+      setItineraries(updatedItineraries);
+      setTrip(updatedTrip);
       setEditingItineraryId(null);
       setEditingItems({});
-      setMessage('일정이 수정되었습니다.');
+      setMessage(refreshWarning.length > 0 ? refreshWarning : '일정이 수정되었습니다.');
     } catch (error) {
       setItineraryEditError(error instanceof Error ? error.message : '일정 수정에 실패했습니다.');
     } finally {

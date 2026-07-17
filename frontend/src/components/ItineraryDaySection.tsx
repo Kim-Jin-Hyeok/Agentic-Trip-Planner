@@ -106,6 +106,9 @@ export function ItineraryDaySection({
           const isEditing = editingItineraryId === itinerary.itineraryId;
           const isAnotherItineraryEditing = editingItineraryId != null && !isEditing;
           const currentPlaceIsCandidate = candidatePlaces.some((place) => place.placeId === itinerary.placeId);
+          const automaticallyRecalculatesRoute = editForm.placeId !== itinerary.placeId
+            && editForm.dayNo === itinerary.dayNo
+            && editForm.orderNo === itinerary.orderNo;
 
           return (
             <li
@@ -244,14 +247,23 @@ export function ItineraryDaySection({
                       </label>
                       <label>
                         이동
-                        <input
-                          type="number"
-                          min="0"
-                          value={editForm.travelMinutesFromPrevious}
-                          onChange={(event) => onUpdateForm(itinerary, 'travelMinutesFromPrevious', Number(event.target.value))}
-                        />
+                        {automaticallyRecalculatesRoute ? (
+                          <div className="itinerary-auto-calculate-value">저장 시 자동 계산</div>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            value={editForm.travelMinutesFromPrevious}
+                            onChange={(event) => onUpdateForm(itinerary, 'travelMinutesFromPrevious', Number(event.target.value))}
+                          />
+                        )}
                       </label>
                     </div>
+                    {automaticallyRecalculatesRoute && (
+                      <p className="itinerary-auto-calculate-notice">
+                        장소를 저장하면 현재 체류시간을 유지한 채 이동시간과 뒤쪽 방문 시각이 자동 계산됩니다.
+                      </p>
+                    )}
                     <label className="reason-field">
                       사유
                       <textarea value={editForm.reason} onChange={(event) => onUpdateForm(itinerary, 'reason', event.target.value)} />

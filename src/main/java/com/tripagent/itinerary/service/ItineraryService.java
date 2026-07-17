@@ -250,6 +250,20 @@ public class ItineraryService {
                 : request.travelMinutesFromPrevious();
         String updatedReason = request.reason() == null ? itinerary.getReason() : request.reason();
 
+        boolean changesPlaceInSamePosition = !updatedPlaceId.equals(itinerary.getPlace().getPlaceId())
+                && updatedDayNo.equals(itinerary.getDayNo())
+                && updatedOrderNo.equals(itinerary.getOrderNo());
+        if (changesPlaceInSamePosition) {
+            return updatePlaceAndRecalculateDay(
+                    trip,
+                    itinerary,
+                    updatedPlace,
+                    updatedStartTime,
+                    updatedEndTime,
+                    updatedReason
+            );
+        }
+
         validateItineraryValues(
                 trip,
                 itineraryId,
@@ -272,6 +286,123 @@ public class ItineraryService {
         itinerary.markAsUserAdjusted();
 
         return ItineraryResponse.from(itinerary);
+    }
+
+    private ItineraryResponse updatePlaceAndRecalculateDay(
+            Trip trip,
+            Itinerary targetItinerary,
+            Place updatedPlace,
+            LocalTime requestedStartTime,
+            LocalTime requestedEndTime,
+            String updatedReason
+    ) {
+        List<Itinerary> dayItineraries = itineraryRepository.findByTrip_TripIdAndDayNo(
+                        trip.getTripId(),
+                        targetItinerary.getDayNo()
+                ).stream()
+                .sorted(Comparator.comparing(Itinerary::getOrderNo))
+                .toList();
+        int targetIndex = findItineraryIndex(dayItineraries, targetItinerary.getItineraryId());
+        List<ReorderState> recalculatedStates = buildPlaceUpdateStates(
+                dayItineraries,
+                targetIndex,
+                updatedPlace,
+                requestedStartTime,
+                requestedEndTime
+        );
+        validateFinalReorderStates(trip, recalculatedStates);
+
+        Map<Long, ReorderState> recalculatedStateById = recalculatedStates.stream()
+                .collect(java.util.stream.Collectors.toMap(ReorderState::itineraryId, state -> state));
+        for (Itinerary dayItinerary : dayItineraries) {
+            ReorderState state = recalculatedStateById.get(dayItinerary.getItineraryId());
+            Place place = dayItinerary.getItineraryId().equals(targetItinerary.getItineraryId())
+                    ? updatedPlace
+                    : dayItinerary.getPlace();
+            String reason = dayItinerary.getItineraryId().equals(targetItinerary.getItineraryId())
+                    ? updatedReason
+                    : dayItinerary.getReason();
+            if (hasSameState(dayItinerary, state) && dayItinerary.getPlace().getPlaceId().equals(place.getPlaceId())) {
+                continue;
+            }
+
+            dayItinerary.update(
+                    place,
+                    state.dayNo(),
+                    state.orderNo(),
+                    state.startTime(),
+                    state.endTime(),
+                    state.travelMinutesFromPrevious(),
+                    reason
+            );
+            dayItinerary.markAsUserAdjusted();
+        }
+
+        return ItineraryResponse.from(targetItinerary);
+    }
+
+    private int findItineraryIndex(List<Itinerary> itineraries, Long itineraryId) {
+        for (int index = 0; index < itineraries.size(); index++) {
+            if (itineraries.get(index).getItineraryId().equals(itineraryId)) {
+                return index;
+            }
+        }
+        throw new IllegalArgumentException("Itinerary must exist in its trip day. itineraryId=" + itineraryId);
+    }
+
+    private List<ReorderState> buildPlaceUpdateStates(
+            List<Itinerary> dayItineraries,
+            int targetIndex,
+            Place updatedPlace,
+            LocalTime requestedStartTime,
+            LocalTime requestedEndTime
+    ) {
+        List<ReorderState> states = new java.util.ArrayList<>();
+        for (int index = 0; index < dayItineraries.size(); index++) {
+            Itinerary currentItinerary = dayItineraries.get(index);
+            LocalTime startTime = currentItinerary.getStartTime();
+            LocalTime endTime = currentItinerary.getEndTime();
+            int travelMinutes = currentItinerary.getTravelMinutesFromPrevious();
+
+            if (index >= targetIndex) {
+                int stayMinutes = index == targetIndex
+                        ? (int) ChronoUnit.MINUTES.between(requestedStartTime, requestedEndTime)
+                        : (int) ChronoUnit.MINUTES.between(
+                                currentItinerary.getStartTime(),
+                                currentItinerary.getEndTime()
+                        );
+                if (index == 0) {
+                    startTime = requestedStartTime;
+                    travelMinutes = 0;
+                } else {
+                    Itinerary previousItinerary = dayItineraries.get(index - 1);
+                    Place previousPlace = index - 1 == targetIndex
+                            ? updatedPlace
+                            : previousItinerary.getPlace();
+                    Place currentPlace = index == targetIndex
+                            ? updatedPlace
+                            : currentItinerary.getPlace();
+                    travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                            previousPlace.getLatitude(),
+                            previousPlace.getLongitude(),
+                            currentPlace.getLatitude(),
+                            currentPlace.getLongitude()
+                    );
+                    startTime = states.get(index - 1).endTime().plusMinutes(travelMinutes);
+                }
+                endTime = startTime.plusMinutes(stayMinutes);
+            }
+
+            states.add(new ReorderState(
+                    currentItinerary.getItineraryId(),
+                    currentItinerary.getDayNo(),
+                    currentItinerary.getOrderNo(),
+                    startTime,
+                    endTime,
+                    travelMinutes
+            ));
+        }
+        return states;
     }
 
     @Transactional
