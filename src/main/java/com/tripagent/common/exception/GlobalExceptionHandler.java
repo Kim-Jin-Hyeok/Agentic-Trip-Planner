@@ -3,6 +3,7 @@ package com.tripagent.common.exception;
 import com.tripagent.ai.llm.LlmException;
 import com.tripagent.auth.support.AuthenticationException;
 import com.tripagent.auth.support.AuthorizationException;
+import com.tripagent.place.adapter.PlaceSearchAdapterException;
 import java.util.NoSuchElementException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -62,6 +63,15 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
     public ErrorResponse handleLlmException(LlmException exception) {
         return new ErrorResponse(exception.getFailureType().name(), userMessageForLlmFailure(exception));
+    }
+
+    @ExceptionHandler(PlaceSearchAdapterException.class)
+    @ResponseStatus(HttpStatus.BAD_GATEWAY)
+    public ErrorResponse handlePlaceSearchAdapterException(PlaceSearchAdapterException exception) {
+        return new ErrorResponse(
+                "EXTERNAL_PLACE_SEARCH_FAILED",
+                "외부 장소 검색 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해 주세요."
+        );
     }
 
     private String userMessageForInvalidRequest(String message) {

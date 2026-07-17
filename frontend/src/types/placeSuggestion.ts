@@ -26,3 +26,14 @@ export type AdminPlaceSuggestionResponse = PlaceSuggestionResponse & {
   memberEmail: string;
   memberNickname: string;
 };
+
+export type PlaceSearchCandidate = {
+  externalPlaceId: string;
+  name: string;
+  address: string | null;
+  roadAddress: string | null;
+  latitude: number;
+  longitude: number;
+  category: string | null;
+  placeUrl: string | null;
+};

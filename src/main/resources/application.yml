@@ -25,6 +25,13 @@ weather:
     connect-timeout: ${WEATHER_OPEN_METEO_CONNECT_TIMEOUT:3s}
     read-timeout: ${WEATHER_OPEN_METEO_READ_TIMEOUT:5s}
 
+place-search:
+  kakao-local:
+    base-url: ${KAKAO_LOCAL_BASE_URL:https://dapi.kakao.com}
+    api-key: ${KAKAO_LOCAL_REST_API_KEY:}
+    connect-timeout: ${KAKAO_LOCAL_CONNECT_TIMEOUT:3s}
+    read-timeout: ${KAKAO_LOCAL_READ_TIMEOUT:5s}
+
 ---
 
 spring:

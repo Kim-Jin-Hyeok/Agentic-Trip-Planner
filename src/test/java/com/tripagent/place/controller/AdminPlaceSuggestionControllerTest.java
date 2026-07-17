@@ -13,6 +13,7 @@ import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
+import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.service.AdminPlaceSuggestionService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -105,6 +106,31 @@ class AdminPlaceSuggestionControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void searchCandidatesReturnsExternalPlaceCandidates() throws Exception {
+        when(adminPlaceSuggestionService.searchCandidates(1L, 10L)).thenReturn(List.of(
+                new PlaceSearchCandidateResponse(
+                        "7936768",
+                        "새별오름",
+                        "제주특별자치도 제주시 애월읍 봉성리 산 59-8",
+                        "",
+                        33.3661276358495,
+                        126.3577306657398,
+                        "여행 > 관광,명소 > 오름",
+                        "http://place.map.kakao.com/7936768"
+                )
+        ));
+
+        mockMvc.perform(get("/api/admin/place-suggestions/10/candidates"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].externalPlaceId").value("7936768"))
+                .andExpect(jsonPath("$.data[0].name").value("새별오름"))
+                .andExpect(jsonPath("$.data[0].latitude").value(33.3661276358495))
+                .andExpect(jsonPath("$.data[0].longitude").value(126.3577306657398));
+
+        verify(adminPlaceSuggestionService).searchCandidates(1L, 10L);
     }
 
     private PageResponse<AdminPlaceSuggestionResponse> pageResponse() {

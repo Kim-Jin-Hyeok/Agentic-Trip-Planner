@@ -1,6 +1,14 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { getAdminPlaceSuggestions, rejectPlaceSuggestion } from '../api/placeSuggestionApi';
-import type { AdminPlaceSuggestionResponse, PlaceSuggestionStatus } from '../types/placeSuggestion';
+import {
+  getAdminPlaceSuggestions,
+  getPlaceSuggestionCandidates,
+  rejectPlaceSuggestion
+} from '../api/placeSuggestionApi';
+import type {
+  AdminPlaceSuggestionResponse,
+  PlaceSearchCandidate,
+  PlaceSuggestionStatus
+} from '../types/placeSuggestion';
 import type { PageResponse } from '../types/trip';
 import {
   placeSuggestionStatusLabel,
@@ -20,6 +28,10 @@ export function AdminPlaceSuggestionPanel() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
   const [actionFeedback, setActionFeedback] = useState('');
+  const [candidateSuggestionId, setCandidateSuggestionId] = useState<number | null>(null);
+  const [placeCandidates, setPlaceCandidates] = useState<PlaceSearchCandidate[]>([]);
+  const [isSearchingCandidates, setIsSearchingCandidates] = useState(false);
+  const [candidateFeedback, setCandidateFeedback] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -55,10 +67,12 @@ export function AdminPlaceSuggestionPanel() {
     setStatus(nextStatus);
     setPage(0);
     cancelRejection();
+    clearCandidateSearch();
     setActionFeedback('');
   }
 
   function startRejection(placeSuggestionId: number) {
+    clearCandidateSearch();
     setRejectingSuggestionId(placeSuggestionId);
     setRejectionReason('');
     setActionFeedback('');
@@ -67,6 +81,37 @@ export function AdminPlaceSuggestionPanel() {
   function cancelRejection() {
     setRejectingSuggestionId(null);
     setRejectionReason('');
+  }
+
+  function clearCandidateSearch() {
+    setCandidateSuggestionId(null);
+    setPlaceCandidates([]);
+    setCandidateFeedback('');
+  }
+
+  async function handleSearchCandidates(placeSuggestionId: number) {
+    if (candidateSuggestionId === placeSuggestionId) {
+      clearCandidateSearch();
+      return;
+    }
+
+    setCandidateSuggestionId(placeSuggestionId);
+    setPlaceCandidates([]);
+    setCandidateFeedback('');
+    setIsSearchingCandidates(true);
+    try {
+      const candidates = await getPlaceSuggestionCandidates(placeSuggestionId);
+      setPlaceCandidates(candidates);
+      if (candidates.length === 0) {
+        setCandidateFeedback('제주 지역에서 일치하는 외부 장소 후보를 찾지 못했습니다.');
+      }
+    } catch (requestError) {
+      setCandidateFeedback(requestError instanceof Error
+        ? requestError.message
+        : '외부 장소 후보를 검색하지 못했습니다.');
+    } finally {
+      setIsSearchingCandidates(false);
+    }
   }
 
   async function handleReject(event: FormEvent<HTMLFormElement>, placeSuggestionId: number) {
@@ -166,6 +211,42 @@ export function AdminPlaceSuggestionPanel() {
               {suggestion.description != null && (
                 <p className="admin-suggestion-description">{suggestion.description}</p>
               )}
+              {suggestion.status === 'PENDING' && candidateSuggestionId === suggestion.placeSuggestionId && (
+                <div className="admin-place-candidate-panel">
+                  <div className="admin-place-candidate-heading">
+                    <strong>카카오 장소 후보</strong>
+                    <button type="button" className="secondary-button" onClick={clearCandidateSearch}>
+                      닫기
+                    </button>
+                  </div>
+                  {isSearchingCandidates ? (
+                    <div className="compact-empty">외부 장소 후보를 검색하는 중입니다.</div>
+                  ) : candidateFeedback.length > 0 ? (
+                    <p className="admin-candidate-feedback">{candidateFeedback}</p>
+                  ) : (
+                    <div className="admin-place-candidate-list">
+                      {placeCandidates.map((candidate) => (
+                        <article className="admin-place-candidate-item" key={candidate.externalPlaceId}>
+                          <div>
+                            <strong>{candidate.name}</strong>
+                            <span>{candidate.category || '카테고리 정보 없음'}</span>
+                          </div>
+                          <p>{candidate.roadAddress || candidate.address}</p>
+                          <small>
+                            위도 {candidate.latitude.toFixed(6)} · 경도 {candidate.longitude.toFixed(6)}
+                          </small>
+                          {candidate.placeUrl != null && (
+                            <a href={candidate.placeUrl} target="_blank" rel="noreferrer">
+                              카카오맵에서 확인
+                            </a>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                  <small className="admin-place-candidate-source">장소 정보 제공: Kakao Local</small>
+                </div>
+              )}
               {suggestion.status === 'REJECTED' && suggestion.rejectionReason != null && (
                 <div className="admin-rejection-summary">
                   <strong>거절 사유</strong>
@@ -214,6 +295,18 @@ export function AdminPlaceSuggestionPanel() {
                   </form>
                 ) : (
                   <div className="admin-suggestion-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void handleSearchCandidates(suggestion.placeSuggestionId)}
+                      disabled={isSearchingCandidates || isRejecting}
+                    >
+                      {isSearchingCandidates && candidateSuggestionId === suggestion.placeSuggestionId
+                        ? '검색 중...'
+                        : candidateSuggestionId === suggestion.placeSuggestionId
+                          ? '후보 닫기'
+                          : '외부 장소 검색'}
+                    </button>
                     <button
                       type="button"
                       className="danger-button"

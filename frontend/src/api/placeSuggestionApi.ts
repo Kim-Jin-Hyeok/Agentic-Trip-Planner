@@ -5,7 +5,8 @@ import type {
   PlaceSuggestionCreateRequest,
   PlaceSuggestionRejectRequest,
   PlaceSuggestionResponse,
-  PlaceSuggestionStatus
+  PlaceSuggestionStatus,
+  PlaceSearchCandidate
 } from '../types/placeSuggestion';
 
 export function createPlaceSuggestion(
@@ -46,5 +47,13 @@ export function rejectPlaceSuggestion(
       method: 'PATCH',
       body: JSON.stringify(request)
     }
+  );
+}
+
+export function getPlaceSuggestionCandidates(
+  placeSuggestionId: number
+): Promise<PlaceSearchCandidate[]> {
+  return apiRequest<PlaceSearchCandidate[]>(
+    `/api/admin/place-suggestions/${placeSuggestionId}/candidates`
   );
 }

@@ -10,10 +10,13 @@ import static org.mockito.Mockito.when;
 import com.tripagent.auth.service.AdminAuthorizationService;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.member.domain.Member;
+import com.tripagent.place.adapter.PlaceSearchAdapter;
+import com.tripagent.place.adapter.PlaceSearchCandidate;
 import com.tripagent.place.domain.PlaceSuggestion;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
+import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.repository.PlaceSuggestionRepository;
 import java.util.List;
 import java.util.Optional;
@@ -28,15 +31,18 @@ class AdminPlaceSuggestionServiceTest {
 
     private PlaceSuggestionRepository placeSuggestionRepository;
     private AdminAuthorizationService adminAuthorizationService;
+    private PlaceSearchAdapter placeSearchAdapter;
     private AdminPlaceSuggestionService adminPlaceSuggestionService;
 
     @BeforeEach
     void setUp() {
         placeSuggestionRepository = org.mockito.Mockito.mock(PlaceSuggestionRepository.class);
         adminAuthorizationService = org.mockito.Mockito.mock(AdminAuthorizationService.class);
+        placeSearchAdapter = org.mockito.Mockito.mock(PlaceSearchAdapter.class);
         adminPlaceSuggestionService = new AdminPlaceSuggestionService(
                 placeSuggestionRepository,
-                adminAuthorizationService
+                adminAuthorizationService,
+                placeSearchAdapter
         );
     }
 
@@ -123,6 +129,38 @@ class AdminPlaceSuggestionServiceTest {
                 .hasMessage("Place suggestion not found. placeSuggestionId=999");
     }
 
+    @Test
+    void searchCandidatesReturnsOnlyJejuCandidates() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        when(placeSearchAdapter.search("새별오름 제주특별자치도 제주시", 5)).thenReturn(List.of(
+                candidate("1", "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577),
+                candidate("2", "서울 새별공원", "서울특별시 강남구", 37.5, 127.0)
+        ));
+
+        List<PlaceSearchCandidateResponse> response = adminPlaceSuggestionService.searchCandidates(1L, 10L);
+
+        assertThat(response).hasSize(1);
+        assertThat(response.getFirst().externalPlaceId()).isEqualTo("1");
+        assertThat(response.getFirst().latitude()).isEqualTo(33.3661);
+        verify(adminAuthorizationService).requireAdmin(1L);
+    }
+
+    @Test
+    void searchCandidatesRetriesWithJejuAndNameWhenDetailedQueryHasNoResult() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        when(placeSearchAdapter.search("새별오름 제주특별자치도 제주시", 5)).thenReturn(List.of());
+        when(placeSearchAdapter.search("제주 새별오름", 5)).thenReturn(List.of(
+                candidate("1", "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577)
+        ));
+
+        List<PlaceSearchCandidateResponse> response = adminPlaceSuggestionService.searchCandidates(1L, 10L);
+
+        assertThat(response).hasSize(1);
+        verify(placeSearchAdapter).search("제주 새별오름", 5);
+    }
+
     private PlaceSuggestion suggestion(Long suggestionId, Long memberId) {
         Member member = Member.create("user@example.com", "user", "password-hash");
         ReflectionTestUtils.setField(member, "memberId", memberId);
@@ -134,5 +172,24 @@ class AdminPlaceSuggestionServiceTest {
         );
         ReflectionTestUtils.setField(suggestion, "placeSuggestionId", suggestionId);
         return suggestion;
+    }
+
+    private PlaceSearchCandidate candidate(
+            String externalPlaceId,
+            String name,
+            String address,
+            double latitude,
+            double longitude
+    ) {
+        return new PlaceSearchCandidate(
+                externalPlaceId,
+                name,
+                address,
+                address,
+                latitude,
+                longitude,
+                "여행 > 관광",
+                "https://place.map.kakao.com/" + externalPlaceId
+        );
     }
 }

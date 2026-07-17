@@ -3,10 +3,13 @@
 ## 사용자·관리자 장소 등록
 
 - [ ] 외부 장소 검색 API 제공사와 데이터 저장·출처 표시 정책을 최종 검토한다.
-- [ ] 장소명과 주소로 좌표를 조회하는 `PlaceSearchAdapter`를 구현한다.
+- [x] 장소명과 주소로 좌표를 조회하는 `PlaceSearchAdapter`를 구현한다.
   - 1차 후보: [카카오 Local 키워드 검색 API](https://developers.kakao.com/docs/ko/local/dev-guide)
   - 주소 직접 입력 보조 후보: [네이버 Cloud Geocoding API](https://api.ncloud-docs.com/docs/application-maps-geocoding)
+  - 카카오 장소 ID, 주소, 카테고리, 위도·경도와 장소 상세 URL을 관리자 후보 검색에 제공한다.
 - [ ] 외부 API 키, timeout, 호출 제한과 장애 응답을 환경설정으로 관리한다.
+  - [x] 카카오 REST API 키와 연결·읽기 timeout을 환경변수로 관리하고 장애 응답을 통일한다.
+  - [ ] 운영 요금제의 호출 한도와 429 응답 정책을 확정한다.
 - [x] `MemberRole`을 추가하고 사용자와 관리자 권한을 구분한다.
   - 관리자만 상태별 장소 제안 목록을 페이지 단위로 조회할 수 있다.
 - [x] 사용자 제안은 `Place`에 바로 활성화하지 않고 승인 대기 데이터로 저장한다.

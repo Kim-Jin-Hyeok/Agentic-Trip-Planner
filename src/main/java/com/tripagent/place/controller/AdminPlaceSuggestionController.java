@@ -6,8 +6,10 @@ import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
+import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.service.AdminPlaceSuggestionService;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,6 +46,16 @@ public class AdminPlaceSuggestionController {
     ) {
         return ApiResponse.success(
                 adminPlaceSuggestionService.rejectSuggestion(memberId, placeSuggestionId, request)
+        );
+    }
+
+    @GetMapping("/{placeSuggestionId}/candidates")
+    public ApiResponse<List<PlaceSearchCandidateResponse>> searchCandidates(
+            @LoginMemberId Long memberId,
+            @PathVariable Long placeSuggestionId
+    ) {
+        return ApiResponse.success(
+                adminPlaceSuggestionService.searchCandidates(memberId, placeSuggestionId)
         );
     }
 }
