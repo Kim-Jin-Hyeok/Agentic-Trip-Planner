@@ -99,7 +99,13 @@ export type Itinerary = {
   generationSource: ItineraryGenerationSource;
 };
 
-export type ItineraryGenerationSource = 'LLM' | 'LLM_ADJUSTED' | 'FALLBACK' | 'MANUAL' | 'UNKNOWN';
+export type ItineraryGenerationSource =
+  | 'LLM'
+  | 'LLM_ADJUSTED'
+  | 'FALLBACK'
+  | 'MANUAL'
+  | 'USER_ADJUSTED'
+  | 'UNKNOWN';
 
 export type ItineraryCreateRequest = {
   placeId: number;

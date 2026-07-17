@@ -5,5 +5,6 @@ public enum ItineraryGenerationSource {
     LLM_ADJUSTED,
     FALLBACK,
     MANUAL,
+    USER_ADJUSTED,
     UNKNOWN
 }

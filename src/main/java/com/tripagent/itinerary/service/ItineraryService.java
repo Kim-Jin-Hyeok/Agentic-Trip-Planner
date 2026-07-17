@@ -208,6 +208,7 @@ public class ItineraryService {
                 updatedTravelMinutesFromPrevious,
                 updatedReason
         );
+        itinerary.markAsUserAdjusted();
 
         return ItineraryResponse.from(itinerary);
     }
@@ -249,6 +250,7 @@ public class ItineraryService {
                     finalState.travelMinutesFromPrevious(),
                     itinerary.getReason()
             );
+            itinerary.markAsUserAdjusted();
         }
 
         return tripItineraries.stream()

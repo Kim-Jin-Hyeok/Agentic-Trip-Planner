@@ -369,6 +369,7 @@ class ItineraryServiceTest {
         assertThat(response.startTime()).isEqualTo(LocalTime.of(9, 30));
         assertThat(response.endTime()).isEqualTo(LocalTime.of(10, 30));
         assertThat(response.reason()).isEqualTo("Updated reason");
+        assertThat(response.generationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
     }
 
     @Test
@@ -552,6 +553,7 @@ class ItineraryServiceTest {
                 .containsExactly(100L, 200L);
         assertThat(responses).extracting(ItineraryResponse::orderNo)
                 .containsExactly(1, 2);
+        assertThat(responses.get(1).generationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
     }
 
     @Test

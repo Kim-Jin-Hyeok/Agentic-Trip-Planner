@@ -1589,6 +1589,12 @@ button.trip-list-item:hover:not(:disabled),
   color: #87631f;
 }
 
+.generation-source-badge.source-user_adjusted {
+  border-color: #c9c2e7;
+  background: #f6f3ff;
+  color: #5d4e99;
+}
+
 .place-lock-label {
   display: inline-flex;
   align-items: center;

@@ -136,6 +136,10 @@ public class Itinerary {
         this.reason = reason;
     }
 
+    public void markAsUserAdjusted() {
+        this.generationSource = ItineraryGenerationSource.USER_ADJUSTED;
+    }
+
     public Long getItineraryId() {
         return itineraryId;
     }

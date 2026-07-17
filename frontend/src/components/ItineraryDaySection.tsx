@@ -276,6 +276,8 @@ function generationSourceLabel(source: Itinerary['generationSource']): string {
       return '안전 일정';
     case 'MANUAL':
       return '직접 추가';
+    case 'USER_ADJUSTED':
+      return '직접 수정';
     case 'UNKNOWN':
       return '기존 일정';
   }
