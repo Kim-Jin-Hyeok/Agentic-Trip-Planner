@@ -1,5 +1,6 @@
 import type {
   PlaceDuplicateReason,
+  PlaceSuggestionApproveRequest,
   PlaceSuggestionCreateRequest,
   PlaceSuggestionStatus
 } from '../types/placeSuggestion';
@@ -50,6 +51,40 @@ export function validatePlaceSuggestionRejection(rejectionReason: string): strin
   }
   if (normalizedReason.length > 500) {
     return '거절 사유는 500자 이하여야 합니다.';
+  }
+  return '';
+}
+
+export function validatePlaceSuggestionApproval(form: PlaceSuggestionApproveRequest): string {
+  if (form.externalPlaceId.trim().length === 0 || form.name.trim().length === 0) {
+    return '승인할 외부 장소 후보를 다시 선택해 주세요.';
+  }
+  if (!form.address.includes('제주')) {
+    return '제주 지역 주소만 승인할 수 있습니다.';
+  }
+  if (!Number.isFinite(form.latitude) || !Number.isFinite(form.longitude)
+      || form.latitude < 33.0 || form.latitude > 33.6
+      || form.longitude < 126.0 || form.longitude > 127.0) {
+    return '제주 지역 좌표만 승인할 수 있습니다.';
+  }
+  if (!Number.isInteger(form.avgStayMinutes)
+      || form.avgStayMinutes < 10 || form.avgStayMinutes > 480) {
+    return '평균 체류시간은 10분 이상 480분 이하여야 합니다.';
+  }
+  const scores = [
+    form.rainyDayScore,
+    form.healingScore,
+    form.foodScore,
+    form.cafeScore,
+    form.photoScore,
+    form.coupleScore,
+    form.familyScore
+  ];
+  if (scores.some((score) => !Number.isInteger(score) || score < 1 || score > 5)) {
+    return '추천 점수는 모두 1점 이상 5점 이하여야 합니다.';
+  }
+  if (form.description.trim().length > 1000) {
+    return '설명은 1000자 이하여야 합니다.';
   }
   return '';
 }

@@ -3,6 +3,8 @@ import type { PageResponse } from '../types/trip';
 import type {
   AdminPlaceSuggestionResponse,
   PlaceSuggestionCreateRequest,
+  PlaceSuggestionApproveRequest,
+  PlaceSuggestionApprovalResponse,
   PlaceSuggestionRejectRequest,
   PlaceSuggestionResponse,
   PlaceSuggestionStatus,
@@ -55,5 +57,18 @@ export function getPlaceSuggestionCandidates(
 ): Promise<PlaceSearchCandidate[]> {
   return apiRequest<PlaceSearchCandidate[]>(
     `/api/admin/place-suggestions/${placeSuggestionId}/candidates`
+  );
+}
+
+export function approvePlaceSuggestion(
+  placeSuggestionId: number,
+  request: PlaceSuggestionApproveRequest
+): Promise<PlaceSuggestionApprovalResponse> {
+  return apiRequest<PlaceSuggestionApprovalResponse>(
+    `/api/admin/place-suggestions/${placeSuggestionId}/approve`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(request)
+    }
   );
 }

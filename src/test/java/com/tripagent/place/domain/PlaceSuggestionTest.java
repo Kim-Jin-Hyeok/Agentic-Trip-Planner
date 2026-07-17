@@ -36,6 +36,27 @@ class PlaceSuggestionTest {
                 .hasMessage("Only pending place suggestions can be rejected.");
     }
 
+    @Test
+    void approveChangesPendingSuggestionToApproved() {
+        PlaceSuggestion suggestion = suggestion();
+
+        suggestion.approve();
+
+        assertThat(suggestion.getStatus()).isEqualTo(PlaceSuggestionStatus.APPROVED);
+        assertThat(suggestion.getReviewedAt()).isNotNull();
+        assertThat(suggestion.getRejectionReason()).isNull();
+    }
+
+    @Test
+    void approveDoesNotAllowRepeatedReview() {
+        PlaceSuggestion suggestion = suggestion();
+        suggestion.approve();
+
+        assertThatThrownBy(suggestion::approve)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Only pending place suggestions can be approved.");
+    }
+
     private PlaceSuggestion suggestion() {
         return PlaceSuggestion.create(
                 Member.create("user@example.com", "user", "password-hash"),

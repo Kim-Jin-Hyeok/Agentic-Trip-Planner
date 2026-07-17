@@ -7,6 +7,8 @@ import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
+import com.tripagent.place.dto.PlaceSuggestionApproveRequest;
+import com.tripagent.place.dto.PlaceSuggestionApprovalResponse;
 import com.tripagent.place.service.AdminPlaceSuggestionService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -46,6 +48,17 @@ public class AdminPlaceSuggestionController {
     ) {
         return ApiResponse.success(
                 adminPlaceSuggestionService.rejectSuggestion(memberId, placeSuggestionId, request)
+        );
+    }
+
+    @PatchMapping("/{placeSuggestionId}/approve")
+    public ApiResponse<PlaceSuggestionApprovalResponse> approveSuggestion(
+            @LoginMemberId Long memberId,
+            @PathVariable Long placeSuggestionId,
+            @Valid @RequestBody PlaceSuggestionApproveRequest request
+    ) {
+        return ApiResponse.success(
+                adminPlaceSuggestionService.approveSuggestion(memberId, placeSuggestionId, request)
         );
     }
 

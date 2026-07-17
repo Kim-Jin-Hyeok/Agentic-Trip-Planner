@@ -4,8 +4,10 @@ import {
   placeSuggestionStatusLabel,
   placeDuplicateReasonLabel,
   validatePlaceSuggestion,
+  validatePlaceSuggestionApproval,
   validatePlaceSuggestionRejection
 } from '../src/utils/placeSuggestionDisplay.ts';
+import type { PlaceSuggestionApproveRequest } from '../src/types/placeSuggestion.ts';
 
 test('translates place suggestion statuses', () => {
   assert.equal(placeSuggestionStatusLabel('PENDING'), '검토 대기');
@@ -43,4 +45,41 @@ test('explains why an external place candidate is duplicated', () => {
   assert.equal(placeDuplicateReasonLabel('NAME_AND_ADDRESS'), '동일한 이름과 주소의 장소가 등록되어 있습니다.');
   assert.equal(placeDuplicateReasonLabel('NEARBY_NAME'), '50m 이내에 이름이 같은 장소가 등록되어 있습니다.');
   assert.equal(placeDuplicateReasonLabel(null), '기존 장소와 중복됩니다.');
+});
+
+test('validates place suggestion approval fields', () => {
+  const validForm: PlaceSuggestionApproveRequest = {
+    externalPlaceId: '25274725',
+    name: '새별오름',
+    address: '제주특별자치도 제주시 애월읍 봉성리 산 59-8',
+    latitude: 33.366277,
+    longitude: 126.357731,
+    category: 'NATURE',
+    region: 'WEST',
+    avgStayMinutes: 90,
+    indoorYn: false,
+    parkingYn: true,
+    rainyDayScore: 2,
+    healingScore: 5,
+    foodScore: 1,
+    cafeScore: 1,
+    photoScore: 5,
+    coupleScore: 4,
+    familyScore: 4,
+    description: '노을 명소'
+  };
+
+  assert.equal(validatePlaceSuggestionApproval(validForm), '');
+  assert.equal(
+    validatePlaceSuggestionApproval({ ...validForm, avgStayMinutes: 0 }),
+    '평균 체류시간은 10분 이상 480분 이하여야 합니다.'
+  );
+  assert.equal(
+    validatePlaceSuggestionApproval({ ...validForm, photoScore: 6 }),
+    '추천 점수는 모두 1점 이상 5점 이하여야 합니다.'
+  );
+  assert.equal(
+    validatePlaceSuggestionApproval({ ...validForm, address: '서울특별시 강남구' }),
+    '제주 지역 주소만 승인할 수 있습니다.'
+  );
 });

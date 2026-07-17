@@ -139,6 +139,15 @@ public class PlaceSuggestion {
         reviewedAt = LocalDateTime.now();
     }
 
+    public void approve() {
+        if (status != PlaceSuggestionStatus.PENDING) {
+            throw new IllegalArgumentException("Only pending place suggestions can be approved.");
+        }
+        status = PlaceSuggestionStatus.APPROVED;
+        rejectionReason = null;
+        reviewedAt = LocalDateTime.now();
+    }
+
     public String getRejectionReason() {
         return rejectionReason;
     }

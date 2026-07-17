@@ -8,11 +8,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tripagent.auth.support.LoginMemberId;
+import com.tripagent.common.exception.ConflictException;
 import com.tripagent.common.exception.GlobalExceptionHandler;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
+import com.tripagent.place.dto.PlaceSuggestionApproveRequest;
+import com.tripagent.place.dto.PlaceSuggestionApprovalResponse;
 import com.tripagent.place.dto.PlaceDuplicateReason;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.service.AdminPlaceSuggestionService;
@@ -138,6 +141,78 @@ class AdminPlaceSuggestionControllerTest {
                 .andExpect(jsonPath("$.data[0].duplicateReason").value("EXTERNAL_PLACE_ID"));
 
         verify(adminPlaceSuggestionService).searchCandidates(1L, 10L);
+    }
+
+    @Test
+    void approveSuggestionCreatesPlaceAndReturnsApprovedStatus() throws Exception {
+        when(adminPlaceSuggestionService.approveSuggestion(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(10L),
+                org.mockito.ArgumentMatchers.any(PlaceSuggestionApproveRequest.class)
+        )).thenReturn(new PlaceSuggestionApprovalResponse(
+                10L,
+                300L,
+                PlaceSuggestionStatus.APPROVED,
+                LocalDateTime.of(2026, 7, 17, 12, 0)
+        ));
+
+        mockMvc.perform(patch("/api/admin/place-suggestions/10/approve")
+                        .contentType("application/json")
+                        .content(approvalRequestJson(5)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.placeSuggestionId").value(10L))
+                .andExpect(jsonPath("$.data.placeId").value(300L))
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
+    }
+
+    @Test
+    void approveSuggestionRejectsScoreOutsideAllowedRange() throws Exception {
+        mockMvc.perform(patch("/api/admin/place-suggestions/10/approve")
+                        .contentType("application/json")
+                        .content(approvalRequestJson(6)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void approveSuggestionReturnsConflictForDuplicatePlace() throws Exception {
+        when(adminPlaceSuggestionService.approveSuggestion(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(10L),
+                org.mockito.ArgumentMatchers.any(PlaceSuggestionApproveRequest.class)
+        )).thenThrow(new ConflictException("이미 등록된 장소입니다. placeId=200"));
+
+        mockMvc.perform(patch("/api/admin/place-suggestions/10/approve")
+                        .contentType("application/json")
+                        .content(approvalRequestJson(5)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"))
+                .andExpect(jsonPath("$.message").value("이미 등록된 장소입니다. placeId=200"));
+    }
+
+    private String approvalRequestJson(int photoScore) {
+        return """
+                {
+                  "externalPlaceId": "25274725",
+                  "name": "새별오름",
+                  "address": "제주특별자치도 제주시 애월읍 봉성리 산 59-8",
+                  "latitude": 33.366277,
+                  "longitude": 126.357731,
+                  "category": "NATURE",
+                  "region": "WEST",
+                  "avgStayMinutes": 90,
+                  "indoorYn": false,
+                  "parkingYn": true,
+                  "rainyDayScore": 2,
+                  "healingScore": 5,
+                  "foodScore": 1,
+                  "cafeScore": 1,
+                  "photoScore": %d,
+                  "coupleScore": 4,
+                  "familyScore": 4,
+                  "description": "노을 명소"
+                }
+                """.formatted(photoScore);
     }
 
     private PageResponse<AdminPlaceSuggestionResponse> pageResponse() {

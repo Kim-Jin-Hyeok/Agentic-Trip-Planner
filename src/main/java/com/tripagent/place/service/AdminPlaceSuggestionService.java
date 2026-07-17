@@ -1,6 +1,7 @@
 package com.tripagent.place.service;
 
 import com.tripagent.auth.service.AdminAuthorizationService;
+import com.tripagent.common.exception.ConflictException;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.adapter.PlaceSearchAdapter;
 import com.tripagent.place.adapter.PlaceSearchCandidate;
@@ -11,12 +12,16 @@ import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceDuplicateReason;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
+import com.tripagent.place.dto.PlaceSuggestionApproveRequest;
+import com.tripagent.place.dto.PlaceSuggestionApprovalResponse;
 import com.tripagent.place.repository.PlaceSuggestionRepository;
 import com.tripagent.place.repository.PlaceRepository;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +40,12 @@ public class AdminPlaceSuggestionService {
     private static final double LATITUDE_MARGIN = 0.0005;
     private static final double LONGITUDE_MARGIN = 0.0006;
     private static final double EARTH_RADIUS_METERS = 6_371_000.0;
+    private static final double MINIMUM_JEJU_LATITUDE = 33.0;
+    private static final double MAXIMUM_JEJU_LATITUDE = 33.6;
+    private static final double MINIMUM_JEJU_LONGITUDE = 126.0;
+    private static final double MAXIMUM_JEJU_LONGITUDE = 127.0;
+    private static final Set<String> ALLOWED_CATEGORIES = Set.of("NATURE", "FOOD", "CAFE");
+    private static final Set<String> ALLOWED_REGIONS = Set.of("EAST", "WEST", "NORTH", "SOUTH");
 
     private final PlaceSuggestionRepository placeSuggestionRepository;
     private final AdminAuthorizationService adminAuthorizationService;
@@ -82,6 +93,102 @@ public class AdminPlaceSuggestionService {
                 ));
         suggestion.reject(request.rejectionReason());
         return AdminPlaceSuggestionResponse.from(suggestion);
+    }
+
+    @Transactional
+    public PlaceSuggestionApprovalResponse approveSuggestion(
+            Long memberId,
+            Long placeSuggestionId,
+            PlaceSuggestionApproveRequest request
+    ) {
+        adminAuthorizationService.requireAdmin(memberId);
+        PlaceSuggestion suggestion = placeSuggestionRepository.findById(placeSuggestionId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Place suggestion not found. placeSuggestionId=" + placeSuggestionId
+                ));
+        if (suggestion.getStatus() != PlaceSuggestionStatus.PENDING) {
+            throw new IllegalArgumentException("Only pending place suggestions can be approved.");
+        }
+
+        String category = normalizeAllowedValue("Place category", request.category(), ALLOWED_CATEGORIES);
+        String region = normalizeAllowedValue("Place region", request.region(), ALLOWED_REGIONS);
+        validateJejuLocation(request.address(), request.latitude(), request.longitude());
+        PlaceSearchCandidate candidate = approvalCandidate(request);
+        findDuplicate(candidate).ifPresent(match -> {
+            throw new ConflictException("이미 등록된 장소입니다. placeId=" + match.place().getPlaceId());
+        });
+
+        Place place = Place.create(
+                request.name().trim(),
+                category,
+                region,
+                request.address().trim(),
+                request.latitude(),
+                request.longitude(),
+                request.avgStayMinutes(),
+                request.indoorYn(),
+                request.parkingYn(),
+                request.rainyDayScore(),
+                request.healingScore(),
+                request.foodScore(),
+                request.cafeScore(),
+                request.photoScore(),
+                request.coupleScore(),
+                request.familyScore(),
+                normalizeDescription(request.description()),
+                true
+        );
+        place.linkExternalReference(KAKAO_LOCAL_PROVIDER, request.externalPlaceId());
+
+        try {
+            placeRepository.saveAndFlush(place);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ConflictException("동일한 외부 장소가 이미 등록되어 있습니다.", exception);
+        }
+        suggestion.approve();
+        return new PlaceSuggestionApprovalResponse(
+                suggestion.getPlaceSuggestionId(),
+                place.getPlaceId(),
+                suggestion.getStatus(),
+                suggestion.getReviewedAt()
+        );
+    }
+
+    private PlaceSearchCandidate approvalCandidate(PlaceSuggestionApproveRequest request) {
+        return new PlaceSearchCandidate(
+                request.externalPlaceId().trim(),
+                request.name().trim(),
+                request.address().trim(),
+                request.address().trim(),
+                request.latitude(),
+                request.longitude(),
+                request.category(),
+                null
+        );
+    }
+
+    private String normalizeAllowedValue(String fieldName, String value, Set<String> allowedValues) {
+        String normalizedValue = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        if (!allowedValues.contains(normalizedValue)) {
+            throw new IllegalArgumentException(fieldName + " is invalid. value=" + value);
+        }
+        return normalizedValue;
+    }
+
+    private void validateJejuLocation(String address, Double latitude, Double longitude) {
+        if (address == null || !address.contains("제주")) {
+            throw new IllegalArgumentException("Place address must be in Jeju.");
+        }
+        if (latitude == null || longitude == null
+                || !Double.isFinite(latitude) || !Double.isFinite(longitude)
+                || latitude < MINIMUM_JEJU_LATITUDE || latitude > MAXIMUM_JEJU_LATITUDE
+                || longitude < MINIMUM_JEJU_LONGITUDE || longitude > MAXIMUM_JEJU_LONGITUDE) {
+            throw new IllegalArgumentException("Place coordinates must be within Jeju.");
+        }
+    }
+
+    private String normalizeDescription(String description) {
+        return description == null || description.isBlank() ? null : description.trim();
     }
 
     public List<PlaceSearchCandidateResponse> searchCandidates(Long memberId, Long placeSuggestionId) {

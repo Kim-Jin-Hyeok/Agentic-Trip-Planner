@@ -59,6 +59,12 @@ public class GlobalExceptionHandler {
         return new ErrorResponse("FORBIDDEN", exception.getMessage());
     }
 
+    @ExceptionHandler(ConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleConflictException(ConflictException exception) {
+        return new ErrorResponse("CONFLICT", exception.getMessage());
+    }
+
     @ExceptionHandler(LlmException.class)
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
     public ErrorResponse handleLlmException(LlmException exception) {

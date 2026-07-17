@@ -713,6 +713,11 @@ button:disabled {
   background: #fffafa;
 }
 
+.admin-place-candidate-item.selected {
+  border-color: var(--green-600);
+  box-shadow: 0 0 0 2px rgba(47, 107, 82, 0.1);
+}
+
 .admin-place-candidate-item-heading {
   display: flex;
   align-items: flex-start;
@@ -779,6 +784,135 @@ button:disabled {
 
 .admin-place-candidate-item a:hover {
   text-decoration: underline;
+}
+
+.admin-place-select-button {
+  min-height: 34px;
+  border: 1px solid var(--green-700);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--green-700);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.admin-place-select-button:hover:not(:disabled) {
+  background: var(--green-100);
+}
+
+.admin-place-candidate-item.duplicate .admin-place-select-button {
+  border-color: #e1c4c1;
+  color: #a87975;
+}
+
+.admin-approval-form {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid #cfe0d5;
+  padding-top: 16px;
+}
+
+.admin-approval-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-approval-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-approval-heading strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.admin-approval-heading span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.admin-approval-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-approval-field-grid label,
+.admin-approval-description {
+  display: grid;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.admin-approval-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.admin-approval-checks label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #425048;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-approval-checks input {
+  width: auto;
+  margin: 0;
+}
+
+.admin-approval-scores {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 0;
+  padding: 12px;
+}
+
+.admin-approval-scores legend {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 5px;
+}
+
+.admin-approval-scores > div {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(55px, 1fr));
+  gap: 8px;
+}
+
+.admin-approval-scores label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.admin-approval-description textarea {
+  min-height: 86px;
+}
+
+.admin-approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-approval-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 11px;
 }
 
 .admin-candidate-feedback {
@@ -2735,6 +2869,10 @@ button.trip-list-item:hover:not(:disabled),
   .admin-suggestion-details {
     grid-template-columns: 1fr;
   }
+
+  .admin-approval-scores > div {
+    grid-template-columns: repeat(4, minmax(55px, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -2780,6 +2918,15 @@ button.trip-list-item:hover:not(:disabled),
 
   .admin-status-tabs {
     grid-template-columns: 1fr;
+  }
+
+  .admin-approval-field-grid,
+  .admin-approval-scores > div {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-approval-heading {
+    display: grid;
   }
 
   .field-grid,

@@ -1,20 +1,26 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import {
+  approvePlaceSuggestion,
   getAdminPlaceSuggestions,
   getPlaceSuggestionCandidates,
   rejectPlaceSuggestion
 } from '../api/placeSuggestionApi';
 import type {
   AdminPlaceSuggestionResponse,
+  PlaceApprovalCategory,
+  PlaceApprovalRegion,
   PlaceSearchCandidate,
+  PlaceSuggestionApproveRequest,
   PlaceSuggestionStatus
 } from '../types/placeSuggestion';
 import type { PageResponse } from '../types/trip';
 import {
-  placeSuggestionStatusLabel,
   placeDuplicateReasonLabel,
+  placeSuggestionStatusLabel,
+  validatePlaceSuggestionApproval,
   validatePlaceSuggestionRejection
 } from '../utils/placeSuggestionDisplay';
+import { PlaceSuggestionApprovalForm } from './PlaceSuggestionApprovalForm';
 
 const pageSize = 20;
 
@@ -33,6 +39,9 @@ export function AdminPlaceSuggestionPanel() {
   const [placeCandidates, setPlaceCandidates] = useState<PlaceSearchCandidate[]>([]);
   const [isSearchingCandidates, setIsSearchingCandidates] = useState(false);
   const [candidateFeedback, setCandidateFeedback] = useState('');
+  const [approvingSuggestionId, setApprovingSuggestionId] = useState<number | null>(null);
+  const [approvalForm, setApprovalForm] = useState<PlaceSuggestionApproveRequest | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +97,63 @@ export function AdminPlaceSuggestionPanel() {
     setCandidateSuggestionId(null);
     setPlaceCandidates([]);
     setCandidateFeedback('');
+    setApprovingSuggestionId(null);
+    setApprovalForm(null);
+  }
+
+  function startApproval(
+    suggestion: AdminPlaceSuggestionResponse,
+    candidate: PlaceSearchCandidate
+  ) {
+    if (candidate.alreadyRegistered) {
+      setActionFeedback('이미 등록된 장소 후보는 승인할 수 없습니다.');
+      return;
+    }
+    cancelRejection();
+    setApprovingSuggestionId(suggestion.placeSuggestionId);
+    setApprovalForm(createApprovalForm(suggestion, candidate));
+    setActionFeedback('');
+  }
+
+  function updateApprovalForm<K extends keyof PlaceSuggestionApproveRequest>(
+    key: K,
+    value: PlaceSuggestionApproveRequest[K]
+  ) {
+    setApprovalForm((current) => current == null ? null : { ...current, [key]: value });
+    setActionFeedback('');
+  }
+
+  async function handleApprove(event: FormEvent<HTMLFormElement>, placeSuggestionId: number) {
+    event.preventDefault();
+    if (approvalForm == null) {
+      return;
+    }
+    const validationMessage = validatePlaceSuggestionApproval(approvalForm);
+    if (validationMessage.length > 0) {
+      setActionFeedback(validationMessage);
+      return;
+    }
+
+    setIsApproving(true);
+    setActionFeedback('');
+    try {
+      const response = await approvePlaceSuggestion(placeSuggestionId, {
+        ...approvalForm,
+        name: approvalForm.name.trim(),
+        address: approvalForm.address.trim(),
+        description: approvalForm.description.trim()
+      });
+      clearCandidateSearch();
+      setSuggestionPage(null);
+      setActionFeedback(`장소 제안을 승인하고 장소 #${response.placeId}로 등록했습니다.`);
+      setRefreshKey((current) => current + 1);
+    } catch (requestError) {
+      setActionFeedback(requestError instanceof Error
+        ? requestError.message
+        : '장소 제안을 승인하지 못했습니다.');
+    } finally {
+      setIsApproving(false);
+    }
   }
 
   async function handleSearchCandidates(placeSuggestionId: number) {
@@ -228,9 +294,10 @@ export function AdminPlaceSuggestionPanel() {
                     <div className="admin-place-candidate-list">
                       {placeCandidates.map((candidate) => (
                         <article
-                          className={candidate.alreadyRegistered
-                            ? 'admin-place-candidate-item duplicate'
-                            : 'admin-place-candidate-item'}
+                          className={candidateClassName(
+                            candidate,
+                            approvalForm?.externalPlaceId === candidate.externalPlaceId
+                          )}
                           key={candidate.externalPlaceId}
                         >
                           <div className="admin-place-candidate-item-heading">
@@ -252,6 +319,18 @@ export function AdminPlaceSuggestionPanel() {
                               {placeDuplicateReasonLabel(candidate.duplicateReason)}
                             </p>
                           )}
+                          <button
+                            type="button"
+                            className="admin-place-select-button"
+                            onClick={() => startApproval(suggestion, candidate)}
+                            disabled={candidate.alreadyRegistered || isApproving || isRejecting}
+                          >
+                            {candidate.alreadyRegistered
+                              ? '중복 장소 · 승인 불가'
+                              : approvalForm?.externalPlaceId === candidate.externalPlaceId
+                                ? '선택됨'
+                                : '이 후보로 승인'}
+                          </button>
                           {candidate.placeUrl != null && (
                             <a href={candidate.placeUrl} target="_blank" rel="noreferrer">
                               카카오맵에서 확인
@@ -260,6 +339,19 @@ export function AdminPlaceSuggestionPanel() {
                         </article>
                       ))}
                     </div>
+                  )}
+                  {approvingSuggestionId === suggestion.placeSuggestionId && approvalForm != null && (
+                    <PlaceSuggestionApprovalForm
+                      form={approvalForm}
+                      isSubmitting={isApproving}
+                      onChange={updateApprovalForm}
+                      onCancel={() => {
+                        setApprovingSuggestionId(null);
+                        setApprovalForm(null);
+                        setActionFeedback('');
+                      }}
+                      onSubmit={(event) => void handleApprove(event, suggestion.placeSuggestionId)}
+                    />
                   )}
                   <small className="admin-place-candidate-source">장소 정보 제공: Kakao Local</small>
                 </div>
@@ -316,7 +408,7 @@ export function AdminPlaceSuggestionPanel() {
                       type="button"
                       className="secondary-button"
                       onClick={() => void handleSearchCandidates(suggestion.placeSuggestionId)}
-                      disabled={isSearchingCandidates || isRejecting}
+                      disabled={isSearchingCandidates || isRejecting || isApproving}
                     >
                       {isSearchingCandidates && candidateSuggestionId === suggestion.placeSuggestionId
                         ? '검색 중...'
@@ -328,7 +420,7 @@ export function AdminPlaceSuggestionPanel() {
                       type="button"
                       className="danger-button"
                       onClick={() => startRejection(suggestion.placeSuggestionId)}
-                      disabled={isRejecting}
+                      disabled={isRejecting || isApproving}
                     >
                       거절하기
                     </button>
@@ -365,6 +457,68 @@ export function AdminPlaceSuggestionPanel() {
       )}
     </section>
   );
+}
+
+function candidateClassName(candidate: PlaceSearchCandidate, selected: boolean): string {
+  const classNames = ['admin-place-candidate-item'];
+  if (candidate.alreadyRegistered) {
+    classNames.push('duplicate');
+  }
+  if (selected) {
+    classNames.push('selected');
+  }
+  return classNames.join(' ');
+}
+
+function createApprovalForm(
+  suggestion: AdminPlaceSuggestionResponse,
+  candidate: PlaceSearchCandidate
+): PlaceSuggestionApproveRequest {
+  const category = inferApprovalCategory(candidate.category);
+  return {
+    externalPlaceId: candidate.externalPlaceId,
+    name: candidate.name,
+    address: candidate.roadAddress || candidate.address || suggestion.address,
+    latitude: candidate.latitude,
+    longitude: candidate.longitude,
+    category,
+    region: inferApprovalRegion(candidate),
+    avgStayMinutes: category === 'NATURE' ? 90 : 60,
+    indoorYn: category !== 'NATURE',
+    parkingYn: false,
+    rainyDayScore: category === 'NATURE' ? 2 : 4,
+    healingScore: category === 'NATURE' ? 5 : 3,
+    foodScore: category === 'FOOD' ? 5 : 1,
+    cafeScore: category === 'CAFE' ? 5 : 1,
+    photoScore: category === 'NATURE' || category === 'CAFE' ? 4 : 3,
+    coupleScore: 3,
+    familyScore: 3,
+    description: suggestion.description ?? ''
+  };
+}
+
+function inferApprovalCategory(category: string | null): PlaceApprovalCategory {
+  if (category?.includes('음식점')) {
+    return 'FOOD';
+  }
+  if (category?.includes('카페')) {
+    return 'CAFE';
+  }
+  return 'NATURE';
+}
+
+function inferApprovalRegion(candidate: PlaceSearchCandidate): PlaceApprovalRegion {
+  const address = candidate.roadAddress || candidate.address || '';
+  if (address.includes('서귀포시')) {
+    return 'SOUTH';
+  }
+  if (candidate.longitude >= 126.7) {
+    return 'EAST';
+  }
+  if (candidate.longitude <= 126.4) {
+    return 'WEST';
+  }
+  return 'NORTH';
 }
 
 function formatSubmittedAt(createdAt: string): string {

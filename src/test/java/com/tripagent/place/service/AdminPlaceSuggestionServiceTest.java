@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tripagent.auth.service.AdminAuthorizationService;
+import com.tripagent.common.exception.ConflictException;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.member.domain.Member;
 import com.tripagent.place.adapter.PlaceSearchAdapter;
@@ -18,6 +19,8 @@ import com.tripagent.place.domain.PlaceSuggestion;
 import com.tripagent.place.domain.PlaceSuggestionStatus;
 import com.tripagent.place.dto.AdminPlaceSuggestionResponse;
 import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
+import com.tripagent.place.dto.PlaceSuggestionApproveRequest;
+import com.tripagent.place.dto.PlaceSuggestionApprovalResponse;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.dto.PlaceDuplicateReason;
 import com.tripagent.place.repository.PlaceRepository;
@@ -29,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class AdminPlaceSuggestionServiceTest {
@@ -234,6 +238,77 @@ class AdminPlaceSuggestionServiceTest {
         assertThat(response.duplicateReason()).isEqualTo(PlaceDuplicateReason.NEARBY_NAME);
     }
 
+    @Test
+    void approveSuggestionCreatesActivePlaceAndApprovesSuggestion() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        when(placeRepository.saveAndFlush(any(Place.class))).thenAnswer(invocation -> {
+            Place savedPlace = invocation.getArgument(0);
+            ReflectionTestUtils.setField(savedPlace, "placeId", 300L);
+            return savedPlace;
+        });
+
+        PlaceSuggestionApprovalResponse response = adminPlaceSuggestionService.approveSuggestion(
+                1L,
+                10L,
+                approveRequest()
+        );
+
+        ArgumentCaptor<Place> placeCaptor = ArgumentCaptor.forClass(Place.class);
+        verify(placeRepository).saveAndFlush(placeCaptor.capture());
+        Place savedPlace = placeCaptor.getValue();
+        assertThat(savedPlace.getName()).isEqualTo("새별오름");
+        assertThat(savedPlace.getCategory()).isEqualTo("NATURE");
+        assertThat(savedPlace.getRegion()).isEqualTo("WEST");
+        assertThat(savedPlace.getUseYn()).isTrue();
+        assertThat(savedPlace.getExternalProvider()).isEqualTo("KAKAO_LOCAL");
+        assertThat(savedPlace.getExternalPlaceId()).isEqualTo("25274725");
+        assertThat(response.placeId()).isEqualTo(300L);
+        assertThat(response.status()).isEqualTo(PlaceSuggestionStatus.APPROVED);
+        assertThat(suggestion.getStatus()).isEqualTo(PlaceSuggestionStatus.APPROVED);
+    }
+
+    @Test
+    void approveSuggestionRejectsDuplicateCandidate() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        Place duplicatePlace = place(200L, "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577);
+        duplicatePlace.linkExternalReference("KAKAO_LOCAL", "25274725");
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        when(placeRepository.findFirstByExternalProviderAndExternalPlaceId("KAKAO_LOCAL", "25274725"))
+                .thenReturn(Optional.of(duplicatePlace));
+
+        assertThatThrownBy(() -> adminPlaceSuggestionService.approveSuggestion(1L, 10L, approveRequest()))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("이미 등록된 장소입니다. placeId=200");
+    }
+
+    @Test
+    void approveSuggestionRejectsLocationOutsideJeju() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        PlaceSuggestionApproveRequest request = approveRequest(
+                "서울특별시 강남구",
+                37.5,
+                127.0
+        );
+
+        assertThatThrownBy(() -> adminPlaceSuggestionService.approveSuggestion(1L, 10L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Place address must be in Jeju.");
+    }
+
+    @Test
+    void approveSuggestionConvertsUniqueConstraintViolationToConflict() {
+        PlaceSuggestion suggestion = suggestion(10L, 100L);
+        when(placeSuggestionRepository.findById(10L)).thenReturn(Optional.of(suggestion));
+        when(placeRepository.saveAndFlush(any(Place.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate external place"));
+
+        assertThatThrownBy(() -> adminPlaceSuggestionService.approveSuggestion(1L, 10L, approveRequest()))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("동일한 외부 장소가 이미 등록되어 있습니다.");
+    }
+
     private PlaceSuggestion suggestion(Long suggestionId, Long memberId) {
         Member member = Member.create("user@example.com", "user", "password-hash");
         ReflectionTestUtils.setField(member, "memberId", memberId);
@@ -295,5 +370,32 @@ class AdminPlaceSuggestionServiceTest {
         );
         ReflectionTestUtils.setField(place, "placeId", placeId);
         return place;
+    }
+
+    private PlaceSuggestionApproveRequest approveRequest() {
+        return approveRequest("제주특별자치도 제주시 애월읍 봉성리 산 59-8", 33.366277, 126.357731);
+    }
+
+    private PlaceSuggestionApproveRequest approveRequest(String address, double latitude, double longitude) {
+        return new PlaceSuggestionApproveRequest(
+                "25274725",
+                "새별오름",
+                address,
+                latitude,
+                longitude,
+                "NATURE",
+                "WEST",
+                90,
+                false,
+                true,
+                2,
+                5,
+                1,
+                1,
+                5,
+                4,
+                4,
+                "노을 명소"
+        );
     }
 }
