@@ -2,6 +2,10 @@ package com.tripagent.trip.service;
 
 import com.tripagent.accommodation.domain.Accommodation;
 import com.tripagent.accommodation.repository.AccommodationRepository;
+import com.tripagent.itinerary.domain.Itinerary;
+import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.place.domain.Place;
+import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripAccommodation;
 import com.tripagent.trip.dto.TripAccommodationItemRequest;
@@ -10,6 +14,8 @@ import com.tripagent.trip.dto.TripAccommodationResponse;
 import com.tripagent.trip.repository.TripAccommodationRepository;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -17,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,15 +35,21 @@ public class TripAccommodationService {
     private final TripRepository tripRepository;
     private final AccommodationRepository accommodationRepository;
     private final TripAccommodationRepository tripAccommodationRepository;
+    private final ItineraryRepository itineraryRepository;
+    private final RouteCalculationAdapter routeCalculationAdapter;
 
     public TripAccommodationService(
             TripRepository tripRepository,
             AccommodationRepository accommodationRepository,
-            TripAccommodationRepository tripAccommodationRepository
+            TripAccommodationRepository tripAccommodationRepository,
+            ItineraryRepository itineraryRepository,
+            RouteCalculationAdapter routeCalculationAdapter
     ) {
         this.tripRepository = tripRepository;
         this.accommodationRepository = accommodationRepository;
         this.tripAccommodationRepository = tripAccommodationRepository;
+        this.itineraryRepository = itineraryRepository;
+        this.routeCalculationAdapter = routeCalculationAdapter;
     }
 
     public List<TripAccommodationResponse> getTripAccommodations(Long tripId, Long ownerId) {
@@ -55,6 +68,14 @@ public class TripAccommodationService {
         Trip trip = getOwnedTrip(tripId, ownerId);
         List<TripAccommodationItemRequest> items = validateAndSortItems(trip, request);
         Map<Long, Accommodation> accommodationsById = findActiveAccommodations(items);
+        List<TripAccommodation> existingTripAccommodations =
+                tripAccommodationRepository.findByTripIdOrderByStayDate(tripId);
+        List<ItineraryScheduleUpdate> scheduleUpdates = buildScheduleUpdates(
+                trip,
+                items,
+                accommodationsById,
+                existingTripAccommodations
+        );
 
         List<TripAccommodation> tripAccommodations = items.stream()
                 .map(item -> TripAccommodation.create(
@@ -64,11 +85,115 @@ public class TripAccommodationService {
                 ))
                 .toList();
 
+        applyScheduleUpdates(scheduleUpdates);
         tripAccommodationRepository.deleteByTripId(tripId);
         return tripAccommodationRepository.saveAll(tripAccommodations).stream()
                 .sorted(Comparator.comparing(TripAccommodation::getStayDate))
                 .map(TripAccommodationResponse::from)
                 .toList();
+    }
+
+    private List<ItineraryScheduleUpdate> buildScheduleUpdates(
+            Trip trip,
+            List<TripAccommodationItemRequest> items,
+            Map<Long, Accommodation> accommodationsById,
+            List<TripAccommodation> existingTripAccommodations
+    ) {
+        Map<LocalDate, Long> existingAccommodationIdByDate = existingTripAccommodations.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        TripAccommodation::getStayDate,
+                        tripAccommodation -> tripAccommodation.getAccommodation().getAccommodationId()
+                ));
+        List<ItineraryScheduleUpdate> scheduleUpdates = new ArrayList<>();
+
+        for (TripAccommodationItemRequest item : items) {
+            Long existingAccommodationId = existingAccommodationIdByDate.get(item.stayDate());
+            if (Objects.equals(existingAccommodationId, item.accommodationId())) {
+                continue;
+            }
+
+            Accommodation accommodation = accommodationsById.get(item.accommodationId());
+            if (accommodation.getLatitude() == null || accommodation.getLongitude() == null) {
+                continue;
+            }
+
+            int dayNo = (int) ChronoUnit.DAYS.between(trip.getStartDate(), item.stayDate()) + 2;
+            List<Itinerary> dayItineraries = itineraryRepository.findByTrip_TripIdAndDayNo(
+                            trip.getTripId(),
+                            dayNo
+                    ).stream()
+                    .sorted(Comparator.comparing(Itinerary::getOrderNo))
+                    .toList();
+            scheduleUpdates.addAll(calculateScheduleUpdates(trip, accommodation, dayItineraries));
+        }
+        return scheduleUpdates;
+    }
+
+    private List<ItineraryScheduleUpdate> calculateScheduleUpdates(
+            Trip trip,
+            Accommodation accommodation,
+            List<Itinerary> dayItineraries
+    ) {
+        if (dayItineraries.isEmpty()) {
+            return List.of();
+        }
+
+        Itinerary firstItinerary = dayItineraries.getFirst();
+        Place firstPlace = firstItinerary.getPlace();
+        int firstTravelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                accommodation.getLatitude(),
+                accommodation.getLongitude(),
+                firstPlace.getLatitude(),
+                firstPlace.getLongitude()
+        );
+        LocalTime cursor = trip.getDailyStartTime().plusMinutes(firstTravelMinutes);
+        List<ItineraryScheduleUpdate> scheduleUpdates = new ArrayList<>();
+
+        Itinerary previousItinerary = null;
+        for (Itinerary itinerary : dayItineraries) {
+            int travelMinutes = 0;
+            if (previousItinerary != null) {
+                travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                        previousItinerary.getPlace().getLatitude(),
+                        previousItinerary.getPlace().getLongitude(),
+                        itinerary.getPlace().getLatitude(),
+                        itinerary.getPlace().getLongitude()
+                );
+                cursor = cursor.plusMinutes(travelMinutes);
+            }
+
+            int stayMinutes = (int) ChronoUnit.MINUTES.between(
+                    itinerary.getStartTime(),
+                    itinerary.getEndTime()
+            );
+            LocalTime endTime = cursor.plusMinutes(stayMinutes);
+            if (endTime.isAfter(trip.getDailyEndTime())) {
+                throw new IllegalArgumentException(
+                        "Itinerary endTime must be at or before trip dailyEndTime. dayNo="
+                                + itinerary.getDayNo()
+                );
+            }
+            scheduleUpdates.add(new ItineraryScheduleUpdate(itinerary, cursor, endTime, travelMinutes));
+            cursor = endTime;
+            previousItinerary = itinerary;
+        }
+        return scheduleUpdates;
+    }
+
+    private void applyScheduleUpdates(List<ItineraryScheduleUpdate> scheduleUpdates) {
+        for (ItineraryScheduleUpdate scheduleUpdate : scheduleUpdates) {
+            Itinerary itinerary = scheduleUpdate.itinerary();
+            itinerary.update(
+                    itinerary.getPlace(),
+                    itinerary.getDayNo(),
+                    itinerary.getOrderNo(),
+                    scheduleUpdate.startTime(),
+                    scheduleUpdate.endTime(),
+                    scheduleUpdate.travelMinutesFromPrevious(),
+                    itinerary.getReason()
+            );
+            itinerary.markAsUserAdjusted();
+        }
     }
 
     private Trip getOwnedTrip(Long tripId, Long ownerId) {
@@ -127,5 +252,13 @@ public class TripAccommodationService {
             }
         }
         return accommodationsById;
+    }
+
+    private record ItineraryScheduleUpdate(
+            Itinerary itinerary,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
     }
 }

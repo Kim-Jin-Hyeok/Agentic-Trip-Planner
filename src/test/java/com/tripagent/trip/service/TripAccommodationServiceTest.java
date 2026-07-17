@@ -11,6 +11,11 @@ import static org.mockito.Mockito.when;
 import com.tripagent.accommodation.domain.Accommodation;
 import com.tripagent.accommodation.domain.AccommodationType;
 import com.tripagent.accommodation.repository.AccommodationRepository;
+import com.tripagent.itinerary.domain.Itinerary;
+import com.tripagent.itinerary.domain.ItineraryGenerationSource;
+import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.place.domain.Place;
+import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripAccommodation;
@@ -44,6 +49,12 @@ class TripAccommodationServiceTest {
 
     @Mock
     private TripAccommodationRepository tripAccommodationRepository;
+
+    @Mock
+    private ItineraryRepository itineraryRepository;
+
+    @Mock
+    private RouteCalculationAdapter routeCalculationAdapter;
 
     @InjectMocks
     private TripAccommodationService tripAccommodationService;
@@ -92,6 +103,94 @@ class TripAccommodationServiceTest {
 
         assertThat(responses).isEmpty();
         verify(tripAccommodationRepository).deleteByTripId(1L);
+    }
+
+    @Test
+    void replaceTripAccommodationsRecalculatesNextDayScheduleFromChangedAccommodation() {
+        Trip trip = trip(1L, 100L);
+        Accommodation previousAccommodation = accommodation(20L, true);
+        Accommodation changedAccommodation = accommodation(10L, true);
+        TripAccommodation existingTripAccommodation = TripAccommodation.create(
+                trip,
+                previousAccommodation,
+                LocalDate.of(2026, 7, 1)
+        );
+        Place firstPlace = place("First Place", 33.4, 126.6);
+        Place secondPlace = place("Second Place", 33.5, 126.7);
+        Itinerary first = itinerary(trip, firstPlace, 2, 1, LocalTime.of(9, 10), LocalTime.of(10, 10), 0);
+        Itinerary second = itinerary(trip, secondPlace, 2, 2, LocalTime.of(10, 40), LocalTime.of(11, 40), 30);
+        TripAccommodationReplaceRequest request = new TripAccommodationReplaceRequest(List.of(
+                new TripAccommodationItemRequest(LocalDate.of(2026, 7, 1), 10L)
+        ));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(accommodationRepository.findAllById(any())).thenReturn(List.of(changedAccommodation));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(existingTripAccommodation));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 2)).thenReturn(List.of(second, first));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(35, 15);
+        when(tripAccommodationRepository.saveAll(anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        tripAccommodationService.replaceTripAccommodations(1L, 100L, request);
+
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(9, 35));
+        assertThat(first.getEndTime()).isEqualTo(LocalTime.of(10, 35));
+        assertThat(first.getTravelMinutesFromPrevious()).isZero();
+        assertThat(first.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(10, 50));
+        assertThat(second.getEndTime()).isEqualTo(LocalTime.of(11, 50));
+        assertThat(second.getTravelMinutesFromPrevious()).isEqualTo(15);
+        assertThat(second.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
+    }
+
+    @Test
+    void replaceTripAccommodationsDoesNotRecalculateScheduleForUnchangedAccommodation() {
+        Trip trip = trip(1L, 100L);
+        Accommodation accommodation = accommodation(10L, true);
+        TripAccommodation existingTripAccommodation = TripAccommodation.create(
+                trip,
+                accommodation,
+                LocalDate.of(2026, 7, 1)
+        );
+        TripAccommodationReplaceRequest request = new TripAccommodationReplaceRequest(List.of(
+                new TripAccommodationItemRequest(LocalDate.of(2026, 7, 1), 10L)
+        ));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(accommodationRepository.findAllById(any())).thenReturn(List.of(accommodation));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(existingTripAccommodation));
+        when(tripAccommodationRepository.saveAll(anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        tripAccommodationService.replaceTripAccommodations(1L, 100L, request);
+
+        verify(itineraryRepository, never()).findByTrip_TripIdAndDayNo(any(), any());
+        verify(routeCalculationAdapter, never()).calculateTravelMinutes(any(), any(), any(), any());
+    }
+
+    @Test
+    void replaceTripAccommodationsRejectsScheduleAfterDailyEndTime() {
+        Trip trip = trip(1L, 100L, LocalTime.of(10, 30));
+        Accommodation accommodation = accommodation(10L, true);
+        Place firstPlace = place("First Place", 33.4, 126.6);
+        Itinerary first = itinerary(trip, firstPlace, 2, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        TripAccommodationReplaceRequest request = new TripAccommodationReplaceRequest(List.of(
+                new TripAccommodationItemRequest(LocalDate.of(2026, 7, 1), 10L)
+        ));
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(accommodationRepository.findAllById(any())).thenReturn(List.of(accommodation));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L)).thenReturn(List.of());
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 2)).thenReturn(List.of(first));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(60);
+
+        assertThatThrownBy(() -> tripAccommodationService.replaceTripAccommodations(1L, 100L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime. dayNo=2");
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(first.getGenerationSource()).isEqualTo(ItineraryGenerationSource.MANUAL);
+        verify(tripAccommodationRepository, never()).deleteByTripId(1L);
+        verify(tripAccommodationRepository, never()).saveAll(anyList());
     }
 
     @Test
@@ -152,12 +251,16 @@ class TripAccommodationServiceTest {
     }
 
     private Trip trip(Long tripId, Long ownerId) {
+        return trip(tripId, ownerId, LocalTime.of(18, 0));
+    }
+
+    private Trip trip(Long tripId, Long ownerId, LocalTime dailyEndTime) {
         Trip trip = Trip.create(
                 "JEJU",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
                 LocalTime.of(9, 0),
-                LocalTime.of(18, 0),
+                dailyEndTime,
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO",
@@ -182,6 +285,50 @@ class TripAccommodationServiceTest {
         );
         setId(accommodation, "accommodationId", accommodationId);
         return accommodation;
+    }
+
+    private Place place(String name, Double latitude, Double longitude) {
+        return Place.create(
+                name,
+                "NATURE",
+                "SOUTH",
+                "Jeju",
+                latitude,
+                longitude,
+                60,
+                false,
+                true,
+                3,
+                3,
+                3,
+                3,
+                3,
+                3,
+                3,
+                "description",
+                true
+        );
+    }
+
+    private Itinerary itinerary(
+            Trip trip,
+            Place place,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
+        return Itinerary.create(
+                trip,
+                place,
+                dayNo,
+                orderNo,
+                startTime,
+                endTime,
+                travelMinutesFromPrevious,
+                "reason"
+        );
     }
 
     private void setId(Object target, String fieldName, Long id) {
