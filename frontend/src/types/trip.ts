@@ -96,7 +96,10 @@ export type Itinerary = {
   endTime: string;
   travelMinutesFromPrevious: number;
   reason: string;
+  generationSource: ItineraryGenerationSource;
 };
+
+export type ItineraryGenerationSource = 'LLM' | 'LLM_ADJUSTED' | 'FALLBACK' | 'MANUAL' | 'UNKNOWN';
 
 export type ItineraryCreateRequest = {
   placeId: number;

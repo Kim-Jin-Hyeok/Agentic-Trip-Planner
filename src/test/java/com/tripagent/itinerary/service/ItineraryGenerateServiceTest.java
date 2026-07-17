@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.domain.Itinerary;
+import com.tripagent.itinerary.domain.ItineraryGenerationSource;
 import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.dto.PlaceCategory;
@@ -55,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -105,6 +108,23 @@ class ItineraryGenerateServiceTest {
 
     @InjectMocks
     private ItineraryGenerateService itineraryGenerateService;
+
+    @BeforeEach
+    void connectGenerationSourceAwareSaveMethodsToExistingSaveStubs() {
+        lenient().when(itineraryService.createGeneratedItinerary(
+                        any(), any(), any(ItineraryGenerationSource.class)))
+                .thenAnswer(invocation -> itineraryService.createItinerary(
+                        invocation.getArgument(0), invocation.getArgument(1)));
+        lenient().when(itineraryService.createGeneratedItinerary(
+                        any(), any(), any(LocalTime.class), any(LocalTime.class),
+                        any(ItineraryGenerationSource.class)))
+                .thenAnswer(invocation -> itineraryService.createGeneratedItinerary(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.getArgument(2),
+                        invocation.getArgument(3)
+                ));
+    }
 
     @Test
     void generateDraftItinerariesCreatesDraftsFromCandidatePlaces() {
@@ -2152,6 +2172,9 @@ class ItineraryGenerateServiceTest {
                 1L,
                 request(20L, 2, LocalTime.of(11, 5), LocalTime.of(12, 5), 5)
         );
+        verify(itineraryService, times(2)).createGeneratedItinerary(
+                eq(1L), any(ItineraryCreateRequest.class), eq(ItineraryGenerationSource.LLM_ADJUSTED)
+        );
     }
 
     @Test
@@ -2723,6 +2746,9 @@ class ItineraryGenerateServiceTest {
         assertThat(responses).extracting(ItineraryResponse::placeId)
                 .containsExactly(10L);
         verify(llmClient).generate(prompt);
+        verify(itineraryService).createGeneratedItinerary(
+                eq(1L), any(ItineraryCreateRequest.class), eq(ItineraryGenerationSource.FALLBACK)
+        );
         verify(llmItineraryJsonParser, never()).parse("raw response");
         verify(llmItineraryResponseConverter, never()).toCreateRequests(List.of());
         verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L));

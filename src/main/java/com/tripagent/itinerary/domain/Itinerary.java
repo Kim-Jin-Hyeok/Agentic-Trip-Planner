@@ -4,6 +4,8 @@ import com.tripagent.place.domain.Place;
 import com.tripagent.trip.domain.Trip;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -47,6 +49,10 @@ public class Itinerary {
     @Column(length = 1000)
     private String reason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private ItineraryGenerationSource generationSource;
+
     protected Itinerary() {
     }
 
@@ -58,7 +64,8 @@ public class Itinerary {
             LocalTime startTime,
             LocalTime endTime,
             Integer travelMinutesFromPrevious,
-            String reason
+            String reason,
+            ItineraryGenerationSource generationSource
     ) {
         this.trip = trip;
         this.place = place;
@@ -68,6 +75,7 @@ public class Itinerary {
         this.endTime = endTime;
         this.travelMinutesFromPrevious = travelMinutesFromPrevious;
         this.reason = reason;
+        this.generationSource = generationSource;
     }
 
     public static Itinerary create(
@@ -80,6 +88,23 @@ public class Itinerary {
             Integer travelMinutesFromPrevious,
             String reason
     ) {
+        return create(
+                trip, place, dayNo, orderNo, startTime, endTime,
+                travelMinutesFromPrevious, reason, ItineraryGenerationSource.MANUAL
+        );
+    }
+
+    public static Itinerary create(
+            Trip trip,
+            Place place,
+            Integer dayNo,
+            Integer orderNo,
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious,
+            String reason,
+            ItineraryGenerationSource generationSource
+    ) {
         return new Itinerary(
                 trip,
                 place,
@@ -88,7 +113,8 @@ public class Itinerary {
                 startTime,
                 endTime,
                 travelMinutesFromPrevious,
-                reason
+                reason,
+                generationSource == null ? ItineraryGenerationSource.MANUAL : generationSource
         );
     }
 
@@ -144,5 +170,9 @@ public class Itinerary {
 
     public String getReason() {
         return reason;
+    }
+
+    public ItineraryGenerationSource getGenerationSource() {
+        return generationSource == null ? ItineraryGenerationSource.UNKNOWN : generationSource;
     }
 }

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tripagent.itinerary.domain.Itinerary;
+import com.tripagent.itinerary.domain.ItineraryGenerationSource;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryReorderRequest;
 import com.tripagent.itinerary.dto.ItineraryReorderRequestItem;
@@ -77,6 +78,7 @@ class ItineraryServiceTest {
         assertThat(response.place().description()).isEqualTo("Test description");
         assertThat(response.dayNo()).isEqualTo(1);
         assertThat(response.orderNo()).isEqualTo(1);
+        assertThat(response.generationSource()).isEqualTo(ItineraryGenerationSource.MANUAL);
         verify(itineraryRepository).save(any(Itinerary.class));
     }
 
@@ -268,6 +270,7 @@ class ItineraryServiceTest {
 
         assertThat(response.startTime()).isEqualTo(LocalTime.of(10, 0));
         assertThat(response.endTime()).isEqualTo(LocalTime.of(11, 0));
+        assertThat(response.generationSource()).isEqualTo(ItineraryGenerationSource.LLM);
         verify(itineraryRepository).save(any(Itinerary.class));
     }
 

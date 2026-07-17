@@ -1,6 +1,7 @@
 package com.tripagent.itinerary.service;
 
 import com.tripagent.itinerary.domain.Itinerary;
+import com.tripagent.itinerary.domain.ItineraryGenerationSource;
 import com.tripagent.itinerary.dto.ItineraryCreateRequest;
 import com.tripagent.itinerary.dto.ItineraryReorderRequest;
 import com.tripagent.itinerary.dto.ItineraryReorderRequestItem;
@@ -48,6 +49,24 @@ public class ItineraryService {
 
     @Transactional
     public ItineraryResponse createItinerary(Long tripId, ItineraryCreateRequest request, Long ownerId) {
+        return createItinerary(tripId, request, ownerId, ItineraryGenerationSource.MANUAL);
+    }
+
+    @Transactional
+    public ItineraryResponse createGeneratedItinerary(
+            Long tripId,
+            ItineraryCreateRequest request,
+            ItineraryGenerationSource generationSource
+    ) {
+        return createItinerary(tripId, request, null, generationSource);
+    }
+
+    private ItineraryResponse createItinerary(
+            Long tripId,
+            ItineraryCreateRequest request,
+            Long ownerId,
+            ItineraryGenerationSource generationSource
+    ) {
         validateRequest(tripId, request);
 
         Trip trip = findTripAndValidateOwner(tripId, ownerId);
@@ -72,7 +91,8 @@ public class ItineraryService {
                 request.startTime(),
                 request.endTime(),
                 request.travelMinutesFromPrevious(),
-                request.reason()
+                request.reason(),
+                generationSource
         );
 
         return ItineraryResponse.from(itineraryRepository.save(itinerary));
@@ -84,6 +104,20 @@ public class ItineraryService {
             ItineraryCreateRequest request,
             LocalTime dayTimeWindowStartTime,
             LocalTime dayTimeWindowEndTime
+    ) {
+        return createGeneratedItinerary(
+                tripId, request, dayTimeWindowStartTime, dayTimeWindowEndTime,
+                ItineraryGenerationSource.LLM
+        );
+    }
+
+    @Transactional
+    public ItineraryResponse createGeneratedItinerary(
+            Long tripId,
+            ItineraryCreateRequest request,
+            LocalTime dayTimeWindowStartTime,
+            LocalTime dayTimeWindowEndTime,
+            ItineraryGenerationSource generationSource
     ) {
         validateRequest(tripId, request);
         validateDayTimeWindow(dayTimeWindowStartTime, dayTimeWindowEndTime);
@@ -113,7 +147,8 @@ public class ItineraryService {
                 request.startTime(),
                 request.endTime(),
                 request.travelMinutesFromPrevious(),
-                request.reason()
+                request.reason(),
+                generationSource
         );
 
         return ItineraryResponse.from(itineraryRepository.save(itinerary));

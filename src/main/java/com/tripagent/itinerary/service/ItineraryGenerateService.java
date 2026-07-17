@@ -14,6 +14,7 @@ import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.domain.Itinerary;
+import com.tripagent.itinerary.domain.ItineraryGenerationSource;
 import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.policy.PaceItineraryPolicy;
 import com.tripagent.place.dto.PlaceCategory;
@@ -127,8 +128,8 @@ public class ItineraryGenerateService {
             throw new IllegalArgumentException("Itinerary already exists for this trip.");
         }
 
-        List<ItineraryCreateRequest> createRequests = generateDraftItineraries(tripId, request, OPERATION_GENERATE);
-        return saveGeneratedItineraries(tripId, request, createRequests);
+        DraftGenerationResult result = generateDraftItineraryResult(tripId, request, OPERATION_GENERATE);
+        return saveGeneratedItineraries(tripId, request, result);
     }
 
     @Transactional
@@ -150,14 +151,14 @@ public class ItineraryGenerateService {
         validateTripId(tripId);
         validateTripOwner(tripId, ownerId);
 
-        List<ItineraryCreateRequest> createRequests = generateDraftItineraries(
+        DraftGenerationResult result = generateDraftItineraryResult(
                 tripId,
                 request,
                 OPERATION_REGENERATE
         );
         itineraryRepository.deleteByTrip_TripId(tripId);
 
-        return saveGeneratedItineraries(tripId, request, createRequests);
+        return saveGeneratedItineraries(tripId, request, result);
     }
 
     @Transactional
@@ -187,7 +188,7 @@ public class ItineraryGenerateService {
                 .map(itinerary -> itinerary.getPlace().getPlaceId())
                 .collect(Collectors.toSet());
         ItineraryGenerateRequest dayRequest = requestForDay(request, unavailablePlaceIds, dayNo);
-        List<ItineraryCreateRequest> createRequests = generateDraftItineraries(
+        DraftGenerationResult result = generateDraftItineraryResult(
                 tripId,
                 dayRequest,
                 OPERATION_REGENERATE_DAY,
@@ -196,18 +197,19 @@ public class ItineraryGenerateService {
         );
 
         itineraryRepository.deleteByTrip_TripIdAndDayNo(tripId, dayNo);
-        saveGeneratedItineraries(tripId, dayRequest, createRequests);
+        saveGeneratedItineraries(tripId, dayRequest, result);
         return itineraryService.getItineraries(tripId, ownerId);
     }
 
     private List<ItineraryResponse> saveGeneratedItineraries(
             Long tripId,
             ItineraryGenerateRequest request,
-            List<ItineraryCreateRequest> createRequests
+            DraftGenerationResult result
     ) {
         if (!hasDayTimeWindowOverrides(request)) {
-            return createRequests.stream()
-                    .map(createRequest -> itineraryService.createItinerary(tripId, createRequest))
+            return result.createRequests().stream()
+                    .map(createRequest -> itineraryService.createGeneratedItinerary(
+                            tripId, createRequest, result.generationSource()))
                     .toList();
         }
 
@@ -215,14 +217,15 @@ public class ItineraryGenerateService {
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         Map<Integer, DayTimeWindow> dayTimeWindowByDayNo = createDayTimeWindows(trip, request);
 
-        return createRequests.stream()
+        return result.createRequests().stream()
                 .map(createRequest -> {
                     DayTimeWindow dayTimeWindow = dayTimeWindowByDayNo.get(createRequest.dayNo());
                     return itineraryService.createGeneratedItinerary(
                             tripId,
                             createRequest,
                             dayTimeWindow.startTime(),
-                            dayTimeWindow.endTime()
+                            dayTimeWindow.endTime(),
+                            result.generationSource()
                     );
                 })
                 .toList();
@@ -233,22 +236,22 @@ public class ItineraryGenerateService {
     }
 
     public List<ItineraryCreateRequest> generateDraftItineraries(Long tripId) {
-        return generateDraftItineraries(tripId, null, OPERATION_GENERATE_DRAFT);
+        return generateDraftItineraryResult(tripId, null, OPERATION_GENERATE_DRAFT).createRequests();
     }
 
     public List<ItineraryCreateRequest> generateDraftItineraries(Long tripId, ItineraryGenerateRequest request) {
-        return generateDraftItineraries(tripId, request, OPERATION_GENERATE_DRAFT);
+        return generateDraftItineraryResult(tripId, request, OPERATION_GENERATE_DRAFT).createRequests();
     }
 
-    private List<ItineraryCreateRequest> generateDraftItineraries(
+    private DraftGenerationResult generateDraftItineraryResult(
             Long tripId,
             ItineraryGenerateRequest request,
             String operation
     ) {
-        return generateDraftItineraries(tripId, request, operation, null, Set.of());
+        return generateDraftItineraryResult(tripId, request, operation, null, Set.of());
     }
 
-    private List<ItineraryCreateRequest> generateDraftItineraries(
+    private DraftGenerationResult generateDraftItineraryResult(
             Long tripId,
             ItineraryGenerateRequest request,
             String operation,
@@ -310,7 +313,7 @@ public class ItineraryGenerateService {
         );
     }
 
-    private List<ItineraryCreateRequest> generateValidatedDraftItineraries(
+    private DraftGenerationResult generateValidatedDraftItineraries(
             Trip trip,
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
@@ -328,7 +331,7 @@ public class ItineraryGenerateService {
             String attemptPrompt = promptForValidationAttempt(prompt, lastValidationException);
             try {
                 boolean repairDuplicatedPlaces = attempt > 0;
-                List<ItineraryCreateRequest> createRequests = generateValidatedDraftItinerary(
+                DraftGenerationResult result = generateValidatedDraftItinerary(
                         trip,
                         candidatePlaces,
                         request,
@@ -338,7 +341,7 @@ public class ItineraryGenerateService {
                         routeAnchorByBoundaryNo
                 );
                 logDraftGenerationSuccess(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces);
-                return createRequests;
+                return result;
             } catch (LlmException exception) {
                 logLlmFailure(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces, exception);
                 return generateFallbackDraftItinerariesOrThrow(
@@ -410,7 +413,7 @@ public class ItineraryGenerateService {
                 + "Return JSON only. Do not include markdown or explanation outside JSON.\n";
     }
 
-    private List<ItineraryCreateRequest> generateFallbackDraftItinerariesOrThrow(
+    private DraftGenerationResult generateFallbackDraftItinerariesOrThrow(
             Trip trip,
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
@@ -434,7 +437,7 @@ public class ItineraryGenerateService {
                     routeAnchorByBoundaryNo
             );
             logFallbackDraftGenerationSuccess(trip, operation, request, candidatePlaces, originalException);
-            return fallbackCreateRequests;
+            return new DraftGenerationResult(fallbackCreateRequests, ItineraryGenerationSource.FALLBACK);
         } catch (RuntimeException fallbackException) {
             logFallbackDraftGenerationFailure(
                     trip,
@@ -1003,7 +1006,7 @@ public class ItineraryGenerateService {
         return Math.max(MIN_FALLBACK_STAY_MINUTES, stayMinutes);
     }
 
-    private List<ItineraryCreateRequest> generateValidatedDraftItinerary(
+    private DraftGenerationResult generateValidatedDraftItinerary(
             Trip trip,
             List<PlaceResponse> candidatePlaces,
             ItineraryGenerateRequest request,
@@ -1015,6 +1018,7 @@ public class ItineraryGenerateService {
         String rawResponse = llmClient.generate(prompt);
         List<LlmItineraryItemResponse> parsedItems = llmItineraryJsonParser.parse(rawResponse);
         List<ItineraryCreateRequest> createRequests = llmItineraryResponseConverter.toCreateRequests(parsedItems);
+        List<ItineraryCreateRequest> originalCreateRequests = createRequests;
         if (repairDuplicatedPlaces) {
             createRequests = replaceDuplicatedPlaces(candidatePlaces, createRequests);
         }
@@ -1035,7 +1039,10 @@ public class ItineraryGenerateService {
         validateDraftItineraries(trip, request, createRequests, targetDayNo);
         validateRouteAnchors(trip, request, candidatePlaces, createRequests, routeAnchorByBoundaryNo);
 
-        return createRequests;
+        ItineraryGenerationSource generationSource = createRequests.equals(originalCreateRequests)
+                ? ItineraryGenerationSource.LLM
+                : ItineraryGenerationSource.LLM_ADJUSTED;
+        return new DraftGenerationResult(createRequests, generationSource);
     }
 
     private List<ItineraryCreateRequest> replaceDuplicatedPlaces(
@@ -2614,6 +2621,12 @@ public class ItineraryGenerateService {
                     accommodation.getLongitude()
             );
         }
+    }
+
+    private record DraftGenerationResult(
+            List<ItineraryCreateRequest> createRequests,
+            ItineraryGenerationSource generationSource
+    ) {
     }
 
     private record DayTimeWindow(

@@ -265,7 +265,8 @@ public class TripService {
                         source.getStartTime(),
                         source.getEndTime(),
                         source.getTravelMinutesFromPrevious(),
-                        source.getReason()
+                        source.getReason(),
+                        source.getGenerationSource()
                 ))
                 .toList();
         List<ItineraryResponse> copiedItineraryResponses = itineraryRepository.saveAll(copiedItineraries)

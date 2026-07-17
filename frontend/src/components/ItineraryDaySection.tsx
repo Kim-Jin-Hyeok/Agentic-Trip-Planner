@@ -103,7 +103,12 @@ export function ItineraryDaySection({
               </div>
               <div className="itinerary-content">
                 <div className="itinerary-title-row">
-                  <strong>{itinerary.place.name}</strong>
+                  <div className="itinerary-title">
+                    <strong>{itinerary.place.name}</strong>
+                    <span className={`generation-source-badge source-${itinerary.generationSource.toLowerCase()}`}>
+                      {generationSourceLabel(itinerary.generationSource)}
+                    </span>
+                  </div>
                   {viewMode === 'mine' && (
                     <div className="itinerary-actions">
                       {!isEditing && (
@@ -259,6 +264,21 @@ export function ItineraryDaySection({
       </ol>
     </section>
   );
+}
+
+function generationSourceLabel(source: Itinerary['generationSource']): string {
+  switch (source) {
+    case 'LLM':
+      return 'AI 생성';
+    case 'LLM_ADJUSTED':
+      return 'AI 자동 보정';
+    case 'FALLBACK':
+      return '안전 일정';
+    case 'MANUAL':
+      return '직접 추가';
+    case 'UNKNOWN':
+      return '기존 일정';
+  }
 }
 
 function createGoogleMapsUrl(place: Itinerary['place']): string {
