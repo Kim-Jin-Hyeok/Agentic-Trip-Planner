@@ -17,6 +17,7 @@ import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
+import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
@@ -44,6 +45,9 @@ class ItineraryServiceTest {
 
     @Mock
     private PlaceRepository placeRepository;
+
+    @Mock
+    private RouteCalculationAdapter routeCalculationAdapter;
 
     @InjectMocks
     private ItineraryService itineraryService;
@@ -780,7 +784,63 @@ class ItineraryServiceTest {
         assertThat(third.getOrderNo()).isEqualTo(2);
         assertThat(third.getTravelMinutesFromPrevious()).isEqualTo(30);
         assertThat(third.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
+        verify(routeCalculationAdapter, never()).calculateTravelMinutes(any(), any(), any(), any());
         verify(itineraryRepository).delete(first);
+    }
+
+    @Test
+    void deleteItineraryRecalculatesTravelMinutesForImmediateSuccessor() {
+        Trip trip = trip(1L);
+        Place firstPlace = place(10L);
+        Place deletedPlace = place(20L);
+        Place thirdPlace = place(30L);
+        Itinerary first = itinerary(100L, trip, firstPlace, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary deleted = itinerary(200L, trip, deletedPlace, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        Itinerary third = itinerary(300L, trip, thirdPlace, 1, 3, LocalTime.of(12, 0), LocalTime.of(13, 0), 20);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(deleted));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1))
+                .thenReturn(List.of(third, deleted, first));
+        when(routeCalculationAdapter.calculateTravelMinutes(
+                firstPlace.getLatitude(),
+                firstPlace.getLongitude(),
+                thirdPlace.getLatitude(),
+                thirdPlace.getLongitude()
+        )).thenReturn(47);
+
+        itineraryService.deleteItinerary(1L, 200L);
+
+        assertThat(first.getOrderNo()).isEqualTo(1);
+        assertThat(first.getGenerationSource()).isEqualTo(ItineraryGenerationSource.MANUAL);
+        assertThat(third.getOrderNo()).isEqualTo(2);
+        assertThat(third.getTravelMinutesFromPrevious()).isEqualTo(47);
+        assertThat(third.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
+        verify(routeCalculationAdapter).calculateTravelMinutes(
+                firstPlace.getLatitude(),
+                firstPlace.getLongitude(),
+                thirdPlace.getLatitude(),
+                thirdPlace.getLongitude()
+        );
+        verify(itineraryRepository).delete(deleted);
+    }
+
+    @Test
+    void deleteLastItineraryDoesNotRecalculateTravelMinutes() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary last = itinerary(200L, trip, place, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(200L)).thenReturn(Optional.of(last));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(first, last));
+
+        itineraryService.deleteItinerary(1L, 200L);
+
+        assertThat(first.getOrderNo()).isEqualTo(1);
+        assertThat(first.getTravelMinutesFromPrevious()).isZero();
+        assertThat(first.getGenerationSource()).isEqualTo(ItineraryGenerationSource.MANUAL);
+        verify(routeCalculationAdapter, never()).calculateTravelMinutes(any(), any(), any(), any());
+        verify(itineraryRepository).delete(last);
     }
 
     @Test

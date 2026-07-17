@@ -10,6 +10,7 @@ import com.tripagent.itinerary.dto.ItineraryUpdateRequest;
 import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
+import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.repository.TripRepository;
 import java.time.LocalTime;
@@ -31,15 +32,18 @@ public class ItineraryService {
     private final ItineraryRepository itineraryRepository;
     private final TripRepository tripRepository;
     private final PlaceRepository placeRepository;
+    private final RouteCalculationAdapter routeCalculationAdapter;
 
     public ItineraryService(
             ItineraryRepository itineraryRepository,
             TripRepository tripRepository,
-            PlaceRepository placeRepository
+            PlaceRepository placeRepository,
+            RouteCalculationAdapter routeCalculationAdapter
     ) {
         this.itineraryRepository = itineraryRepository;
         this.tripRepository = tripRepository;
         this.placeRepository = placeRepository;
+        this.routeCalculationAdapter = routeCalculationAdapter;
     }
 
     @Transactional
@@ -297,12 +301,27 @@ public class ItineraryService {
                 .filter(dayItinerary -> !dayItinerary.getItineraryId().equals(itinerary.getItineraryId()))
                 .sorted(Comparator.comparing(Itinerary::getOrderNo))
                 .toList();
+        Long successorItineraryId = remainingItineraries.stream()
+                .filter(remainingItinerary -> remainingItinerary.getOrderNo() > itinerary.getOrderNo())
+                .min(Comparator.comparing(Itinerary::getOrderNo))
+                .map(Itinerary::getItineraryId)
+                .orElse(null);
         for (int index = 0; index < remainingItineraries.size(); index++) {
             Itinerary remainingItinerary = remainingItineraries.get(index);
             int normalizedOrderNo = index + 1;
-            int normalizedTravelMinutes = normalizedOrderNo == 1
-                    ? 0
-                    : remainingItinerary.getTravelMinutesFromPrevious();
+            int normalizedTravelMinutes = remainingItinerary.getTravelMinutesFromPrevious();
+            if (normalizedOrderNo == 1) {
+                normalizedTravelMinutes = 0;
+            } else if (remainingItinerary.getItineraryId().equals(successorItineraryId)) {
+                Place previousPlace = remainingItineraries.get(index - 1).getPlace();
+                Place currentPlace = remainingItinerary.getPlace();
+                normalizedTravelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                        previousPlace.getLatitude(),
+                        previousPlace.getLongitude(),
+                        currentPlace.getLatitude(),
+                        currentPlace.getLongitude()
+                );
+            }
             if (remainingItinerary.getOrderNo().equals(normalizedOrderNo)
                     && remainingItinerary.getTravelMinutesFromPrevious().equals(normalizedTravelMinutes)) {
                 continue;
