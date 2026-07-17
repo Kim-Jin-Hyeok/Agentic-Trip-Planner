@@ -1176,7 +1176,14 @@ export function TripCreatePage() {
   }
 
   async function handleDeleteItinerary(itineraryId: number) {
-    if (trip == null) {
+    if (trip == null || pendingItineraryId != null) {
+      return;
+    }
+
+    const targetItinerary = itineraries.find((itinerary) => itinerary.itineraryId === itineraryId);
+    if (targetItinerary == null || !window.confirm(
+      `Day ${targetItinerary.dayNo}의 '${targetItinerary.place.name}' 일정을 삭제할까요? 삭제한 일정은 복구할 수 없습니다.`
+    )) {
       return;
     }
 
