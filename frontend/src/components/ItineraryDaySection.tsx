@@ -53,11 +53,26 @@ export function ItineraryDaySection({
   onTogglePlaceLock
 }: ItineraryDaySectionProps) {
   const lockedPlaceCount = dayItineraries.filter((itinerary) => lockedPlaceIds.includes(itinerary.placeId)).length;
+  const orderedDayItineraries = [...dayItineraries].sort((left, right) => left.orderNo - right.orderNo);
+  const firstItinerary = orderedDayItineraries[0];
+  const lastItinerary = orderedDayItineraries[orderedDayItineraries.length - 1];
+  const totalTravelMinutes = orderedDayItineraries.reduce(
+    (total, itinerary) => total + itinerary.travelMinutesFromPrevious,
+    0
+  );
 
   return (
     <section className="day-section">
       <div className="day-section-header">
-        <h3>Day {dayNo}</h3>
+        <div className="day-section-heading">
+          <h3>Day {dayNo}</h3>
+          {firstItinerary != null && lastItinerary != null && (
+            <span className="day-section-summary">
+              방문 {orderedDayItineraries.length}곳 · 장소 간 이동 {totalTravelMinutes}분 ·{' '}
+              {firstItinerary.startTime}~{lastItinerary.endTime}
+            </span>
+          )}
+        </div>
         <div className="day-section-header-actions">
           {viewMode === 'mine' && (
             <button

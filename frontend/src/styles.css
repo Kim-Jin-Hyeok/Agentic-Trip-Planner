@@ -1448,6 +1448,22 @@ button.trip-list-item:hover:not(:disabled),
   margin-bottom: 13px;
 }
 
+.day-section-heading {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 9px;
+  min-width: 0;
+}
+
+.day-section-summary {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
 .day-section h3 {
   display: inline-flex;
   align-items: center;
