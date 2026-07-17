@@ -10,7 +10,11 @@ import type { AuthSession } from '../types/auth';
 
 export type ItineraryEditForm = ItineraryUpdateRequest;
 export type PublicListMode = 'all' | 'liked';
-export type ViewMode = 'mine' | 'public';
+export type ViewMode = 'mine' | 'public' | 'admin';
+
+export function canAccessAdminView(session: AuthSession | null): boolean {
+  return session?.role === 'ADMIN';
+}
 
 export const conceptOptions: Array<{ value: TripConcept; label: string }> = [
   { value: 'HEALING', label: '힐링' },

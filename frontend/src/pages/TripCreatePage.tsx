@@ -25,6 +25,7 @@ import { getStoredAuthSession } from '../api/authStorage';
 import { getRecommendedPlaces, getTripEndpointPlaces } from '../api/placeApi';
 import { getTripWeather } from '../api/weatherApi';
 import { AuthPanel } from '../components/AuthPanel';
+import { AdminPlaceSuggestionPanel } from '../components/AdminPlaceSuggestionPanel';
 import { MyTripList } from '../components/MyTripList';
 import { PublicTripList } from '../components/PublicTripList';
 import { PlaceSuggestionPanel } from '../components/PlaceSuggestionPanel';
@@ -48,7 +49,14 @@ import type {
   TripVisibility
 } from '../types/trip';
 import type { TripWeatherForecast } from '../types/weather';
-import { initialPublicFilters, itineraryForm, type ItineraryEditForm, type PublicListMode, type ViewMode } from '../utils/tripDisplay';
+import {
+  canAccessAdminView,
+  initialPublicFilters,
+  itineraryForm,
+  type ItineraryEditForm,
+  type PublicListMode,
+  type ViewMode
+} from '../utils/tripDisplay';
 
 const initialForm: TripCreateRequest = {
   title: '',
@@ -217,6 +225,18 @@ export function TripCreatePage() {
     setItineraries([]);
     void loadPublicTrips(publicSort, publicPage, publicListMode, appliedPublicFilters);
   }, [viewMode, publicSort, publicPage, publicListMode, appliedPublicFilters]);
+
+  useEffect(() => {
+    if (viewMode !== 'admin' || canAccessAdminView(session)) {
+      return;
+    }
+
+    setViewMode('mine');
+    updateBrowserNavigation('mine', null, true);
+    setMessage(session == null
+      ? '로그인 후 관리자 화면을 이용할 수 있습니다.'
+      : '관리자 권한이 필요합니다.');
+  }, [viewMode, session?.role]);
 
   useEffect(() => {
     const initialNavigation = readBrowserNavigation();
@@ -1101,6 +1121,19 @@ export function TripCreatePage() {
     updateBrowserNavigation('public');
   }
 
+  function handleShowAdmin() {
+    if (!canAccessAdminView(session)) {
+      setMessage('관리자 권한이 필요합니다.');
+      return;
+    }
+    setViewMode('admin');
+    setTrip(null);
+    setPublicTrip(null);
+    setItineraries([]);
+    setMessage('');
+    updateBrowserNavigation('admin');
+  }
+
   function handleApplyPublicFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPublicPage(0);
@@ -1356,7 +1389,11 @@ export function TripCreatePage() {
 
           <PlaceSuggestionPanel session={session} />
 
-          <div className="view-tabs" role="tablist" aria-label="여행 보기 방식">
+          <div
+            className={canAccessAdminView(session) ? 'view-tabs admin-enabled' : 'view-tabs'}
+            role="tablist"
+            aria-label="서비스 보기 방식"
+          >
             <button
               type="button"
               className={viewMode === 'mine' ? 'tab-button active' : 'tab-button'}
@@ -1373,6 +1410,16 @@ export function TripCreatePage() {
               <span>여행 둘러보기</span>
               <small>다른 일정 참고하기</small>
             </button>
+            {canAccessAdminView(session) && (
+              <button
+                type="button"
+                className={viewMode === 'admin' ? 'tab-button active' : 'tab-button'}
+                onClick={handleShowAdmin}
+              >
+                <span>관리자</span>
+                <small>장소 제안 검토</small>
+              </button>
+            )}
           </div>
 
           {viewMode === 'mine' && (
@@ -1429,9 +1476,20 @@ export function TripCreatePage() {
               }}
             />
           )}
+
+          {viewMode === 'admin' && canAccessAdminView(session) && (
+            <div className="admin-sidebar-summary">
+              <p>ADMIN</p>
+              <strong>장소 제안 관리</strong>
+              <span>상태별 제안 목록을 확인할 수 있습니다. 승인과 거절 처리는 다음 단계에서 제공됩니다.</span>
+            </div>
+          )}
         </div>
 
-        <TripDetailPanel
+        {viewMode === 'admin' && canAccessAdminView(session) ? (
+          <AdminPlaceSuggestionPanel />
+        ) : (
+          <TripDetailPanel
           viewMode={viewMode}
           trip={trip}
           publicTrip={publicTrip}
@@ -1502,7 +1560,8 @@ export function TripCreatePage() {
           onMoveItinerary={(dayItineraries, index, direction) => void handleMoveItinerary(dayItineraries, index, direction)}
           onDeleteItinerary={(itineraryId) => void handleDeleteItinerary(itineraryId)}
           onUpdateItinerary={(itinerary) => void handleUpdateItinerary(itinerary)}
-        />
+          />
+        )}
       </section>
     </main>
   );
@@ -1512,8 +1571,9 @@ function readBrowserNavigation(): BrowserNavigation {
   const searchParams = new URLSearchParams(window.location.search);
   const publicTripId = Number(searchParams.get('tripId'));
 
+  const requestedView = searchParams.get('view');
   return {
-    viewMode: searchParams.get('view') === 'public' ? 'public' : 'mine',
+    viewMode: requestedView === 'public' || requestedView === 'admin' ? requestedView : 'mine',
     publicTripId: Number.isInteger(publicTripId) && publicTripId > 0 ? publicTripId : null
   };
 }
@@ -1540,6 +1600,8 @@ function updateBrowserNavigation(
     if (publicTripId != null) {
       url.searchParams.set('tripId', String(publicTripId));
     }
+  } else if (viewMode === 'admin') {
+    url.searchParams.set('view', 'admin');
   }
 
   const nextLocation = `${url.pathname}${url.search}`;

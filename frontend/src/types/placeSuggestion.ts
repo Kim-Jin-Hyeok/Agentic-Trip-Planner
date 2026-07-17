@@ -14,3 +14,9 @@ export type PlaceSuggestionResponse = {
   status: PlaceSuggestionStatus;
   createdAt: string;
 };
+
+export type AdminPlaceSuggestionResponse = PlaceSuggestionResponse & {
+  memberId: number;
+  memberEmail: string;
+  memberNickname: string;
+};
