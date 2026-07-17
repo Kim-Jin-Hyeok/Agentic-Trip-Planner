@@ -14,12 +14,16 @@ export function getStoredAuthSession(): AuthSession | null {
 
   try {
     const parsedSession = JSON.parse(sessionJson) as Partial<AuthSession>;
-    if (!isAuthSession(parsedSession)) {
+    const normalizedSession = {
+      ...parsedSession,
+      role: parsedSession.role ?? 'USER'
+    };
+    if (!isAuthSession(normalizedSession)) {
       clearStoredAuthSession();
       return null;
     }
 
-    return parsedSession;
+    return normalizedSession;
   } catch {
     clearStoredAuthSession();
     return null;
@@ -51,6 +55,7 @@ function isAuthSession(value: Partial<AuthSession> | null): value is AuthSession
     typeof value.email === 'string' &&
     value.email.length > 0 &&
     typeof value.nickname === 'string' &&
-    value.nickname.length > 0
+    value.nickname.length > 0 &&
+    (value.role === 'USER' || value.role === 'ADMIN')
   );
 }

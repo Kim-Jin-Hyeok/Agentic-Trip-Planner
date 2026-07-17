@@ -55,7 +55,8 @@ class MemberControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.memberId").value(1L))
                 .andExpect(jsonPath("$.data.email").value("test@example.com"))
-                .andExpect(jsonPath("$.data.nickname").value("testUser"));
+                .andExpect(jsonPath("$.data.nickname").value("testUser"))
+                .andExpect(jsonPath("$.data.role").value("USER"));
     }
 
     @Test

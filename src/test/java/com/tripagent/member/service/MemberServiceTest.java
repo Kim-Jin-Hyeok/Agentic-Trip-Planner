@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tripagent.member.domain.Member;
+import com.tripagent.member.domain.MemberRole;
 import com.tripagent.member.dto.MemberCreateRequest;
 import com.tripagent.member.dto.MemberResponse;
 import com.tripagent.member.repository.MemberRepository;
@@ -53,6 +54,7 @@ class MemberServiceTest {
         assertThat(response.memberId()).isEqualTo(1L);
         assertThat(response.email()).isEqualTo("test@example.com");
         assertThat(response.nickname()).isEqualTo("testUser");
+        assertThat(response.role()).isEqualTo(MemberRole.USER);
         assertThat(response.createdAt()).isNotNull();
 
         ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
@@ -60,6 +62,7 @@ class MemberServiceTest {
         assertThat(memberCaptor.getValue().getEmail()).isEqualTo("test@example.com");
         assertThat(memberCaptor.getValue().getNickname()).isEqualTo("testUser");
         assertThat(memberCaptor.getValue().getPasswordHash()).isEqualTo("hashed-password");
+        assertThat(memberCaptor.getValue().getRole()).isEqualTo(MemberRole.USER);
     }
 
     @Test

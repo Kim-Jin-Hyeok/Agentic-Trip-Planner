@@ -2,11 +2,14 @@ package com.tripagent.member.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "members")
@@ -25,16 +28,28 @@ public class Member {
     @Column(nullable = false, length = 255)
     private String passwordHash;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @ColumnDefault("'USER'")
+    private MemberRole role;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
     protected Member() {
     }
 
-    private Member(String email, String nickname, String passwordHash, LocalDateTime createdAt) {
+    private Member(
+            String email,
+            String nickname,
+            String passwordHash,
+            MemberRole role,
+            LocalDateTime createdAt
+    ) {
         this.email = email;
         this.nickname = nickname;
         this.passwordHash = passwordHash;
+        this.role = role;
         this.createdAt = createdAt;
     }
 
@@ -53,6 +68,7 @@ public class Member {
                 email.trim().toLowerCase(),
                 nickname.trim(),
                 passwordHash,
+                MemberRole.USER,
                 LocalDateTime.now()
         );
     }
@@ -71,6 +87,10 @@ public class Member {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public MemberRole getRole() {
+        return role;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tripagent.ai.llm.LlmException;
 import com.tripagent.ai.llm.LlmFailureType;
+import com.tripagent.auth.support.AuthorizationException;
 import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +32,17 @@ class GlobalExceptionHandlerTest {
         assertThat(response.success()).isFalse();
         assertThat(response.code()).isEqualTo("NOT_FOUND");
         assertThat(response.message()).isEqualTo("Trip not found.");
+    }
+
+    @Test
+    void handleAuthorizationExceptionReturnsForbiddenErrorResponse() {
+        ErrorResponse response = handler.handleAuthorizationException(
+                new AuthorizationException("Admin access is required.")
+        );
+
+        assertThat(response.success()).isFalse();
+        assertThat(response.code()).isEqualTo("FORBIDDEN");
+        assertThat(response.message()).isEqualTo("Admin access is required.");
     }
 
     @Test

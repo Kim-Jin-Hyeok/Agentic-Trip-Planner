@@ -48,6 +48,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.memberId").value(1L))
                 .andExpect(jsonPath("$.data.email").value("test@example.com"))
                 .andExpect(jsonPath("$.data.nickname").value("testUser"))
+                .andExpect(jsonPath("$.data.role").value("USER"))
                 .andExpect(jsonPath("$.data.accessToken").value("access-token"))
                 .andExpect(jsonPath("$.data.tokenType").value("Bearer"));
     }

@@ -46,7 +46,8 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
       const session = {
         memberId: loginResponse.memberId,
         email: loginResponse.email,
-        nickname: loginResponse.nickname
+        nickname: loginResponse.nickname,
+        role: loginResponse.role
       };
       storeAuthSession(loginResponse.accessToken, session);
       onLogin(session);

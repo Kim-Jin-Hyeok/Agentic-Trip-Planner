@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.tripagent.auth.dto.LoginRequest;
 import com.tripagent.auth.dto.LoginResponse;
 import com.tripagent.member.domain.Member;
+import com.tripagent.member.domain.MemberRole;
 import com.tripagent.member.repository.MemberRepository;
 import com.tripagent.member.service.PasswordHashService;
 import java.lang.reflect.Field;
@@ -48,6 +49,7 @@ class AuthServiceTest {
         assertThat(response.memberId()).isEqualTo(1L);
         assertThat(response.email()).isEqualTo("test@example.com");
         assertThat(response.nickname()).isEqualTo("testUser");
+        assertThat(response.role()).isEqualTo(MemberRole.USER);
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.tokenType()).isEqualTo("Bearer");
     }

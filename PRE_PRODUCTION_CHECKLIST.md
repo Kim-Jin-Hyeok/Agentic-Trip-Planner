@@ -7,7 +7,8 @@
   - 1차 후보: [카카오 Local 키워드 검색 API](https://developers.kakao.com/docs/ko/local/dev-guide)
   - 주소 직접 입력 보조 후보: [네이버 Cloud Geocoding API](https://api.ncloud-docs.com/docs/application-maps-geocoding)
 - [ ] 외부 API 키, timeout, 호출 제한과 장애 응답을 환경설정으로 관리한다.
-- [ ] `MemberRole`을 추가하고 사용자와 관리자 권한을 구분한다.
+- [x] `MemberRole`을 추가하고 사용자와 관리자 권한을 구분한다.
+  - 관리자만 상태별 장소 제안 목록을 페이지 단위로 조회할 수 있다.
 - [x] 사용자 제안은 `Place`에 바로 활성화하지 않고 승인 대기 데이터로 저장한다.
   - 로그인 사용자의 장소명·주소·설명 제안과 본인 처리 상태 조회 API를 제공한다.
 - [ ] 관리자가 제안을 승인·거절하고 추천용 필수 정보를 보완할 수 있게 한다.

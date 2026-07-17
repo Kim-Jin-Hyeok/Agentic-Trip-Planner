@@ -2,6 +2,7 @@ package com.tripagent.common.exception;
 
 import com.tripagent.ai.llm.LlmException;
 import com.tripagent.auth.support.AuthenticationException;
+import com.tripagent.auth.support.AuthorizationException;
 import java.util.NoSuchElementException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -49,6 +50,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ErrorResponse handleAuthenticationException(AuthenticationException exception) {
         return new ErrorResponse("UNAUTHORIZED", exception.getMessage());
+    }
+
+    @ExceptionHandler(AuthorizationException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleAuthorizationException(AuthorizationException exception) {
+        return new ErrorResponse("FORBIDDEN", exception.getMessage());
     }
 
     @ExceptionHandler(LlmException.class)
