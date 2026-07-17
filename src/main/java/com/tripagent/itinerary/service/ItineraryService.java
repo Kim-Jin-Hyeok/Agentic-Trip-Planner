@@ -12,7 +12,10 @@ import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Trip;
+import com.tripagent.trip.domain.TripAccommodation;
+import com.tripagent.trip.repository.TripAccommodationRepository;
 import com.tripagent.trip.repository.TripRepository;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -31,17 +34,20 @@ public class ItineraryService {
 
     private final ItineraryRepository itineraryRepository;
     private final TripRepository tripRepository;
+    private final TripAccommodationRepository tripAccommodationRepository;
     private final PlaceRepository placeRepository;
     private final RouteCalculationAdapter routeCalculationAdapter;
 
     public ItineraryService(
             ItineraryRepository itineraryRepository,
             TripRepository tripRepository,
+            TripAccommodationRepository tripAccommodationRepository,
             PlaceRepository placeRepository,
             RouteCalculationAdapter routeCalculationAdapter
     ) {
         this.itineraryRepository = itineraryRepository;
         this.tripRepository = tripRepository;
+        this.tripAccommodationRepository = tripAccommodationRepository;
         this.placeRepository = placeRepository;
         this.routeCalculationAdapter = routeCalculationAdapter;
     }
@@ -86,7 +92,7 @@ public class ItineraryService {
         Place place = placeRepository.findById(request.placeId())
                 .orElseThrow(() -> new NoSuchElementException("Place not found. placeId=" + request.placeId()));
         ItineraryCreateValues createValues = resolveCreateValues(
-                trip.getTripId(),
+                trip,
                 request,
                 place,
                 generationSource
@@ -120,7 +126,7 @@ public class ItineraryService {
     }
 
     private ItineraryCreateValues resolveCreateValues(
-            Long tripId,
+            Trip trip,
             ItineraryCreateRequest request,
             Place place,
             ItineraryGenerationSource generationSource
@@ -134,11 +140,14 @@ public class ItineraryService {
             return requestedValues;
         }
 
-        Itinerary lastItinerary = itineraryRepository.findByTrip_TripIdAndDayNo(tripId, request.dayNo())
+        Itinerary lastItinerary = itineraryRepository.findByTrip_TripIdAndDayNo(trip.getTripId(), request.dayNo())
                 .stream()
                 .max(Comparator.comparing(Itinerary::getOrderNo))
                 .orElse(null);
-        if (lastItinerary == null || request.orderNo() != lastItinerary.getOrderNo() + 1) {
+        if (lastItinerary == null) {
+            return resolveFirstCreateValues(trip, request, place, requestedValues);
+        }
+        if (request.orderNo() != lastItinerary.getOrderNo() + 1) {
             return requestedValues;
         }
 
@@ -157,6 +166,64 @@ public class ItineraryService {
                 startTime.plusMinutes(stayMinutes),
                 travelMinutes
         );
+    }
+
+    private ItineraryCreateValues resolveFirstCreateValues(
+            Trip trip,
+            ItineraryCreateRequest request,
+            Place place,
+            ItineraryCreateValues requestedValues
+    ) {
+        if (request.orderNo() != 1) {
+            return requestedValues;
+        }
+
+        RouteOrigin routeOrigin = findRouteOrigin(trip, request.dayNo());
+        if (routeOrigin == null) {
+            return requestedValues;
+        }
+
+        int travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                routeOrigin.latitude(),
+                routeOrigin.longitude(),
+                place.getLatitude(),
+                place.getLongitude()
+        );
+        LocalTime earliestStartTime = trip.getDailyStartTime().plusMinutes(travelMinutes);
+        if (!request.startTime().isBefore(earliestStartTime)) {
+            return requestedValues;
+        }
+
+        int stayMinutes = (int) ChronoUnit.MINUTES.between(request.startTime(), request.endTime());
+        return new ItineraryCreateValues(
+                earliestStartTime,
+                earliestStartTime.plusMinutes(stayMinutes),
+                0
+        );
+    }
+
+    private RouteOrigin findRouteOrigin(Trip trip, Integer dayNo) {
+        if (dayNo == 1) {
+            if (trip.getStartPlaceId() == null) {
+                return null;
+            }
+            return placeRepository.findById(trip.getStartPlaceId())
+                    .filter(place -> Boolean.TRUE.equals(place.getUseYn()))
+                    .map(place -> new RouteOrigin(place.getLatitude(), place.getLongitude()))
+                    .orElse(null);
+        }
+
+        LocalDate previousStayDate = trip.getStartDate().plusDays(dayNo - 2L);
+        return tripAccommodationRepository.findByTripIdOrderByStayDate(trip.getTripId())
+                .stream()
+                .filter(tripAccommodation -> tripAccommodation.getStayDate().equals(previousStayDate))
+                .findFirst()
+                .map(TripAccommodation::getAccommodation)
+                .map(accommodation -> new RouteOrigin(
+                        accommodation.getLatitude(),
+                        accommodation.getLongitude()
+                ))
+                .orElse(null);
     }
 
     @Transactional
@@ -1046,6 +1113,12 @@ public class ItineraryService {
             LocalTime startTime,
             LocalTime endTime,
             Integer travelMinutesFromPrevious
+    ) {
+    }
+
+    private record RouteOrigin(
+            Double latitude,
+            Double longitude
     ) {
     }
 

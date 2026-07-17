@@ -102,6 +102,7 @@ class MvpTripPlanningFlowTest {
         ItineraryService itineraryService = new ItineraryService(
                 itineraryRepository,
                 tripRepository,
+                tripAccommodationRepository,
                 placeRepository,
                 new SimpleRouteCalculationAdapter()
         );

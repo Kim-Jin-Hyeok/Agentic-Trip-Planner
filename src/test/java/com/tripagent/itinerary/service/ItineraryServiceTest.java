@@ -19,9 +19,12 @@ import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.route.RouteCalculationAdapter;
+import com.tripagent.accommodation.domain.Accommodation;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
+import com.tripagent.trip.domain.TripAccommodation;
 import com.tripagent.trip.domain.TripConcept;
+import com.tripagent.trip.repository.TripAccommodationRepository;
 import com.tripagent.trip.repository.TripRepository;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
@@ -43,6 +46,9 @@ class ItineraryServiceTest {
 
     @Mock
     private TripRepository tripRepository;
+
+    @Mock
+    private TripAccommodationRepository tripAccommodationRepository;
 
     @Mock
     private PlaceRepository placeRepository;
@@ -85,6 +91,110 @@ class ItineraryServiceTest {
         assertThat(response.orderNo()).isEqualTo(1);
         assertThat(response.generationSource()).isEqualTo(ItineraryGenerationSource.MANUAL);
         verify(itineraryRepository).save(any(Itinerary.class));
+    }
+
+    @Test
+    void createItineraryAdjustsFirstVisitTimeFromTripStartPlace() {
+        Trip trip = tripWithStartPlace(1L, 50L, LocalTime.of(18, 0));
+        Place startPlace = place(50L, "제주국제공항");
+        Place place = place(10L);
+        ItineraryCreateRequest request = request(10L, 1, 1);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(startPlace));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of());
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(40);
+        when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(invocation -> {
+            Itinerary itinerary = invocation.getArgument(0);
+            setId(itinerary, "itineraryId", 100L);
+            return itinerary;
+        });
+
+        ItineraryResponse response = itineraryService.createItinerary(1L, request);
+
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(9, 40));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(11, 10));
+        assertThat(response.travelMinutesFromPrevious()).isZero();
+    }
+
+    @Test
+    void createItineraryKeepsLaterFirstVisitTimeSelectedByUser() {
+        Trip trip = tripWithStartPlace(1L, 50L, LocalTime.of(18, 0));
+        Place startPlace = place(50L, "제주국제공항");
+        Place place = place(10L);
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                10L,
+                1,
+                1,
+                LocalTime.of(10, 0),
+                LocalTime.of(11, 30),
+                0,
+                "Later first visit"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(startPlace));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of());
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(40);
+        when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(invocation -> {
+            Itinerary itinerary = invocation.getArgument(0);
+            setId(itinerary, "itineraryId", 100L);
+            return itinerary;
+        });
+
+        ItineraryResponse response = itineraryService.createItinerary(1L, request);
+
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(10, 0));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(11, 30));
+        assertThat(response.travelMinutesFromPrevious()).isZero();
+    }
+
+    @Test
+    void createItineraryAdjustsFirstVisitTimeFromPreviousAccommodation() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        ItineraryCreateRequest request = request(10L, 2, 1);
+        TripAccommodation tripAccommodation = org.mockito.Mockito.mock(TripAccommodation.class);
+        Accommodation accommodation = org.mockito.Mockito.mock(Accommodation.class);
+        when(tripAccommodation.getStayDate()).thenReturn(LocalDate.of(2026, 7, 1));
+        when(tripAccommodation.getAccommodation()).thenReturn(accommodation);
+        when(accommodation.getLatitude()).thenReturn(33.4);
+        when(accommodation.getLongitude()).thenReturn(126.5);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 2)).thenReturn(List.of());
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(tripAccommodation));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(30);
+        when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(invocation -> {
+            Itinerary itinerary = invocation.getArgument(0);
+            setId(itinerary, "itineraryId", 100L);
+            return itinerary;
+        });
+
+        ItineraryResponse response = itineraryService.createItinerary(1L, request);
+
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(9, 30));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(11, 0));
+        assertThat(response.travelMinutesFromPrevious()).isZero();
+    }
+
+    @Test
+    void createItineraryRejectsFirstVisitAdjustedAfterDailyEndTime() {
+        Trip trip = tripWithStartPlace(1L, 50L, LocalTime.of(10, 30));
+        Place startPlace = place(50L, "제주국제공항");
+        Place place = place(10L);
+        ItineraryCreateRequest request = request(10L, 1, 1);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(startPlace));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of());
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(40);
+
+        assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime.");
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
     }
 
     @Test
@@ -1228,6 +1338,25 @@ class ItineraryServiceTest {
                 TripConcept.HEALING,
                 Transportation.RENT_CAR,
                 "SEOGWIPO"
+        );
+        setId(trip, "tripId", tripId);
+        return trip;
+    }
+
+    private Trip tripWithStartPlace(Long tripId, Long startPlaceId, LocalTime dailyEndTime) {
+        Trip trip = Trip.create(
+                "제주 여행",
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                dailyEndTime,
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                startPlaceId,
+                startPlaceId,
+                null
         );
         setId(trip, "tripId", tripId);
         return trip;
