@@ -6,6 +6,8 @@ public record DayStartRouteResponse(
         Integer dayNo,
         String originType,
         String originName,
+        Double originLatitude,
+        Double originLongitude,
         Integer travelMinutes,
         LocalTime estimatedDepartureTime,
         boolean departureBeforeDailyStartTime

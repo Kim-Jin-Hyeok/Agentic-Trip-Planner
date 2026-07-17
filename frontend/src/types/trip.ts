@@ -141,6 +141,8 @@ export type DayEndRoute = {
   dayNo: number;
   destinationType: 'ACCOMMODATION' | 'TRIP_END';
   destinationName: string;
+  destinationLatitude: number;
+  destinationLongitude: number;
   travelMinutes: number;
   estimatedArrivalTime: string;
   arrivalAfterDailyEndTime: boolean;
@@ -150,6 +152,8 @@ export type DayStartRoute = {
   dayNo: number;
   originType: 'ACCOMMODATION' | 'TRIP_START';
   originName: string;
+  originLatitude: number;
+  originLongitude: number;
   travelMinutes: number;
   estimatedDepartureTime: string;
   departureBeforeDailyStartTime: boolean;

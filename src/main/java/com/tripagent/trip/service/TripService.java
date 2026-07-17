@@ -302,6 +302,8 @@ public class TripService {
                     dayNo,
                     origin.originType(),
                     origin.originName(),
+                    origin.latitude(),
+                    origin.longitude(),
                     travelMinutes,
                     firstItinerary.getStartTime().minusMinutes(travelMinutes),
                     departureMinuteOfDay < dailyStartMinuteOfDay
@@ -378,6 +380,8 @@ public class TripService {
                     dayNo,
                     destination.destinationType(),
                     destination.destinationName(),
+                    destination.latitude(),
+                    destination.longitude(),
                     travelMinutes,
                     lastItinerary.getEndTime().plusMinutes(travelMinutes),
                     arrivalMinuteOfDay > dailyEndMinuteOfDay

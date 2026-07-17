@@ -1,4 +1,5 @@
 import type { DayEndRoute, DayStartRoute, Itinerary, PlaceResponse } from '../types/trip';
+import { createDayRouteUrls } from '../utils/kakaoRoute';
 import { itineraryForm, type ItineraryEditForm, type ViewMode } from '../utils/tripDisplay';
 
 type ItineraryDaySectionProps = {
@@ -64,6 +65,7 @@ export function ItineraryDaySection({
     (total, itinerary) => total + itinerary.travelMinutesFromPrevious,
     0
   );
+  const dayRouteUrls = createDayRouteUrls(dayItineraries, dayStartRoute, dayEndRoute);
 
   return (
     <section className="day-section">
@@ -92,15 +94,19 @@ export function ItineraryDaySection({
                   : '이 Day만 다시 만들기'}
             </button>
           )}
-          <a
-            className="day-route-link"
-            href={createDayRouteUrl(dayItineraries)}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Day ${dayNo} 전체 동선을 Google 지도에서 보기`}
-          >
-            전체 동선 보기 <span aria-hidden="true">↗</span>
-          </a>
+          {dayRouteUrls.map((routeUrl, index) => (
+            <a
+              key={routeUrl}
+              className="day-route-link"
+              href={routeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Day ${dayNo} ${dayRouteUrls.length > 1 ? `${index + 1}구간 ` : ''}전체 동선을 카카오맵에서 보기`}
+            >
+              {dayRouteUrls.length > 1 ? `동선 ${index + 1}/${dayRouteUrls.length}` : '전체 동선 보기'}{' '}
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))}
         </div>
       </div>
       {dayStartRoute != null && (
@@ -344,28 +350,6 @@ function createGoogleMapsUrl(place: Itinerary['place']): string {
     query: mapLocation(place)
   });
   return `https://www.google.com/maps/search/?${searchParams.toString()}`;
-}
-
-function createDayRouteUrl(itineraries: Itinerary[]): string {
-  if (itineraries.length === 0) {
-    return 'https://www.google.com/maps';
-  }
-  if (itineraries.length === 1) {
-    return createGoogleMapsUrl(itineraries[0].place);
-  }
-
-  const searchParams = new URLSearchParams({
-    api: '1',
-    origin: mapLocation(itineraries[0].place),
-    destination: mapLocation(itineraries[itineraries.length - 1].place),
-    travelmode: 'driving'
-  });
-  const waypoints = itineraries.slice(1, -1).map((itinerary) => mapLocation(itinerary.place));
-  if (waypoints.length > 0) {
-    searchParams.set('waypoints', waypoints.join('|'));
-  }
-
-  return `https://www.google.com/maps/dir/?${searchParams.toString()}`;
 }
 
 function mapLocation(place: Itinerary['place']): string {
