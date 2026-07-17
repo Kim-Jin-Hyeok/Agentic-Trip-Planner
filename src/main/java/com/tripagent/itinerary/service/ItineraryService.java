@@ -271,7 +271,7 @@ public class ItineraryService {
                 .orElseThrow(() -> new NoSuchElementException("Itinerary not found. itineraryId=" + itineraryId));
         validateItineraryBelongsToTrip(itinerary, tripId);
 
-        itineraryRepository.delete(itinerary);
+        deleteAndNormalizeDay(itinerary);
     }
 
     @Transactional
@@ -283,7 +283,42 @@ public class ItineraryService {
                 .orElseThrow(() -> new NoSuchElementException("Itinerary not found. itineraryId=" + itineraryId));
         validateItineraryBelongsToTrip(itinerary, tripId);
 
+        deleteAndNormalizeDay(itinerary);
+    }
+
+    private void deleteAndNormalizeDay(Itinerary itinerary) {
+        List<Itinerary> dayItineraries = itineraryRepository.findByTrip_TripIdAndDayNo(
+                itinerary.getTrip().getTripId(),
+                itinerary.getDayNo()
+        );
         itineraryRepository.delete(itinerary);
+
+        List<Itinerary> remainingItineraries = dayItineraries.stream()
+                .filter(dayItinerary -> !dayItinerary.getItineraryId().equals(itinerary.getItineraryId()))
+                .sorted(Comparator.comparing(Itinerary::getOrderNo))
+                .toList();
+        for (int index = 0; index < remainingItineraries.size(); index++) {
+            Itinerary remainingItinerary = remainingItineraries.get(index);
+            int normalizedOrderNo = index + 1;
+            int normalizedTravelMinutes = normalizedOrderNo == 1
+                    ? 0
+                    : remainingItinerary.getTravelMinutesFromPrevious();
+            if (remainingItinerary.getOrderNo().equals(normalizedOrderNo)
+                    && remainingItinerary.getTravelMinutesFromPrevious().equals(normalizedTravelMinutes)) {
+                continue;
+            }
+
+            remainingItinerary.update(
+                    remainingItinerary.getPlace(),
+                    remainingItinerary.getDayNo(),
+                    normalizedOrderNo,
+                    remainingItinerary.getStartTime(),
+                    remainingItinerary.getEndTime(),
+                    normalizedTravelMinutes,
+                    remainingItinerary.getReason()
+            );
+            remainingItinerary.markAsUserAdjusted();
+        }
     }
 
     public List<ItineraryResponse> getItineraries(Long tripId) {

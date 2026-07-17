@@ -761,6 +761,29 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void deleteItineraryNormalizesRemainingDayOrderAndFirstTravelMinutes() {
+        Trip trip = trip(1L);
+        Place place = place(10L);
+        Itinerary first = itinerary(100L, trip, place, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0);
+        Itinerary second = itinerary(200L, trip, place, 1, 2, LocalTime.of(10, 30), LocalTime.of(11, 30), 30);
+        Itinerary third = itinerary(300L, trip, place, 1, 3, LocalTime.of(12, 0), LocalTime.of(13, 0), 30);
+        when(tripRepository.existsById(1L)).thenReturn(true);
+        when(itineraryRepository.findById(100L)).thenReturn(Optional.of(first));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1))
+                .thenReturn(List.of(third, first, second));
+
+        itineraryService.deleteItinerary(1L, 100L);
+
+        assertThat(second.getOrderNo()).isEqualTo(1);
+        assertThat(second.getTravelMinutesFromPrevious()).isZero();
+        assertThat(second.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
+        assertThat(third.getOrderNo()).isEqualTo(2);
+        assertThat(third.getTravelMinutesFromPrevious()).isEqualTo(30);
+        assertThat(third.getGenerationSource()).isEqualTo(ItineraryGenerationSource.USER_ADJUSTED);
+        verify(itineraryRepository).delete(first);
+    }
+
+    @Test
     void deleteItineraryRejectsUnknownTrip() {
         when(tripRepository.existsById(1L)).thenReturn(false);
 
