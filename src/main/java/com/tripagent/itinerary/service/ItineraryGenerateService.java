@@ -572,12 +572,15 @@ public class ItineraryGenerateService {
                     .comparingInt((PlaceResponse place) -> travelMinutes(startAccommodation, place))
                     .thenComparing(PlaceResponse::placeId));
         }
-        PlaceResponse preferredStart = findFallbackStartPlace(trip, candidatePlaces, preferredStartRegion);
-        if (dayItemCount == 1 && preferredEndRegion != null) {
-            preferredStart = findFallbackStartPlace(trip, candidatePlaces, preferredEndRegion);
+        PlaceResponse preferredStart = null;
+        if (startAccommodation == null) {
+            preferredStart = findFallbackStartPlace(trip, candidatePlaces, preferredStartRegion);
+            if (dayItemCount == 1 && preferredEndRegion != null) {
+                preferredStart = findFallbackStartPlace(trip, candidatePlaces, preferredEndRegion);
+            }
+            startCandidates.remove(preferredStart);
+            startCandidates.addFirst(preferredStart);
         }
-        startCandidates.remove(preferredStart);
-        startCandidates.addFirst(preferredStart);
 
         for (PlaceResponse startCandidate : startCandidates) {
             if (startAccommodation != null
@@ -1022,7 +1025,13 @@ public class ItineraryGenerateService {
         validateGeneratedPlaceControls(request, selectedPlaceIds);
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
         validateDayAndOrderPolicies(trip, createRequests);
-        createRequests = applyCalculatedTravelMinutes(candidatePlaces, createRequests);
+        createRequests = applyCalculatedTravelMinutesAndAdjustSchedule(
+                trip,
+                request,
+                candidatePlaces,
+                createRequests,
+                routeAnchorByBoundaryNo
+        );
         validateDraftItineraries(trip, request, createRequests, targetDayNo);
         validateRouteAnchors(trip, request, candidatePlaces, createRequests, routeAnchorByBoundaryNo);
 
@@ -1205,9 +1214,12 @@ public class ItineraryGenerateService {
         return to == null || to.placeId() == null ? 0 : travelMinutes(from, to);
     }
 
-    private List<ItineraryCreateRequest> applyCalculatedTravelMinutes(
+    private List<ItineraryCreateRequest> applyCalculatedTravelMinutesAndAdjustSchedule(
+            Trip trip,
+            ItineraryGenerateRequest request,
             List<PlaceResponse> candidatePlaces,
-            List<ItineraryCreateRequest> createRequests
+            List<ItineraryCreateRequest> createRequests,
+            Map<Integer, RouteAnchor> routeAnchorByBoundaryNo
     ) {
         Map<Long, PlaceResponse> candidatePlaceById = candidatePlaces.stream()
                 .collect(Collectors.toMap(PlaceResponse::placeId, Function.identity()));
@@ -1215,46 +1227,56 @@ public class ItineraryGenerateService {
                 .sorted(Comparator.comparing(ItineraryCreateRequest::dayNo)
                         .thenComparing(ItineraryCreateRequest::orderNo))
                 .toList();
+        Map<Integer, DayTimeWindow> dayTimeWindowByDayNo = createDayTimeWindows(trip, request);
         List<ItineraryCreateRequest> requestsWithCalculatedTravelMinutes = new ArrayList<>();
         PlaceResponse previousPlace = null;
         ItineraryCreateRequest previousRequest = null;
 
-        for (ItineraryCreateRequest request : sortedRequests) {
-            PlaceResponse currentPlace = candidatePlaceById.get(request.placeId());
+        for (ItineraryCreateRequest createRequest : sortedRequests) {
+            PlaceResponse currentPlace = candidatePlaceById.get(createRequest.placeId());
             if (currentPlace == null) {
                 throw new IllegalArgumentException("Itinerary placeId must be included in candidate places. placeId="
-                        + request.placeId());
+                        + createRequest.placeId());
             }
 
-            PlaceResponse previousPlaceForCalculation = previousPlace;
-            if (Integer.valueOf(1).equals(request.orderNo())) {
-                previousPlaceForCalculation = null;
-            }
-
-            int travelMinutesFromPrevious = routeCalculationAdapter.calculateTravelMinutes(
-                    previousPlaceForCalculation,
-                    currentPlace
-            );
-
-            LocalTime startTime = request.startTime();
-            LocalTime endTime = request.endTime();
-            if (previousRequest != null && previousRequest.dayNo().equals(request.dayNo())) {
-                LocalTime earliestStartTime = previousRequest.endTime().plusMinutes(travelMinutesFromPrevious);
-                if (!startTime.isBefore(previousRequest.endTime()) && startTime.isBefore(earliestStartTime)) {
-                    long stayMinutes = ChronoUnit.MINUTES.between(startTime, endTime);
-                    startTime = earliestStartTime;
-                    endTime = startTime.plusMinutes(stayMinutes);
+            boolean firstItemOfDay = previousRequest == null
+                    || !previousRequest.dayNo().equals(createRequest.dayNo());
+            int travelMinutesFromPrevious = firstItemOfDay
+                    ? 0
+                    : routeCalculationAdapter.calculateTravelMinutes(previousPlace, currentPlace);
+            LocalTime earliestStartTime;
+            if (firstItemOfDay) {
+                RouteAnchor startAnchor = routeAnchorByBoundaryNo.get(createRequest.dayNo() - 1);
+                if (startAnchor == null) {
+                    earliestStartTime = createRequest.startTime();
+                } else {
+                    DayTimeWindow dayTimeWindow = dayTimeWindowByDayNo.get(createRequest.dayNo());
+                    earliestStartTime = dayTimeWindow.startTime()
+                            .plusMinutes(travelMinutes(startAnchor, currentPlace));
                 }
+            } else {
+                earliestStartTime = previousRequest.endTime().plusMinutes(travelMinutesFromPrevious);
             }
 
+            long stayMinutes = ChronoUnit.MINUTES.between(createRequest.startTime(), createRequest.endTime());
+            if (stayMinutes <= 0) {
+                throw new IllegalArgumentException(
+                        "Itinerary startTime must be before endTime. dayNo=" + createRequest.dayNo()
+                                + ", orderNo=" + createRequest.orderNo()
+                );
+            }
+            LocalTime startTime = createRequest.startTime().isBefore(earliestStartTime)
+                    ? earliestStartTime
+                    : createRequest.startTime();
+            LocalTime endTime = startTime.plusMinutes(stayMinutes);
             ItineraryCreateRequest adjustedRequest = new ItineraryCreateRequest(
-                    request.placeId(),
-                    request.dayNo(),
-                    request.orderNo(),
+                    createRequest.placeId(),
+                    createRequest.dayNo(),
+                    createRequest.orderNo(),
                     startTime,
                     endTime,
                     travelMinutesFromPrevious,
-                    request.reason()
+                    createRequest.reason()
             );
             requestsWithCalculatedTravelMinutes.add(adjustedRequest);
             previousPlace = currentPlace;
