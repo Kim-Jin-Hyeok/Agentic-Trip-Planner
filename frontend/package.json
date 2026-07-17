@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test tests/kakaoRoute.test.ts",
+    "test": "node --test tests/kakaoRoute.test.ts tests/accommodationDisplay.test.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },

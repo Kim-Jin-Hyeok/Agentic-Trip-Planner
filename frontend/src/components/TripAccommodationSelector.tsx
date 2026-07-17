@@ -11,6 +11,7 @@ import type {
   TripAccommodation
 } from '../types/accommodation';
 import type { PageResponse } from '../types/trip';
+import { createStayContextLabels } from '../utils/accommodationDisplay';
 
 type TripAccommodationSelectorProps = {
   tripId: number;
@@ -58,6 +59,8 @@ export function TripAccommodationSelector({
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const activeStayIndex = activeStayDate == null ? -1 : stayDates.indexOf(activeStayDate);
+  const activeStayContext = activeStayIndex < 0 ? null : createStayContextLabels(activeStayIndex);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,7 +185,7 @@ export function TripAccommodationSelector({
         <div>
           <p>STAY ROUTE</p>
           <h3>날짜별 숙소</h3>
-          <span>선택한 숙소 지역을 기준으로 하루의 시작과 마지막 동선을 구성합니다.</span>
+          <span>각 숙소는 해당 일차의 마지막 동선과 다음 날 출발 일정에 반영됩니다.</span>
         </div>
         <small>{Object.keys(selectedByDate).length}/{stayDates.length}박 선택</small>
       </div>
@@ -195,11 +198,15 @@ export function TripAccommodationSelector({
         <div className="stay-date-list">
           {stayDates.map((stayDate, index) => {
             const selected = selectedByDate[stayDate];
+            const stayContext = createStayContextLabels(index);
             return (
               <article className="stay-date-card" key={stayDate}>
                 <div className="stay-date-label">
-                  <strong>{index + 1}박</strong>
-                  <span>{formatStayDate(stayDate)}</span>
+                  <strong>{stayContext.stayLabel}</strong>
+                  <div>
+                    <span>{formatStayDate(stayDate)} 숙박</span>
+                    <small>{stayContext.departureLabel}</small>
+                  </div>
                 </div>
                 {selected == null ? (
                   <p>선택된 숙소가 없습니다.</p>
@@ -244,7 +251,13 @@ export function TripAccommodationSelector({
       {activeStayDate != null && (
         <div className="accommodation-search-panel">
           <div className="accommodation-search-title">
-            <strong>{formatStayDate(activeStayDate)} 숙소 찾기</strong>
+            <div className="accommodation-search-context">
+              <strong>{activeStayContext?.stayLabel ?? '숙소'} 찾기</strong>
+              <span>
+                {formatStayDate(activeStayDate)} 숙박
+                {activeStayContext == null ? '' : ` · ${activeStayContext.departureLabel}`}
+              </span>
+            </div>
             <button type="button" className="secondary-button" onClick={() => setActiveStayDate(null)}>
               닫기
             </button>
