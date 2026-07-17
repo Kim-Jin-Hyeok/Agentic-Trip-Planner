@@ -1022,23 +1022,26 @@ button.trip-list-item:hover:not(:disabled),
   gap: 12px;
 }
 
-.number-input-suffix {
-  position: relative;
-}
-
-.number-input-suffix input {
-  padding-right: 35px;
-}
-
-.number-input-suffix span {
-  position: absolute;
-  top: 50%;
-  right: 12px;
+.itinerary-auto-calculate-notice {
+  border-radius: 10px;
+  background: var(--surface-soft);
   color: var(--muted);
   font-size: 11px;
+  line-height: 1.55;
+  padding: 9px 11px;
+}
+
+.itinerary-auto-calculate-value {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 700;
-  pointer-events: none;
-  transform: translateY(-50%);
+  padding: 0 12px;
 }
 
 .itinerary-add-actions {

@@ -70,6 +70,10 @@ export function ItineraryAddForm({
         </label>
       </div>
 
+      <p id="itinerary-auto-calculate-notice" className="itinerary-auto-calculate-notice">
+        입력한 시작·종료 시각의 체류시간은 유지되며, 실제 이동시간과 방문 시각은 장소를 추가할 때 자동 계산됩니다.
+      </p>
+
       <div className="itinerary-add-time-grid">
         <label>
           시작 시간
@@ -93,16 +97,11 @@ export function ItineraryAddForm({
         </label>
         <label>
           이전 장소에서 이동
-          <div className="number-input-suffix">
-            <input
-              type="number"
-              min="0"
-              value={form.travelMinutesFromPrevious}
-              onChange={(event) => onChange('travelMinutesFromPrevious', Number(event.target.value))}
-              disabled={isSubmitting || form.orderNo === 1}
-              required
-            />
-            <span>분</span>
+          <div
+            className="itinerary-auto-calculate-value"
+            aria-describedby="itinerary-auto-calculate-notice"
+          >
+            {form.orderNo === 1 ? '0분' : '저장 시 자동 계산'}
           </div>
         </label>
       </div>

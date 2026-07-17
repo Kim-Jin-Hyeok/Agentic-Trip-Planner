@@ -88,6 +88,83 @@ class ItineraryServiceTest {
     }
 
     @Test
+    void createItineraryCalculatesTravelAndTimesWhenAppendingPlace() {
+        Trip trip = trip(1L);
+        Place previousPlace = place(10L, "Previous Place");
+        Place newPlace = place(20L, "New Place");
+        Itinerary previousItinerary = itinerary(
+                100L,
+                trip,
+                previousPlace,
+                1,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0),
+                0
+        );
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                20L,
+                1,
+                2,
+                LocalTime.of(10, 20),
+                LocalTime.of(11, 50),
+                20,
+                "Append itinerary"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(20L)).thenReturn(Optional.of(newPlace));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(previousItinerary));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(35);
+        when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(invocation -> {
+            Itinerary itinerary = invocation.getArgument(0);
+            setId(itinerary, "itineraryId", 200L);
+            return itinerary;
+        });
+
+        ItineraryResponse response = itineraryService.createItinerary(1L, request);
+
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(10, 35));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(12, 5));
+        assertThat(response.travelMinutesFromPrevious()).isEqualTo(35);
+        verify(routeCalculationAdapter).calculateTravelMinutes(any(), any(), any(), any());
+    }
+
+    @Test
+    void createItineraryRejectsAutomaticallyCalculatedEndTimeAfterDailyEndTime() {
+        Trip trip = trip(1L, LocalTime.of(9, 0), LocalTime.of(11, 0));
+        Place previousPlace = place(10L, "Previous Place");
+        Place newPlace = place(20L, "New Place");
+        Itinerary previousItinerary = itinerary(
+                100L,
+                trip,
+                previousPlace,
+                1,
+                1,
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0),
+                0
+        );
+        ItineraryCreateRequest request = new ItineraryCreateRequest(
+                20L,
+                1,
+                2,
+                LocalTime.of(10, 20),
+                LocalTime.of(10, 50),
+                20,
+                "Append itinerary"
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeRepository.findById(20L)).thenReturn(Optional.of(newPlace));
+        when(itineraryRepository.findByTrip_TripIdAndDayNo(1L, 1)).thenReturn(List.of(previousItinerary));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any())).thenReturn(45);
+
+        assertThatThrownBy(() -> itineraryService.createItinerary(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Itinerary endTime must be at or before trip dailyEndTime.");
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
     void createItineraryRejectsUnknownTrip() {
         ItineraryCreateRequest request = request(10L, 1, 1);
         when(tripRepository.findById(1L)).thenReturn(Optional.empty());

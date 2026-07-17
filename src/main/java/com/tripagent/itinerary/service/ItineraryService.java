@@ -74,7 +74,6 @@ public class ItineraryService {
         validateRequest(tripId, request);
 
         Trip trip = findTripAndValidateOwner(tripId, ownerId);
-
         validateItineraryValues(
                 trip,
                 null,
@@ -86,20 +85,78 @@ public class ItineraryService {
         );
         Place place = placeRepository.findById(request.placeId())
                 .orElseThrow(() -> new NoSuchElementException("Place not found. placeId=" + request.placeId()));
+        ItineraryCreateValues createValues = resolveCreateValues(
+                trip.getTripId(),
+                request,
+                place,
+                generationSource
+        );
+
+        if (!createValues.matches(request)) {
+            validateItineraryValues(
+                    trip,
+                    null,
+                    request.dayNo(),
+                    request.orderNo(),
+                    createValues.startTime(),
+                    createValues.endTime(),
+                    createValues.travelMinutesFromPrevious()
+            );
+        }
 
         Itinerary itinerary = Itinerary.create(
                 trip,
                 place,
                 request.dayNo(),
                 request.orderNo(),
-                request.startTime(),
-                request.endTime(),
-                request.travelMinutesFromPrevious(),
+                createValues.startTime(),
+                createValues.endTime(),
+                createValues.travelMinutesFromPrevious(),
                 request.reason(),
                 generationSource
         );
 
         return ItineraryResponse.from(itineraryRepository.save(itinerary));
+    }
+
+    private ItineraryCreateValues resolveCreateValues(
+            Long tripId,
+            ItineraryCreateRequest request,
+            Place place,
+            ItineraryGenerationSource generationSource
+    ) {
+        ItineraryCreateValues requestedValues = new ItineraryCreateValues(
+                request.startTime(),
+                request.endTime(),
+                request.travelMinutesFromPrevious()
+        );
+        if (generationSource != ItineraryGenerationSource.MANUAL) {
+            return requestedValues;
+        }
+
+        Itinerary lastItinerary = itineraryRepository.findByTrip_TripIdAndDayNo(tripId, request.dayNo())
+                .stream()
+                .max(Comparator.comparing(Itinerary::getOrderNo))
+                .orElse(null);
+        if (lastItinerary == null || request.orderNo() != lastItinerary.getOrderNo() + 1) {
+            return requestedValues;
+        }
+
+        int stayMinutes = (int) ChronoUnit.MINUTES.between(request.startTime(), request.endTime());
+        Place previousPlace = lastItinerary.getPlace();
+        int travelMinutes = routeCalculationAdapter.calculateTravelMinutes(
+                previousPlace.getLatitude(),
+                previousPlace.getLongitude(),
+                place.getLatitude(),
+                place.getLongitude()
+        );
+        LocalTime startTime = lastItinerary.getEndTime().plusMinutes(travelMinutes);
+
+        return new ItineraryCreateValues(
+                startTime,
+                startTime.plusMinutes(stayMinutes),
+                travelMinutes
+        );
     }
 
     @Transactional
@@ -816,5 +873,18 @@ public class ItineraryService {
             LocalTime endTime,
             Integer travelMinutesFromPrevious
     ) {
+    }
+
+    private record ItineraryCreateValues(
+            LocalTime startTime,
+            LocalTime endTime,
+            Integer travelMinutesFromPrevious
+    ) {
+
+        private boolean matches(ItineraryCreateRequest request) {
+            return startTime.equals(request.startTime())
+                    && endTime.equals(request.endTime())
+                    && travelMinutesFromPrevious.equals(request.travelMinutesFromPrevious());
+        }
     }
 }
