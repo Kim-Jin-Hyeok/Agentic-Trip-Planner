@@ -14,6 +14,8 @@ export type TripCreateRequest = {
   concept: TripConcept;
   transportation: Transportation;
   lastAccommodationArea: string;
+  startPlaceId: number | null;
+  endPlaceId: number | null;
 };
 
 export type TripTitleUpdateRequest = {
@@ -27,6 +29,8 @@ export type TripConditionUpdateRequest = {
   dailyEndTime: string;
   concept: TripConcept;
   lastAccommodationArea: string;
+  startPlaceId: number | null;
+  endPlaceId: number | null;
 };
 
 export type TripResponse = TripCreateRequest & {

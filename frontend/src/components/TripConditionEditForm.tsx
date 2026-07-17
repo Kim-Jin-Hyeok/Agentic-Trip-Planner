@@ -1,11 +1,12 @@
 import type { FormEvent } from 'react';
-import type { TripConcept, TripConditionUpdateRequest } from '../types/trip';
+import type { PlaceResponse, TripConcept, TripConditionUpdateRequest } from '../types/trip';
 import { conceptOptions } from '../utils/tripDisplay';
 
 type TripConditionEditFormProps = {
   form: TripConditionUpdateRequest;
   error: string;
   isUpdating: boolean;
+  endpointPlaces: PlaceResponse[];
   onChange: <K extends keyof TripConditionUpdateRequest>(key: K, value: TripConditionUpdateRequest[K]) => void;
   onCancel: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -15,6 +16,7 @@ export function TripConditionEditForm({
   form,
   error,
   isUpdating,
+  endpointPlaces,
   onChange,
   onCancel,
   onSubmit
@@ -32,6 +34,33 @@ export function TripConditionEditForm({
       <p className="condition-edit-notice">
         일정이 만들어진 상태에서 조건을 변경하면 기존 일정은 삭제되고 여행은 비공개로 전환됩니다.
       </p>
+
+      <div className="field-grid">
+        <label>
+          여행 시작 지점
+          <select
+            value={form.startPlaceId ?? ''}
+            onChange={(event) => onChange('startPlaceId', Number(event.target.value) || null)}
+            disabled={isUpdating || endpointPlaces.length === 0}
+          >
+            {endpointPlaces.map((place) => (
+              <option key={place.placeId} value={place.placeId}>{place.name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          여행 종료 지점
+          <select
+            value={form.endPlaceId ?? ''}
+            onChange={(event) => onChange('endPlaceId', Number(event.target.value) || null)}
+            disabled={isUpdating || endpointPlaces.length === 0}
+          >
+            {endpointPlaces.map((place) => (
+              <option key={place.placeId} value={place.placeId}>{place.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <div className="field-grid">
         <label>

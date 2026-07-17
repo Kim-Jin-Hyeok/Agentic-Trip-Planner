@@ -58,4 +58,9 @@ public class PlaceController {
     public ApiResponse<PlaceResponse> getPlace(@PathVariable Long placeId) {
         return ApiResponse.success(placeService.getPlace(placeId));
     }
+
+    @GetMapping("/trip-endpoints")
+    public ApiResponse<List<PlaceResponse>> getTripEndpointPlaces() {
+        return ApiResponse.success(placeService.findTripEndpointPlaces());
+    }
 }

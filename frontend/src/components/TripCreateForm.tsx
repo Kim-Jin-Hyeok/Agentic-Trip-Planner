@@ -1,16 +1,24 @@
 import type { FormEvent } from 'react';
-import type { TripConcept, TripCreateRequest } from '../types/trip';
+import type { PlaceResponse, TripConcept, TripCreateRequest } from '../types/trip';
 import { conceptOptions } from '../utils/tripDisplay';
 
 type TripCreateFormProps = {
   form: TripCreateRequest;
   isCreating: boolean;
   disabled: boolean;
+  endpointPlaces: PlaceResponse[];
   onChange: <K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
-export function TripCreateForm({ form, isCreating, disabled, onChange, onSubmit }: TripCreateFormProps) {
+export function TripCreateForm({
+  form,
+  isCreating,
+  disabled,
+  endpointPlaces,
+  onChange,
+  onSubmit
+}: TripCreateFormProps) {
   return (
     <form className="trip-form" onSubmit={onSubmit}>
       <div className="form-section-heading">
@@ -19,6 +27,35 @@ export function TripCreateForm({ form, isCreating, disabled, onChange, onSubmit 
           <h3>새 여행 만들기</h3>
           <p>기본 조건을 입력하면 여행 일정 생성을 준비합니다.</p>
         </div>
+      </div>
+
+      <div className="field-grid">
+        <label>
+          여행 시작 지점
+          <select
+            value={form.startPlaceId ?? ''}
+            onChange={(event) => onChange('startPlaceId', Number(event.target.value) || null)}
+            disabled={endpointPlaces.length === 0}
+          >
+            {endpointPlaces.length === 0 && <option value="">제주국제공항</option>}
+            {endpointPlaces.map((place) => (
+              <option key={place.placeId} value={place.placeId}>{place.name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          여행 종료 지점
+          <select
+            value={form.endPlaceId ?? ''}
+            onChange={(event) => onChange('endPlaceId', Number(event.target.value) || null)}
+            disabled={endpointPlaces.length === 0}
+          >
+            {endpointPlaces.length === 0 && <option value="">제주국제공항</option>}
+            {endpointPlaces.map((place) => (
+              <option key={place.placeId} value={place.placeId}>{place.name}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {disabled && <p className="form-notice">로그인 후 나만의 여행을 만들 수 있습니다.</p>}

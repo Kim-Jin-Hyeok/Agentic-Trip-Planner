@@ -259,12 +259,17 @@ public class ItineraryGenerateService {
 
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
-        Map<Integer, TripAccommodation> accommodationByDayNo = findAccommodationsByDayNo(trip);
-        Map<Integer, String> accommodationRegionByDayNo = accommodationRegionsByDayNo(accommodationByDayNo);
         List<PlaceResponse> allCandidatePlaces = placeService.findCandidatePlaces(trip.getConcept());
+        Map<Integer, RouteAnchor> routeAnchorByBoundaryNo = findRouteAnchorsByBoundaryNo(trip, allCandidatePlaces);
+        Map<Integer, String> accommodationRegionByDayNo = routeRegionsByBoundaryNo(routeAnchorByBoundaryNo);
         validateGenerateRequest(trip, allCandidatePlaces, request);
+        Set<Long> endpointPlaceIds = routeAnchorByBoundaryNo.values().stream()
+                .map(RouteAnchor::placeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         List<PlaceResponse> availableCandidatePlaces = allCandidatePlaces.stream()
                 .filter(place -> !unavailablePlaceIds.contains(place.placeId()))
+                .filter(place -> !endpointPlaceIds.contains(place.placeId()))
                 .toList();
         List<PlaceResponse> selectedCandidatePlaces = selectLlmCandidatePlaces(
                 trip,
@@ -301,7 +306,7 @@ public class ItineraryGenerateService {
                 operation,
                 targetDayNo,
                 accommodationRegionByDayNo,
-                accommodationByDayNo
+                routeAnchorByBoundaryNo
         );
     }
 
@@ -313,7 +318,7 @@ public class ItineraryGenerateService {
             String operation,
             Integer targetDayNo,
             Map<Integer, String> accommodationRegionByDayNo,
-            Map<Integer, TripAccommodation> accommodationByDayNo
+            Map<Integer, RouteAnchor> routeAnchorByBoundaryNo
     ) {
         IllegalArgumentException lastValidationException = null;
         int maxAttemptCount = MAX_LLM_VALIDATION_RETRY_COUNT + 1;
@@ -330,7 +335,7 @@ public class ItineraryGenerateService {
                         attemptPrompt,
                         targetDayNo,
                         repairDuplicatedPlaces,
-                        accommodationByDayNo
+                        routeAnchorByBoundaryNo
                 );
                 logDraftGenerationSuccess(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces);
                 return createRequests;
@@ -338,7 +343,7 @@ public class ItineraryGenerateService {
                 logLlmFailure(trip, operation, attemptNumber, maxAttemptCount, request, candidatePlaces, exception);
                 return generateFallbackDraftItinerariesOrThrow(
                         trip, candidatePlaces, request, operation, exception, targetDayNo,
-                        accommodationRegionByDayNo, accommodationByDayNo
+                        accommodationRegionByDayNo, routeAnchorByBoundaryNo
                 );
             } catch (IllegalArgumentException exception) {
                 boolean repeatedValidationFailure = lastValidationException != null
@@ -373,7 +378,7 @@ public class ItineraryGenerateService {
                             lastValidationException,
                             targetDayNo,
                             accommodationRegionByDayNo,
-                            accommodationByDayNo
+                            routeAnchorByBoundaryNo
                     );
                 }
             }
@@ -388,7 +393,7 @@ public class ItineraryGenerateService {
                 lastValidationException,
                 targetDayNo,
                 accommodationRegionByDayNo,
-                accommodationByDayNo
+                routeAnchorByBoundaryNo
         );
     }
 
@@ -413,7 +418,7 @@ public class ItineraryGenerateService {
             RuntimeException originalException,
             Integer targetDayNo,
             Map<Integer, String> accommodationRegionByDayNo,
-            Map<Integer, TripAccommodation> accommodationByDayNo
+            Map<Integer, RouteAnchor> routeAnchorByBoundaryNo
     ) {
         if (!supportsFallback(operation)) {
             throw originalException;
@@ -426,7 +431,7 @@ public class ItineraryGenerateService {
                     request,
                     targetDayNo,
                     accommodationRegionByDayNo,
-                    accommodationByDayNo
+                    routeAnchorByBoundaryNo
             );
             logFallbackDraftGenerationSuccess(trip, operation, request, candidatePlaces, originalException);
             return fallbackCreateRequests;
@@ -455,7 +460,7 @@ public class ItineraryGenerateService {
             ItineraryGenerateRequest request,
             Integer targetDayNo,
             Map<Integer, String> accommodationRegionByDayNo,
-            Map<Integer, TripAccommodation> accommodationByDayNo
+            Map<Integer, RouteAnchor> routeAnchorByBoundaryNo
     ) {
         int tripDays = generationDayCount(trip, targetDayNo);
         PaceItineraryPolicy pacePolicy = request == null || request.pace() == null ? null : pacePolicy(request);
@@ -491,8 +496,8 @@ public class ItineraryGenerateService {
             List<PlaceResponse> dayPlaces;
             String preferredStartRegion = preferredStartRegion(trip, accommodationRegionByDayNo, dayNo);
             String preferredEndRegion = accommodationRegionByDayNo.get(dayNo);
-            TripAccommodation startAccommodation = accommodationByDayNo.get(dayNo - 1);
-            TripAccommodation endAccommodation = accommodationByDayNo.get(dayNo);
+            RouteAnchor startAccommodation = routeAnchorByBoundaryNo.get(dayNo - 1);
+            RouteAnchor endAccommodation = routeAnchorByBoundaryNo.get(dayNo);
             if (routeFlexibleSelection) {
                 dayPlaces = selectReachableFallbackDayPlaces(
                         trip,
@@ -519,7 +524,14 @@ public class ItineraryGenerateService {
                         endAccommodation
                 );
             }
-            fallbackCreateRequests.addAll(createFallbackDayItineraries(trip, request, dayNo, dayPlaces));
+            fallbackCreateRequests.addAll(createFallbackDayItineraries(
+                    trip,
+                    request,
+                    dayNo,
+                    dayPlaces,
+                    startAccommodation,
+                    endAccommodation
+            ));
             remainingSelectedPlaces.removeAll(dayPlaces);
         }
 
@@ -529,7 +541,13 @@ public class ItineraryGenerateService {
         validateGeneratedPlaceControls(request, selectedPlaceIds);
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
         validateDraftItineraries(trip, request, fallbackCreateRequests, targetDayNo);
-        validateAccommodationRouteAnchors(candidatePlaces, fallbackCreateRequests, accommodationByDayNo);
+        validateRouteAnchors(
+                trip,
+                request,
+                candidatePlaces,
+                fallbackCreateRequests,
+                routeAnchorByBoundaryNo
+        );
 
         return fallbackCreateRequests;
     }
@@ -545,8 +563,8 @@ public class ItineraryGenerateService {
             int dayItemCount,
             String preferredStartRegion,
             String preferredEndRegion,
-            TripAccommodation startAccommodation,
-            TripAccommodation endAccommodation
+            RouteAnchor startAccommodation,
+            RouteAnchor endAccommodation
     ) {
         List<PlaceResponse> startCandidates = new ArrayList<>(candidatePlaces);
         if (startAccommodation != null) {
@@ -603,7 +621,7 @@ public class ItineraryGenerateService {
             PlaceResponse currentPlace,
             List<PlaceResponse> candidatePlaces,
             String preferredRegion,
-            TripAccommodation endAccommodation
+            RouteAnchor endAccommodation
     ) {
         return candidatePlaces.stream()
                 .filter(place -> routeCalculationAdapter.calculateTravelMinutes(currentPlace, place)
@@ -715,8 +733,8 @@ public class ItineraryGenerateService {
             List<PlaceResponse> dayPlaces,
             String preferredStartRegion,
             String preferredEndRegion,
-            TripAccommodation startAccommodation,
-            TripAccommodation endAccommodation
+            RouteAnchor startAccommodation,
+            RouteAnchor endAccommodation
     ) {
         List<PlaceResponse> remainingPlaces = new ArrayList<>(dayPlaces);
         List<PlaceResponse> orderedPlaces = new ArrayList<>();
@@ -823,8 +841,16 @@ public class ItineraryGenerateService {
         return candidatePlaces.getFirst();
     }
 
-    private Map<Integer, TripAccommodation> findAccommodationsByDayNo(Trip trip) {
-        Map<Integer, TripAccommodation> accommodationByDayNo = new HashMap<>();
+    private Map<Integer, RouteAnchor> findRouteAnchorsByBoundaryNo(
+            Trip trip,
+            List<PlaceResponse> candidatePlaces
+    ) {
+        Map<Integer, RouteAnchor> routeAnchorByBoundaryNo = new HashMap<>();
+        PlaceResponse startPlace = findEndpointPlace(candidatePlaces, trip.getStartPlaceId());
+        PlaceResponse endPlace = findEndpointPlace(candidatePlaces, trip.getEndPlaceId());
+        if (startPlace != null) {
+            routeAnchorByBoundaryNo.put(0, RouteAnchor.from(startPlace));
+        }
         List<TripAccommodation> tripAccommodations =
                 tripAccommodationRepository.findByTripIdOrderByStayDate(trip.getTripId());
 
@@ -834,18 +860,36 @@ public class ItineraryGenerateService {
                 continue;
             }
             int dayNo = Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), stayDate) + 1);
-            accommodationByDayNo.put(dayNo, tripAccommodation);
+            routeAnchorByBoundaryNo.put(dayNo, RouteAnchor.from(tripAccommodation));
+        }
+        if (endPlace != null) {
+            routeAnchorByBoundaryNo.put(generationDayCount(trip, null), RouteAnchor.from(endPlace));
         }
 
-        return accommodationByDayNo;
+        return routeAnchorByBoundaryNo;
     }
 
-    private Map<Integer, String> accommodationRegionsByDayNo(
-            Map<Integer, TripAccommodation> accommodationByDayNo
+    private PlaceResponse findEndpointPlace(List<PlaceResponse> candidatePlaces, Long endpointPlaceId) {
+        if (endpointPlaceId != null) {
+            return candidatePlaces.stream()
+                    .filter(place -> endpointPlaceId.equals(place.placeId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Trip endpoint place must be included in active places. placeId=" + endpointPlaceId
+                    ));
+        }
+        return candidatePlaces.stream()
+                .filter(place -> "제주국제공항".equals(place.name()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Map<Integer, String> routeRegionsByBoundaryNo(
+            Map<Integer, RouteAnchor> routeAnchorByBoundaryNo
     ) {
         Map<Integer, String> accommodationRegionByDayNo = new HashMap<>();
-        accommodationByDayNo.forEach((dayNo, tripAccommodation) -> {
-            String region = normalizeArea(tripAccommodation.getAccommodation().getRegion());
+        routeAnchorByBoundaryNo.forEach((dayNo, routeAnchor) -> {
+            String region = normalizeArea(routeAnchor.region());
             if (region != null) {
                 accommodationRegionByDayNo.put(dayNo, region);
             }
@@ -858,11 +902,9 @@ public class ItineraryGenerateService {
             Map<Integer, String> accommodationRegionByDayNo,
             int dayNo
     ) {
-        if (dayNo > 1) {
-            String previousAccommodationRegion = accommodationRegionByDayNo.get(dayNo - 1);
-            if (previousAccommodationRegion != null) {
-                return previousAccommodationRegion;
-            }
+        String previousAccommodationRegion = accommodationRegionByDayNo.get(dayNo - 1);
+        if (previousAccommodationRegion != null) {
+            return previousAccommodationRegion;
         }
         return accommodationAreaRegionMapper.toPlaceRegion(trip.getLastAccommodationArea());
     }
@@ -889,13 +931,17 @@ public class ItineraryGenerateService {
             Trip trip,
             ItineraryGenerateRequest request,
             int dayNo,
-            List<PlaceResponse> dayPlaces
+            List<PlaceResponse> dayPlaces,
+            RouteAnchor startAnchor,
+            RouteAnchor endAnchor
     ) {
         DayTimeWindow dayTimeWindow = createDayTimeWindows(trip, request).get(dayNo);
         List<Integer> travelMinutes = fallbackTravelMinutes(dayPlaces);
+        int startAnchorTravelMinutes = tripEndpointTravelMinutes(startAnchor, dayPlaces.getFirst());
+        int endAnchorTravelMinutes = tripEndpointTravelMinutes(dayPlaces.getLast(), endAnchor);
         int totalTravelMinutes = travelMinutes.stream()
                 .mapToInt(Integer::intValue)
-                .sum();
+                .sum() + startAnchorTravelMinutes + endAnchorTravelMinutes;
         int availableStayMinutes = Math.toIntExact(
                 ChronoUnit.MINUTES.between(dayTimeWindow.startTime(), dayTimeWindow.endTime())
         ) - totalTravelMinutes;
@@ -904,7 +950,7 @@ public class ItineraryGenerateService {
         }
 
         int maxStayMinutesPerPlace = availableStayMinutes / dayPlaces.size();
-        LocalTime cursor = dayTimeWindow.startTime();
+        LocalTime cursor = dayTimeWindow.startTime().plusMinutes(startAnchorTravelMinutes);
         List<ItineraryCreateRequest> createRequests = new ArrayList<>();
 
         for (int index = 0; index < dayPlaces.size(); index++) {
@@ -961,7 +1007,7 @@ public class ItineraryGenerateService {
             String prompt,
             Integer targetDayNo,
             boolean repairDuplicatedPlaces,
-            Map<Integer, TripAccommodation> accommodationByDayNo
+            Map<Integer, RouteAnchor> routeAnchorByBoundaryNo
     ) {
         String rawResponse = llmClient.generate(prompt);
         List<LlmItineraryItemResponse> parsedItems = llmItineraryJsonParser.parse(rawResponse);
@@ -978,7 +1024,7 @@ public class ItineraryGenerateService {
         validateDayAndOrderPolicies(trip, createRequests);
         createRequests = applyCalculatedTravelMinutes(candidatePlaces, createRequests);
         validateDraftItineraries(trip, request, createRequests, targetDayNo);
-        validateAccommodationRouteAnchors(candidatePlaces, createRequests, accommodationByDayNo);
+        validateRouteAnchors(trip, request, candidatePlaces, createRequests, routeAnchorByBoundaryNo);
 
         return createRequests;
     }
@@ -1133,24 +1179,30 @@ public class ItineraryGenerateService {
         return routeCalculationAdapter.calculateTravelMinutes(from, to);
     }
 
-    private int travelMinutes(TripAccommodation from, PlaceResponse to) {
-        Accommodation accommodation = from.getAccommodation();
+    private int travelMinutes(RouteAnchor from, PlaceResponse to) {
         return routeCalculationAdapter.calculateTravelMinutes(
-                accommodation.getLatitude(),
-                accommodation.getLongitude(),
+                from.latitude(),
+                from.longitude(),
                 to.latitude(),
                 to.longitude()
         );
     }
 
-    private int travelMinutes(PlaceResponse from, TripAccommodation to) {
-        Accommodation accommodation = to.getAccommodation();
+    private int travelMinutes(PlaceResponse from, RouteAnchor to) {
         return routeCalculationAdapter.calculateTravelMinutes(
                 from.latitude(),
                 from.longitude(),
-                accommodation.getLatitude(),
-                accommodation.getLongitude()
+                to.latitude(),
+                to.longitude()
         );
+    }
+
+    private int tripEndpointTravelMinutes(RouteAnchor from, PlaceResponse to) {
+        return from == null || from.placeId() == null ? 0 : travelMinutes(from, to);
+    }
+
+    private int tripEndpointTravelMinutes(PlaceResponse from, RouteAnchor to) {
+        return to == null || to.placeId() == null ? 0 : travelMinutes(from, to);
     }
 
     private List<ItineraryCreateRequest> applyCalculatedTravelMinutes(
@@ -1230,12 +1282,14 @@ public class ItineraryGenerateService {
         validateNoDraftTimeOverlap(createRequests);
     }
 
-    private void validateAccommodationRouteAnchors(
+    private void validateRouteAnchors(
+            Trip trip,
+            ItineraryGenerateRequest request,
             List<PlaceResponse> candidatePlaces,
             List<ItineraryCreateRequest> createRequests,
-            Map<Integer, TripAccommodation> accommodationByDayNo
+            Map<Integer, RouteAnchor> routeAnchorByBoundaryNo
     ) {
-        if (accommodationByDayNo.isEmpty()) {
+        if (routeAnchorByBoundaryNo.isEmpty()) {
             return;
         }
 
@@ -1243,6 +1297,7 @@ public class ItineraryGenerateService {
                 .collect(Collectors.toMap(PlaceResponse::placeId, Function.identity()));
         Map<Integer, List<ItineraryCreateRequest>> requestsByDayNo = createRequests.stream()
                 .collect(Collectors.groupingBy(ItineraryCreateRequest::dayNo));
+        Map<Integer, DayTimeWindow> dayTimeWindowByDayNo = createDayTimeWindows(trip, request);
 
         requestsByDayNo.forEach((dayNo, dayRequests) -> {
             List<ItineraryCreateRequest> orderedRequests = dayRequests.stream()
@@ -1250,8 +1305,9 @@ public class ItineraryGenerateService {
                     .toList();
             PlaceResponse firstPlace = candidatePlaceById.get(orderedRequests.getFirst().placeId());
             PlaceResponse lastPlace = candidatePlaceById.get(orderedRequests.getLast().placeId());
-            TripAccommodation startAccommodation = accommodationByDayNo.get(dayNo - 1);
-            TripAccommodation endAccommodation = accommodationByDayNo.get(dayNo);
+            RouteAnchor startAccommodation = routeAnchorByBoundaryNo.get(dayNo - 1);
+            RouteAnchor endAccommodation = routeAnchorByBoundaryNo.get(dayNo);
+            DayTimeWindow dayTimeWindow = dayTimeWindowByDayNo.get(dayNo);
 
             if (startAccommodation != null) {
                 int travelMinutes = travelMinutes(startAccommodation, firstPlace);
@@ -1265,6 +1321,15 @@ public class ItineraryGenerateService {
                                     + travelMinutes
                     );
                 }
+                if (startAccommodation.placeId() != null
+                        && firstPlace != null
+                        && orderedRequests.getFirst().startTime().isBefore(
+                                dayTimeWindow.startTime().plusMinutes(travelMinutes)
+                        )) {
+                    throw new IllegalArgumentException(
+                            "Itinerary first place must allow travel from trip start place. dayNo=" + dayNo
+                    );
+                }
             }
             if (endAccommodation != null) {
                 int travelMinutes = travelMinutes(lastPlace, endAccommodation);
@@ -1276,6 +1341,14 @@ public class ItineraryGenerateService {
                                     + lastPlace.placeId()
                                     + ", travelMinutes="
                                     + travelMinutes
+                    );
+                }
+                if (endAccommodation.placeId() != null
+                        && lastPlace != null
+                        && orderedRequests.getLast().endTime().plusMinutes(travelMinutes)
+                        .isAfter(dayTimeWindow.endTime())) {
+                    throw new IllegalArgumentException(
+                            "Itinerary must arrive at trip end place by day endTime. dayNo=" + dayNo
                     );
                 }
             }
@@ -1819,7 +1892,7 @@ public class ItineraryGenerateService {
                     normalizedRegion,
                     ignored -> new HashSet<>()
             );
-            if (targetDayNo == null || targetDayNo.equals(stayDayNo)) {
+            if (stayDayNo >= 1 && (targetDayNo == null || targetDayNo.equals(stayDayNo))) {
                 affectedDays.add(stayDayNo);
             }
             int nextDayNo = stayDayNo + 1;
@@ -2489,6 +2562,36 @@ public class ItineraryGenerateService {
         return request != null
                 && (!request.normalizedMustVisitPlaceIds().isEmpty()
                 || !request.normalizedExcludedPlaceIds().isEmpty());
+    }
+
+    private record RouteAnchor(
+            Long placeId,
+            String name,
+            String region,
+            Double latitude,
+            Double longitude
+    ) {
+
+        private static RouteAnchor from(PlaceResponse place) {
+            return new RouteAnchor(
+                    place.placeId(),
+                    place.name(),
+                    place.region(),
+                    place.latitude(),
+                    place.longitude()
+            );
+        }
+
+        private static RouteAnchor from(TripAccommodation tripAccommodation) {
+            Accommodation accommodation = tripAccommodation.getAccommodation();
+            return new RouteAnchor(
+                    null,
+                    accommodation.getName(),
+                    accommodation.getRegion(),
+                    accommodation.getLatitude(),
+                    accommodation.getLongitude()
+            );
+        }
     }
 
     private record DayTimeWindow(

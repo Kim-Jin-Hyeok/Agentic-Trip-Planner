@@ -6,6 +6,8 @@ import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.member.domain.Member;
 import com.tripagent.member.repository.MemberRepository;
+import com.tripagent.place.domain.Place;
+import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
@@ -42,6 +44,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -54,6 +57,7 @@ public class TripService {
     private static final int DEFAULT_PUBLIC_TRIP_PAGE_SIZE = 20;
     private static final int MAX_PUBLIC_TRIP_PAGE_SIZE = 50;
     private static final int REPRESENTATIVE_PLACE_LIMIT = 3;
+    private static final String DEFAULT_JEJU_ENDPOINT_NAME = "제주국제공항";
 
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
@@ -61,6 +65,26 @@ public class TripService {
     private final TripLikeRepository tripLikeRepository;
     private final TripViewRepository tripViewRepository;
     private final MemberRepository memberRepository;
+    private final PlaceRepository placeRepository;
+
+    @Autowired
+    public TripService(
+            TripRepository tripRepository,
+            ItineraryRepository itineraryRepository,
+            TripAccommodationRepository tripAccommodationRepository,
+            TripLikeRepository tripLikeRepository,
+            TripViewRepository tripViewRepository,
+            MemberRepository memberRepository,
+            PlaceRepository placeRepository
+    ) {
+        this.tripRepository = tripRepository;
+        this.itineraryRepository = itineraryRepository;
+        this.tripAccommodationRepository = tripAccommodationRepository;
+        this.tripLikeRepository = tripLikeRepository;
+        this.tripViewRepository = tripViewRepository;
+        this.memberRepository = memberRepository;
+        this.placeRepository = placeRepository;
+    }
 
     public TripService(
             TripRepository tripRepository,
@@ -70,12 +94,15 @@ public class TripService {
             TripViewRepository tripViewRepository,
             MemberRepository memberRepository
     ) {
-        this.tripRepository = tripRepository;
-        this.itineraryRepository = itineraryRepository;
-        this.tripAccommodationRepository = tripAccommodationRepository;
-        this.tripLikeRepository = tripLikeRepository;
-        this.tripViewRepository = tripViewRepository;
-        this.memberRepository = memberRepository;
+        this(
+                tripRepository,
+                itineraryRepository,
+                tripAccommodationRepository,
+                tripLikeRepository,
+                tripViewRepository,
+                memberRepository,
+                null
+        );
     }
 
     @Transactional
@@ -86,6 +113,8 @@ public class TripService {
     @Transactional
     public TripResponse createTrip(TripCreateRequest request, Long ownerId) {
         validateCreateRequest(request);
+        Long startPlaceId = resolveEndpointPlaceId(request.startPlaceId());
+        Long endPlaceId = resolveEndpointPlaceId(request.endPlaceId());
 
         Trip trip = Trip.create(
                 normalizeTripTitle(request.title(), request.destination()),
@@ -97,6 +126,8 @@ public class TripService {
                 request.concept(),
                 request.transportation(),
                 request.lastAccommodationArea(),
+                startPlaceId,
+                endPlaceId,
                 ownerId
         );
 
@@ -218,6 +249,8 @@ public class TripService {
                 sourceTrip.getConcept(),
                 sourceTrip.getTransportation(),
                 sourceTrip.getLastAccommodationArea(),
+                sourceTrip.getStartPlaceId(),
+                sourceTrip.getEndPlaceId(),
                 ownerId
         ));
 
@@ -508,6 +541,12 @@ public class TripService {
         validateTripOwner(trip, ownerId);
 
         String lastAccommodationArea = normalizeAccommodationArea(request.lastAccommodationArea());
+        Long startPlaceId = request.startPlaceId() == null
+                ? trip.getStartPlaceId()
+                : resolveEndpointPlaceId(request.startPlaceId());
+        Long endPlaceId = request.endPlaceId() == null
+                ? trip.getEndPlaceId()
+                : resolveEndpointPlaceId(request.endPlaceId());
         boolean dateRangeChanged = !Objects.equals(trip.getStartDate(), request.startDate())
                 || !Objects.equals(trip.getEndDate(), request.endDate());
         boolean conditionsChanged = !Objects.equals(trip.getStartDate(), request.startDate())
@@ -515,7 +554,9 @@ public class TripService {
                 || !Objects.equals(trip.getDailyStartTime(), request.dailyStartTime())
                 || !Objects.equals(trip.getDailyEndTime(), request.dailyEndTime())
                 || trip.getConcept() != request.concept()
-                || !Objects.equals(normalizeAccommodationArea(trip.getLastAccommodationArea()), lastAccommodationArea);
+                || !Objects.equals(normalizeAccommodationArea(trip.getLastAccommodationArea()), lastAccommodationArea)
+                || !Objects.equals(trip.getStartPlaceId(), startPlaceId)
+                || !Objects.equals(trip.getEndPlaceId(), endPlaceId);
         if (!conditionsChanged) {
             return TripResponse.from(trip);
         }
@@ -526,7 +567,9 @@ public class TripService {
                 request.dailyStartTime(),
                 request.dailyEndTime(),
                 request.concept(),
-                lastAccommodationArea
+                lastAccommodationArea,
+                startPlaceId,
+                endPlaceId
         );
 
         if (itineraryRepository.existsByTrip_TripId(tripId)) {
@@ -638,6 +681,28 @@ public class TripService {
             return null;
         }
         return lastAccommodationArea.trim();
+    }
+
+    private Long resolveEndpointPlaceId(Long requestedPlaceId) {
+        if (placeRepository == null) {
+            return requestedPlaceId;
+        }
+        if (requestedPlaceId != null) {
+            Place place = placeRepository.findById(requestedPlaceId)
+                    .orElseThrow(() -> new NoSuchElementException(
+                            "Trip endpoint place not found. placeId=" + requestedPlaceId
+                    ));
+            if (!Boolean.TRUE.equals(place.getUseYn())) {
+                throw new NoSuchElementException("Trip endpoint place must be active. placeId=" + requestedPlaceId);
+            }
+            return place.getPlaceId();
+        }
+
+        return placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc(DEFAULT_JEJU_ENDPOINT_NAME)
+                .map(Place::getPlaceId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Default Jeju trip endpoint place not found. name=" + DEFAULT_JEJU_ENDPOINT_NAME
+                ));
     }
 
     private void validateTripOwner(Trip trip, Long ownerId) {

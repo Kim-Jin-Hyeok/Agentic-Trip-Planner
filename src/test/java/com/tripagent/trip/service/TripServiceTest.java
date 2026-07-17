@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import com.tripagent.itinerary.repository.ItineraryRepository;
 import com.tripagent.member.domain.Member;
 import com.tripagent.member.repository.MemberRepository;
 import com.tripagent.place.domain.Place;
+import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
@@ -43,6 +45,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -76,8 +79,20 @@ class TripServiceTest {
     @Mock
     private MemberRepository memberRepository;
 
+    @Mock
+    private PlaceRepository placeRepository;
+
     @InjectMocks
     private TripService tripService;
+
+    @BeforeEach
+    void setUpDefaultTripEndpoint() {
+        Place airport = org.mockito.Mockito.mock(Place.class);
+        lenient().when(airport.getPlaceId()).thenReturn(1550L);
+        lenient().when(airport.getUseYn()).thenReturn(true);
+        lenient().when(placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc("제주국제공항"))
+                .thenReturn(Optional.of(airport));
+    }
 
     @Test
     void createTripSavesValidJejuTrip() {
@@ -105,6 +120,8 @@ class TripServiceTest {
         assertThat(response.likeCount()).isZero();
         assertThat(response.viewCount()).isZero();
         assertThat(response.title()).isEqualTo("JEJU 여행");
+        assertThat(response.startPlaceId()).isEqualTo(1550L);
+        assertThat(response.endPlaceId()).isEqualTo(1550L);
         verify(tripRepository).save(any(Trip.class));
     }
 

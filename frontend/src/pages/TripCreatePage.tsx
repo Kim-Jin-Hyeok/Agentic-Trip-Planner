@@ -22,7 +22,7 @@ import {
   updateTripVisibility
 } from '../api/tripApi';
 import { getStoredAuthSession } from '../api/authStorage';
-import { getRecommendedPlaces } from '../api/placeApi';
+import { getRecommendedPlaces, getTripEndpointPlaces } from '../api/placeApi';
 import { getTripWeather } from '../api/weatherApi';
 import { AuthPanel } from '../components/AuthPanel';
 import { MyTripList } from '../components/MyTripList';
@@ -58,7 +58,9 @@ const initialForm: TripCreateRequest = {
   dailyEndTime: '20:00',
   concept: 'HEALING',
   transportation: 'RENT_CAR',
-  lastAccommodationArea: ''
+  lastAccommodationArea: '',
+  startPlaceId: null,
+  endPlaceId: null
 };
 
 const publicTripPageSize = 10;
@@ -78,7 +80,9 @@ const initialConditionForm: TripConditionUpdateRequest = {
   dailyStartTime: '09:00',
   dailyEndTime: '20:00',
   concept: 'HEALING',
-  lastAccommodationArea: ''
+  lastAccommodationArea: '',
+  startPlaceId: null,
+  endPlaceId: null
 };
 
 const initialItineraryAddForm: ItineraryCreateRequest = {
@@ -139,6 +143,7 @@ export function TripCreatePage() {
   const [editingItems, setEditingItems] = useState<Record<number, ItineraryEditForm>>({});
   const [generateOptions, setGenerateOptions] = useState<ItineraryGenerateRequest>(initialGenerateOptions);
   const [candidatePlaces, setCandidatePlaces] = useState<PlaceResponse[]>([]);
+  const [tripEndpointPlaces, setTripEndpointPlaces] = useState<PlaceResponse[]>([]);
   const [tripWeather, setTripWeather] = useState<TripWeatherForecast | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(false);
   const [isSavingAccommodations, setIsSavingAccommodations] = useState(false);
@@ -168,6 +173,34 @@ export function TripCreatePage() {
     }
 
     void loadTrips();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getTripEndpointPlaces()
+      .then((places) => {
+        if (cancelled) {
+          return;
+        }
+
+        setTripEndpointPlaces(places);
+        const defaultPlaceId = places[0]?.placeId ?? null;
+        setForm((current) => ({
+          ...current,
+          startPlaceId: current.startPlaceId ?? defaultPlaceId,
+          endPlaceId: current.endPlaceId ?? defaultPlaceId
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTripEndpointPlaces([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -1285,6 +1318,7 @@ export function TripCreatePage() {
                 form={form}
                 isCreating={isCreating}
                 disabled={session == null}
+                endpointPlaces={tripEndpointPlaces}
                 onChange={updateForm}
                 onSubmit={handleCreateTrip}
               />
@@ -1371,6 +1405,7 @@ export function TripCreatePage() {
           itineraryAddError={itineraryAddError}
           generateOptions={generateOptions}
           candidatePlaces={candidatePlaces}
+          endpointPlaces={tripEndpointPlaces}
           onGenerate={() => void handleGenerateItinerary()}
           onRegenerate={() => void handleRegenerateItinerary()}
           onRegenerateDay={(dayNo) => void handleRegenerateItineraryDay(dayNo)}
@@ -1496,7 +1531,9 @@ function conditionFormFromTrip(trip: TripDetail): TripConditionUpdateRequest {
     dailyStartTime: trip.dailyStartTime,
     dailyEndTime: trip.dailyEndTime,
     concept: trip.concept,
-    lastAccommodationArea: trip.lastAccommodationArea ?? ''
+    lastAccommodationArea: trip.lastAccommodationArea ?? '',
+    startPlaceId: trip.startPlaceId ?? null,
+    endPlaceId: trip.endPlaceId ?? null
   };
 }
 
@@ -1506,7 +1543,9 @@ function haveTripConditionsChanged(trip: TripDetail, form: TripConditionUpdateRe
     || trip.dailyStartTime !== form.dailyStartTime
     || trip.dailyEndTime !== form.dailyEndTime
     || trip.concept !== form.concept
-    || (trip.lastAccommodationArea ?? '').trim() !== form.lastAccommodationArea.trim();
+    || (trip.lastAccommodationArea ?? '').trim() !== form.lastAccommodationArea.trim()
+    || (trip.startPlaceId ?? null) !== form.startPlaceId
+    || (trip.endPlaceId ?? null) !== form.endPlaceId;
 }
 
 function validateConditionForm(form: TripConditionUpdateRequest): string | null {

@@ -65,6 +65,12 @@ public class Trip {
     private String lastAccommodationArea;
 
     @Column
+    private Long startPlaceId;
+
+    @Column
+    private Long endPlaceId;
+
+    @Column
     private Long ownerId;
 
     @Column(nullable = false)
@@ -90,6 +96,8 @@ public class Trip {
             TripConcept concept,
             Transportation transportation,
             String lastAccommodationArea,
+            Long startPlaceId,
+            Long endPlaceId,
             Long ownerId
     ) {
         this.title = title;
@@ -102,6 +110,8 @@ public class Trip {
         this.concept = concept;
         this.transportation = transportation;
         this.lastAccommodationArea = lastAccommodationArea;
+        this.startPlaceId = startPlaceId;
+        this.endPlaceId = endPlaceId;
         this.ownerId = ownerId;
         this.likeCount = 0L;
         this.viewCount = 0L;
@@ -128,6 +138,8 @@ public class Trip {
                 concept,
                 transportation,
                 lastAccommodationArea,
+                null,
+                null,
                 null
         );
     }
@@ -153,6 +165,8 @@ public class Trip {
                 concept,
                 transportation,
                 lastAccommodationArea,
+                null,
+                null,
                 ownerId
         );
     }
@@ -169,6 +183,36 @@ public class Trip {
             String lastAccommodationArea,
             Long ownerId
     ) {
+        return create(
+                title,
+                destination,
+                startDate,
+                endDate,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                transportation,
+                lastAccommodationArea,
+                null,
+                null,
+                ownerId
+        );
+    }
+
+    public static Trip create(
+            String title,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long startPlaceId,
+            Long endPlaceId,
+            Long ownerId
+    ) {
         return new Trip(
                 title,
                 destination,
@@ -179,6 +223,8 @@ public class Trip {
                 concept,
                 transportation,
                 lastAccommodationArea,
+                startPlaceId,
+                endPlaceId,
                 ownerId
         );
     }
@@ -213,6 +259,28 @@ public class Trip {
             TripConcept concept,
             String lastAccommodationArea
     ) {
+        changeConditions(
+                startDate,
+                endDate,
+                dailyStartTime,
+                dailyEndTime,
+                concept,
+                lastAccommodationArea,
+                startPlaceId,
+                endPlaceId
+        );
+    }
+
+    public void changeConditions(
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            String lastAccommodationArea,
+            Long startPlaceId,
+            Long endPlaceId
+    ) {
         this.startDate = startDate;
         this.endDate = endDate;
         this.nights = Math.toIntExact(ChronoUnit.DAYS.between(startDate, endDate));
@@ -220,6 +288,8 @@ public class Trip {
         this.dailyEndTime = dailyEndTime;
         this.concept = concept;
         this.lastAccommodationArea = lastAccommodationArea;
+        this.startPlaceId = startPlaceId;
+        this.endPlaceId = endPlaceId;
     }
 
     public String getDestination() {
@@ -256,6 +326,14 @@ public class Trip {
 
     public String getLastAccommodationArea() {
         return lastAccommodationArea;
+    }
+
+    public Long getStartPlaceId() {
+        return startPlaceId;
+    }
+
+    public Long getEndPlaceId() {
+        return endPlaceId;
     }
 
     public Long getOwnerId() {

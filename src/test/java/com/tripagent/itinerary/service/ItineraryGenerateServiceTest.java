@@ -1240,6 +1240,59 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesFallbackReservesTimeToReturnToTripEndPlace() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 1),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        setId(trip, "startPlaceId", 1550L);
+        setId(trip, "endPlaceId", 1550L);
+        PlaceResponse airport = place(1550L, 30, 33.5063, 126.4953);
+        List<PlaceResponse> candidatePlaces = List.of(
+                airport,
+                place(10L, 120, 33.45, 126.55),
+                place(20L, 120, 33.42, 126.57),
+                place(30L, 120, 33.47, 126.52)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(eq(trip), anyList())).thenReturn("base prompt");
+        when(itineraryPromptGenerator.appendAccommodationRoutePreferences(
+                "base prompt",
+                trip,
+                Map.of(0, "EAST", 1, "EAST"),
+                null
+        )).thenReturn("endpoint prompt");
+        when(llmClient.generate("endpoint prompt")).thenThrow(
+                LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
+        );
+        when(itineraryService.createItinerary(eq(1L), any()))
+                .thenReturn(response(100L, 1L, 10L, 1));
+
+        itineraryGenerateService.generateItineraries(1L);
+
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor =
+                ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService).createItinerary(eq(1L), requestCaptor.capture());
+        List<ItineraryCreateRequest> savedRequests = requestCaptor.getAllValues();
+        assertThat(savedRequests).extracting(ItineraryCreateRequest::placeId)
+                .doesNotContain(1550L);
+        ItineraryCreateRequest lastRequest = savedRequests.getLast();
+        PlaceResponse lastPlace = candidatePlaces.stream()
+                .filter(place -> place.placeId().equals(lastRequest.placeId()))
+                .findFirst()
+                .orElseThrow();
+        int minutesToAirport = routeCalculationAdapter.calculateTravelMinutes(lastPlace, airport);
+        assertThat(lastRequest.endTime().plusMinutes(minutesToAirport))
+                .isBeforeOrEqualTo(trip.getDailyEndTime());
+    }
+
+    @Test
     void generateDraftItinerariesBoostsIndoorAndRainyDayScoreWhenRainyDayModeIsEnabled() {
         Trip trip = trip(1L, TripConcept.FOOD);
         PlaceResponse outdoorHighConceptScore = placeWithFoodScoreRegionIndoorAndRainyScore(

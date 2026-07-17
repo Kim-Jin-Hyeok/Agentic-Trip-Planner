@@ -24,8 +24,26 @@ public record TripCreateRequest(
         Transportation transportation,
         String lastAccommodationArea,
         Long ownerId,
-        String title
+        String title,
+        Long startPlaceId,
+        Long endPlaceId
 ) {
+
+    public TripCreateRequest(
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            Transportation transportation,
+            String lastAccommodationArea,
+            Long ownerId,
+            String title
+    ) {
+        this(destination, startDate, endDate, dailyStartTime, dailyEndTime, concept, transportation,
+                lastAccommodationArea, ownerId, title, null, null);
+    }
 
     public TripCreateRequest(
             String destination,
@@ -39,7 +57,7 @@ public record TripCreateRequest(
             Long ownerId
     ) {
         this(destination, startDate, endDate, dailyStartTime, dailyEndTime, concept, transportation,
-                lastAccommodationArea, ownerId, null);
+                lastAccommodationArea, ownerId, null, null, null);
     }
 
     public TripCreateRequest(
@@ -61,6 +79,8 @@ public record TripCreateRequest(
                 concept,
                 transportation,
                 lastAccommodationArea,
+                null,
+                null,
                 null,
                 null
         );

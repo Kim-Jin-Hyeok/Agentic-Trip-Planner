@@ -5,3 +5,7 @@ export function getRecommendedPlaces(concept: TripConcept): Promise<PlaceRespons
   const searchParams = new URLSearchParams({ concept });
   return apiRequest<PlaceResponse[]>(`/api/places/recommend?${searchParams.toString()}`);
 }
+
+export function getTripEndpointPlaces(): Promise<PlaceResponse[]> {
+  return apiRequest<PlaceResponse[]>('/api/places/trip-endpoints');
+}

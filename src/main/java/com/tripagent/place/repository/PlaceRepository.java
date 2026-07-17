@@ -2,6 +2,7 @@ package com.tripagent.place.repository;
 
 import com.tripagent.place.domain.Place;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.Query;
@@ -56,4 +57,6 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     );
 
     boolean existsByNameAndAddress(String name, String address);
+
+    Optional<Place> findFirstByNameAndUseYnTrueOrderByPlaceIdDesc(String name);
 }

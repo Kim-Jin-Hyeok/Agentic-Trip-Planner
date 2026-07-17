@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Itinerary } from '../types/trip';
+import type { Itinerary, PlaceResponse } from '../types/trip';
 import type { TripAccommodation } from '../types/accommodation';
 
 type ItineraryMapPanelProps = {
@@ -9,6 +9,9 @@ type ItineraryMapPanelProps = {
   selectedDay: number;
   selectedItineraryId: number | null;
   tripStartDate: string;
+  tripDays: number;
+  tripStartPlace: PlaceResponse | null;
+  tripEndPlace: PlaceResponse | null;
   tripAccommodations: TripAccommodation[];
   onDayChange: (dayNo: number) => void;
   onItinerarySelect: (itineraryId: number) => void;
@@ -19,6 +22,9 @@ export function ItineraryMapPanel({
   selectedDay,
   selectedItineraryId,
   tripStartDate,
+  tripDays,
+  tripStartPlace,
+  tripEndPlace,
   tripAccommodations,
   onDayChange,
   onItinerarySelect
@@ -46,10 +52,18 @@ export function ItineraryMapPanel({
     && hasValidAccommodationCoordinates(endAccommodation)
     ? endAccommodation
     : null;
-  const hasSameStartAndEndAccommodation = mappableStartAccommodation != null
-    && mappableEndAccommodation != null
-    && mappableStartAccommodation.accommodation.accommodationId
-      === mappableEndAccommodation.accommodation.accommodationId;
+  const startEndpoint = selectedDay === 1 && tripStartPlace != null && hasValidPlaceCoordinates(tripStartPlace)
+    ? tripStartPlace
+    : null;
+  const endEndpoint = selectedDay === tripDays && tripEndPlace != null && hasValidPlaceCoordinates(tripEndPlace)
+    ? tripEndPlace
+    : null;
+  const routeStartAccommodation = startEndpoint == null ? mappableStartAccommodation : null;
+  const routeEndAccommodation = endEndpoint == null ? mappableEndAccommodation : null;
+  const hasSameStartAndEndAccommodation = routeStartAccommodation != null
+    && routeEndAccommodation != null
+    && routeStartAccommodation.accommodation.accommodationId
+      === routeEndAccommodation.accommodation.accommodationId;
 
   useEffect(() => {
     if (mapContainerRef.current == null || mappableItineraries.length === 0) {
@@ -68,17 +82,21 @@ export function ItineraryMapPanel({
       L.latLng(itinerary.place.latitude, itinerary.place.longitude)
     );
     const routeCoordinates: L.LatLng[] = [];
-    if (mappableStartAccommodation != null) {
+    if (startEndpoint != null) {
+      routeCoordinates.push(L.latLng(startEndpoint.latitude, startEndpoint.longitude));
+    } else if (routeStartAccommodation != null) {
       routeCoordinates.push(L.latLng(
-        mappableStartAccommodation.accommodation.latitude,
-        mappableStartAccommodation.accommodation.longitude
+        routeStartAccommodation.accommodation.latitude,
+        routeStartAccommodation.accommodation.longitude
       ));
     }
     routeCoordinates.push(...itineraryCoordinates);
-    if (mappableEndAccommodation != null) {
+    if (endEndpoint != null) {
+      routeCoordinates.push(L.latLng(endEndpoint.latitude, endEndpoint.longitude));
+    } else if (routeEndAccommodation != null) {
       routeCoordinates.push(L.latLng(
-        mappableEndAccommodation.accommodation.latitude,
-        mappableEndAccommodation.accommodation.longitude
+        routeEndAccommodation.accommodation.latitude,
+        routeEndAccommodation.accommodation.longitude
       ));
     }
     if (routeCoordinates.length > 1) {
@@ -118,8 +136,10 @@ export function ItineraryMapPanel({
       }
     });
 
-    if (mappableStartAccommodation != null) {
-      const accommodation = mappableStartAccommodation.accommodation;
+    if (startEndpoint != null) {
+      addEndpointMarker(map, startEndpoint, '출', '여행 시작 지점', 'departure');
+    } else if (routeStartAccommodation != null) {
+      const accommodation = routeStartAccommodation.accommodation;
       const markerLabel = hasSameStartAndEndAccommodation ? '숙' : '출';
       const markerClassName = hasSameStartAndEndAccommodation ? 'accommodation' : 'departure';
       const marker = L.marker([accommodation.latitude, accommodation.longitude], {
@@ -138,8 +158,10 @@ export function ItineraryMapPanel({
       marker.bindTooltip(tooltip, { direction: 'top', offset: [0, -16] });
     }
 
-    if (mappableEndAccommodation != null && !hasSameStartAndEndAccommodation) {
-      const accommodation = mappableEndAccommodation.accommodation;
+    if (endEndpoint != null) {
+      addEndpointMarker(map, endEndpoint, '종', '여행 종료 지점', 'arrival');
+    } else if (routeEndAccommodation != null && !hasSameStartAndEndAccommodation) {
+      const accommodation = routeEndAccommodation.accommodation;
       const marker = L.marker([accommodation.latitude, accommodation.longitude], {
         icon: L.divIcon({
           className: 'route-marker-shell',
@@ -163,10 +185,12 @@ export function ItineraryMapPanel({
     };
   }, [
     hasSameStartAndEndAccommodation,
-    mappableEndAccommodation,
+    endEndpoint,
     mappableItineraries,
-    mappableStartAccommodation,
     onItinerarySelect,
+    routeEndAccommodation,
+    routeStartAccommodation,
+    startEndpoint,
     selectedItineraryId
   ]);
 
@@ -207,7 +231,18 @@ export function ItineraryMapPanel({
         )}
 
         <ol className="itinerary-map-stops">
-          {startAccommodation != null && (
+          {startEndpoint != null && (
+            <li className="map-departure-stop">
+              <div>
+                <span className="map-stop-number departure">출</span>
+                <span className="map-stop-copy">
+                  <strong>{startEndpoint.name}</strong>
+                  <small>여행 시작 지점 · {startEndpoint.region}</small>
+                </span>
+              </div>
+            </li>
+          )}
+          {startEndpoint == null && startAccommodation != null && (
             <li className="map-departure-stop">
               <div>
                 <span className="map-stop-number departure">출</span>
@@ -237,7 +272,18 @@ export function ItineraryMapPanel({
               </li>
             );
           })}
-          {endAccommodation != null && (
+          {endEndpoint != null && (
+            <li className="map-accommodation-stop">
+              <div>
+                <span className="map-stop-number arrival">종</span>
+                <span className="map-stop-copy">
+                  <strong>{endEndpoint.name}</strong>
+                  <small>여행 종료 지점 · {endEndpoint.region}</small>
+                </span>
+              </div>
+            </li>
+          )}
+          {endEndpoint == null && endAccommodation != null && (
             <li className="map-accommodation-stop">
               <div>
                 <span className="map-stop-number accommodation">숙</span>
@@ -259,6 +305,36 @@ function hasValidCoordinates(itinerary: Itinerary): boolean {
     && Number.isFinite(itinerary.place.longitude)
     && Math.abs(itinerary.place.latitude) <= 90
     && Math.abs(itinerary.place.longitude) <= 180;
+}
+
+function hasValidPlaceCoordinates(place: PlaceResponse): boolean {
+  return Number.isFinite(place.latitude)
+    && Number.isFinite(place.longitude)
+    && Math.abs(place.latitude) <= 90
+    && Math.abs(place.longitude) <= 180;
+}
+
+function addEndpointMarker(
+  map: L.Map,
+  place: PlaceResponse,
+  label: string,
+  description: string,
+  className: 'departure' | 'arrival'
+): void {
+  const marker = L.marker([place.latitude, place.longitude], {
+    icon: L.divIcon({
+      className: 'route-marker-shell',
+      html: `<span class="route-marker ${className}"><b>${label}</b></span>`,
+      iconAnchor: [18, 18],
+      iconSize: [36, 36]
+    }),
+    keyboard: true,
+    title: `${description}. ${place.name}`,
+    zIndexOffset: 500
+  }).addTo(map);
+  const tooltip = document.createElement('span');
+  tooltip.textContent = `${description} · ${place.name}`;
+  marker.bindTooltip(tooltip, { direction: 'top', offset: [0, -16] });
 }
 
 function hasValidAccommodationCoordinates(item: TripAccommodation): boolean {

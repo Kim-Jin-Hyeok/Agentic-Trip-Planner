@@ -18,6 +18,19 @@ public record TripConditionUpdateRequest(
         @NotNull
         TripConcept concept,
         @Size(max = 50)
-        String lastAccommodationArea
+        String lastAccommodationArea,
+        Long startPlaceId,
+        Long endPlaceId
 ) {
+
+    public TripConditionUpdateRequest(
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime dailyStartTime,
+            LocalTime dailyEndTime,
+            TripConcept concept,
+            String lastAccommodationArea
+    ) {
+        this(startDate, endDate, dailyStartTime, dailyEndTime, concept, lastAccommodationArea, null, null);
+    }
 }

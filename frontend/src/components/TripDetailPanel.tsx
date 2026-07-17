@@ -65,6 +65,7 @@ type TripDetailPanelProps = {
   itineraryAddError: string;
   generateOptions: ItineraryGenerateRequest;
   candidatePlaces: PlaceResponse[];
+  endpointPlaces: PlaceResponse[];
   onGenerate: () => void;
   onRegenerate: () => void;
   onRegenerateDay: (dayNo: number) => void;
@@ -136,6 +137,7 @@ export function TripDetailPanel({
   itineraryAddError,
   generateOptions,
   candidatePlaces,
+  endpointPlaces,
   onGenerate,
   onRegenerate,
   onRegenerateDay,
@@ -175,6 +177,11 @@ export function TripDetailPanel({
   const [selectedMapDay, setSelectedMapDay] = useState<number | null>(null);
   const [selectedMapItineraryId, setSelectedMapItineraryId] = useState<number | null>(null);
   const [tripAccommodations, setTripAccommodations] = useState<TripAccommodation[]>([]);
+  const defaultEndpointPlace = endpointPlaces[0] ?? null;
+  const startEndpointPlace = endpointPlaces.find((place) => place.placeId === selectedTrip?.startPlaceId)
+    ?? defaultEndpointPlace;
+  const endEndpointPlace = endpointPlaces.find((place) => place.placeId === selectedTrip?.endPlaceId)
+    ?? defaultEndpointPlace;
   const effectiveMapDay = selectedMapDay != null && mapDayNumbers.includes(selectedMapDay)
     ? selectedMapDay
     : mapDayNumbers[0] ?? null;
@@ -321,6 +328,7 @@ export function TripDetailPanel({
           form={conditionForm}
           error={conditionError}
           isUpdating={isUpdatingConditions}
+          endpointPlaces={endpointPlaces}
           onChange={onConditionFormChange}
           onCancel={onCancelConditionEdit}
           onSubmit={onUpdateConditions}
@@ -404,6 +412,9 @@ export function TripDetailPanel({
           selectedDay={effectiveMapDay}
           selectedItineraryId={selectedMapItineraryId}
           tripStartDate={selectedTrip?.startDate ?? ''}
+          tripDays={(selectedTrip?.nights ?? -1) + 1}
+          tripStartPlace={startEndpointPlace}
+          tripEndPlace={endEndpointPlace}
           tripAccommodations={viewMode === 'mine' ? tripAccommodations : []}
           onDayChange={(dayNo) => {
             setSelectedMapDay(dayNo);

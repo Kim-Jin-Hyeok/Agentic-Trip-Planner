@@ -20,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PlaceService {
 
+    private static final String DEFAULT_TRIP_ENDPOINT_NAME = "제주국제공항";
+
     private final PlaceRepository placeRepository;
 
     public PlaceService(PlaceRepository placeRepository) {
@@ -98,6 +100,12 @@ public class PlaceService {
                 .orElseThrow(() -> new NoSuchElementException("Place not found. placeId=" + placeId));
 
         return PlaceResponse.from(place);
+    }
+
+    public List<PlaceResponse> findTripEndpointPlaces() {
+        return placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc(DEFAULT_TRIP_ENDPOINT_NAME)
+                .map(place -> List.of(PlaceResponse.from(place)))
+                .orElseGet(List::of);
     }
 
     private PlaceRecommendConcept toPlaceRecommendConcept(TripConcept concept) {

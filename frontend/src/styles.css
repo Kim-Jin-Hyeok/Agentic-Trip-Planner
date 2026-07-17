@@ -1377,6 +1377,11 @@ button.trip-list-item:hover:not(:disabled),
   background: #287495;
 }
 
+.map-stop-number.arrival,
+.route-marker.arrival {
+  background: #d26a3a;
+}
+
 .map-stop-copy {
   display: grid;
   gap: 3px;
