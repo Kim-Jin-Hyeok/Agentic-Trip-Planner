@@ -137,8 +137,18 @@ export type ItineraryReorderRequest = {
   items: ItineraryReorderRequestItem[];
 };
 
+export type DayEndRoute = {
+  dayNo: number;
+  destinationType: 'ACCOMMODATION' | 'TRIP_END';
+  destinationName: string;
+  travelMinutes: number;
+  estimatedArrivalTime: string;
+  arrivalAfterDailyEndTime: boolean;
+};
+
 export type TripDetail = TripResponse & {
   itineraries: Itinerary[];
+  dayEndRoutes?: DayEndRoute[];
 };
 
 export type TripAuthor = {
@@ -185,6 +195,7 @@ export type PublicTripDetail = TripResponse & {
   liked: boolean;
   author: TripAuthor;
   itineraries: Itinerary[];
+  dayEndRoutes?: DayEndRoute[];
 };
 
 export type TripLikeResponse = {

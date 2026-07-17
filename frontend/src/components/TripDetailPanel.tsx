@@ -75,6 +75,7 @@ type TripDetailPanelProps = {
   onRefreshWeather: () => void;
   onApplyRainyDays: (rainyDayNos: number[]) => void;
   onAccommodationBusyChange: (busy: boolean) => void;
+  onAccommodationsSaved: () => void;
   onUpdateVisibility: (visibility: TripVisibility) => void;
   onStartTitleEdit: () => void;
   onTitleDraftChange: (title: string) => void;
@@ -147,6 +148,7 @@ export function TripDetailPanel({
   onRefreshWeather,
   onApplyRainyDays,
   onAccommodationBusyChange,
+  onAccommodationsSaved,
   onUpdateVisibility,
   onStartTitleEdit,
   onTitleDraftChange,
@@ -345,6 +347,7 @@ export function TripDetailPanel({
           disabled={isChangingItinerary}
           onBusyChange={onAccommodationBusyChange}
           onAccommodationsChange={setTripAccommodations}
+          onSaved={onAccommodationsSaved}
         />
       )}
 
@@ -443,6 +446,7 @@ export function TripDetailPanel({
               key={dayNo}
               dayNo={dayNo}
               dayItineraries={dayItineraries}
+              dayEndRoute={(selectedTrip?.dayEndRoutes ?? []).find((route) => route.dayNo === Number(dayNo))}
               viewMode={viewMode}
               editingItems={editingItems}
               pendingItineraryId={pendingItineraryId}

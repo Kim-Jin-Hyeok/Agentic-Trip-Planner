@@ -403,6 +403,21 @@ export function TripCreatePage() {
     }
   }
 
+  async function refreshTripDetailAfterAccommodationSave() {
+    if (trip == null) {
+      return;
+    }
+    try {
+      const detail = await getTrip(trip.tripId);
+      setTrip(detail);
+      setItineraries(detail.itineraries);
+    } catch (error) {
+      setMessage(error instanceof Error
+        ? error.message
+        : '숙소 도착 정보 갱신에 실패했습니다. 화면을 새로고침해 주세요.');
+    }
+  }
+
   async function loadPublicTripDetail(tripId: number, updateLocation = true) {
     setMessage('');
     setIsLoadingDetail(true);
@@ -1435,6 +1450,7 @@ export function TripCreatePage() {
           onRefreshWeather={() => trip != null && void loadTripWeather(trip.tripId)}
           onApplyRainyDays={(rainyDayNos) => setGenerateOptions((current) => ({ ...current, rainyDayNos }))}
           onAccommodationBusyChange={setIsSavingAccommodations}
+          onAccommodationsSaved={() => void refreshTripDetailAfterAccommodationSave()}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
           onStartTitleEdit={handleStartTitleEdit}
           onTitleDraftChange={handleTitleDraftChange}

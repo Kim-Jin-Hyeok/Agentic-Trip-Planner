@@ -8,13 +8,17 @@ import com.tripagent.member.domain.Member;
 import com.tripagent.member.repository.MemberRepository;
 import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
+import com.tripagent.route.RouteCalculationAdapter;
+import com.tripagent.route.SimpleRouteCalculationAdapter;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
+import com.tripagent.trip.domain.TripAccommodation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripView;
 import com.tripagent.trip.domain.TripVisibility;
 import com.tripagent.trip.dto.PublicTripDetailResponse;
+import com.tripagent.trip.dto.DayEndRouteResponse;
 import com.tripagent.trip.dto.PublicTripSort;
 import com.tripagent.trip.dto.PublicTripResponse;
 import com.tripagent.trip.dto.TripAuthorResponse;
@@ -29,8 +33,10 @@ import com.tripagent.trip.repository.TripAccommodationRepository;
 import com.tripagent.trip.repository.TripRepository;
 import com.tripagent.trip.repository.TripViewRepository;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -58,6 +64,8 @@ public class TripService {
     private static final int MAX_PUBLIC_TRIP_PAGE_SIZE = 50;
     private static final int REPRESENTATIVE_PLACE_LIMIT = 3;
     private static final String DEFAULT_JEJU_ENDPOINT_NAME = "제주국제공항";
+    private static final String DAY_END_ACCOMMODATION = "ACCOMMODATION";
+    private static final String DAY_END_TRIP_ENDPOINT = "TRIP_END";
 
     private final TripRepository tripRepository;
     private final ItineraryRepository itineraryRepository;
@@ -66,6 +74,7 @@ public class TripService {
     private final TripViewRepository tripViewRepository;
     private final MemberRepository memberRepository;
     private final PlaceRepository placeRepository;
+    private final RouteCalculationAdapter routeCalculationAdapter;
 
     @Autowired
     public TripService(
@@ -75,7 +84,8 @@ public class TripService {
             TripLikeRepository tripLikeRepository,
             TripViewRepository tripViewRepository,
             MemberRepository memberRepository,
-            PlaceRepository placeRepository
+            PlaceRepository placeRepository,
+            RouteCalculationAdapter routeCalculationAdapter
     ) {
         this.tripRepository = tripRepository;
         this.itineraryRepository = itineraryRepository;
@@ -84,6 +94,7 @@ public class TripService {
         this.tripViewRepository = tripViewRepository;
         this.memberRepository = memberRepository;
         this.placeRepository = placeRepository;
+        this.routeCalculationAdapter = routeCalculationAdapter;
     }
 
     public TripService(
@@ -101,7 +112,8 @@ public class TripService {
                 tripLikeRepository,
                 tripViewRepository,
                 memberRepository,
-                null
+                null,
+                new SimpleRouteCalculationAdapter()
         );
     }
 
@@ -223,13 +235,90 @@ public class TripService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         validateTripOwner(trip, ownerId);
-        List<ItineraryResponse> itineraries = itineraryRepository
-                .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
-                .stream()
+        List<Itinerary> itineraryEntities = itineraryRepository
+                .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId);
+        List<ItineraryResponse> itineraries = itineraryEntities.stream()
                 .map(ItineraryResponse::from)
                 .toList();
+        List<DayEndRouteResponse> dayEndRoutes = calculateDayEndRoutes(trip, itineraryEntities);
 
-        return TripDetailResponse.from(trip, itineraries);
+        return TripDetailResponse.from(trip, itineraries, dayEndRoutes);
+    }
+
+    private List<DayEndRouteResponse> calculateDayEndRoutes(
+            Trip trip,
+            List<Itinerary> itineraries
+    ) {
+        if (itineraries.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Integer, Itinerary> lastItineraryByDayNo = new HashMap<>();
+        for (Itinerary itinerary : itineraries) {
+            lastItineraryByDayNo.merge(
+                    itinerary.getDayNo(),
+                    itinerary,
+                    (current, candidate) -> candidate.getOrderNo() > current.getOrderNo() ? candidate : current
+            );
+        }
+        Map<LocalDate, TripAccommodation> accommodationByStayDate = tripAccommodationRepository
+                .findByTripIdOrderByStayDate(trip.getTripId())
+                .stream()
+                .collect(Collectors.toMap(
+                        TripAccommodation::getStayDate,
+                        tripAccommodation -> tripAccommodation
+                ));
+        Place endPlace = findTripEndPlace(trip);
+        int tripDays = Math.toIntExact(ChronoUnit.DAYS.between(trip.getStartDate(), trip.getEndDate()) + 1);
+        List<Integer> dayNos = lastItineraryByDayNo.keySet().stream().sorted().toList();
+
+        List<DayEndRouteResponse> responses = new ArrayList<>();
+        for (Integer dayNo : dayNos) {
+            Itinerary lastItinerary = lastItineraryByDayNo.get(dayNo);
+            DayEndDestination destination = dayNo == tripDays
+                    ? DayEndDestination.from(endPlace)
+                    : DayEndDestination.from(accommodationByStayDate.get(
+                            trip.getStartDate().plusDays(dayNo - 1L)
+                    ));
+            if (destination == null) {
+                continue;
+            }
+
+            int travelMinutes = destination.placeId() != null
+                    && destination.placeId().equals(lastItinerary.getPlace().getPlaceId())
+                    ? 0
+                    : routeCalculationAdapter.calculateTravelMinutes(
+                            lastItinerary.getPlace().getLatitude(),
+                            lastItinerary.getPlace().getLongitude(),
+                            destination.latitude(),
+                            destination.longitude()
+                    );
+            long arrivalMinuteOfDay = lastItinerary.getEndTime().toSecondOfDay() / 60L + travelMinutes;
+            long dailyEndMinuteOfDay = trip.getDailyEndTime().toSecondOfDay() / 60L;
+            responses.add(new DayEndRouteResponse(
+                    dayNo,
+                    destination.destinationType(),
+                    destination.destinationName(),
+                    travelMinutes,
+                    lastItinerary.getEndTime().plusMinutes(travelMinutes),
+                    arrivalMinuteOfDay > dailyEndMinuteOfDay
+            ));
+        }
+
+        return responses;
+    }
+
+    private Place findTripEndPlace(Trip trip) {
+        if (placeRepository == null) {
+            return null;
+        }
+        if (trip.getEndPlaceId() != null) {
+            return placeRepository.findById(trip.getEndPlaceId())
+                    .filter(place -> Boolean.TRUE.equals(place.getUseYn()))
+                    .orElse(null);
+        }
+        return placeRepository.findFirstByNameAndUseYnTrueOrderByPlaceIdDesc(DEFAULT_JEJU_ENDPOINT_NAME)
+                .orElse(null);
     }
 
     @Transactional
@@ -443,16 +532,22 @@ public class TripService {
         Trip trip = tripRepository.findByTripIdAndVisibility(tripId, TripVisibility.PUBLIC)
                 .orElseThrow(() -> new NoSuchElementException("Public trip not found. tripId=" + tripId));
         recordPublicTripViewIfNeeded(trip, currentUserId);
-        List<ItineraryResponse> itineraries = itineraryRepository
-                .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId)
-                .stream()
+        List<Itinerary> itineraryEntities = itineraryRepository
+                .findByTrip_TripIdOrderByDayNoAscOrderNoAsc(tripId);
+        List<ItineraryResponse> itineraries = itineraryEntities.stream()
                 .map(ItineraryResponse::from)
                 .toList();
         boolean liked = currentUserId != null
                 && tripLikeRepository.existsByTrip_TripIdAndUserId(tripId, currentUserId);
         TripAuthorResponse author = findAuthorByOwnerId(trip.getOwnerId());
 
-        return PublicTripDetailResponse.from(trip, itineraries, liked, author);
+        return PublicTripDetailResponse.from(
+                trip,
+                itineraries,
+                liked,
+                author,
+                calculateDayEndRoutes(trip, itineraryEntities)
+        );
     }
 
     public PageResponse<PublicTripResponse> searchLikedPublicTripPage(Long userId, Integer page, Integer size) {
@@ -928,5 +1023,40 @@ public class TripService {
 
         String normalizedDestination = destination.trim();
         return normalizedDestination.equals("제주") || normalizedDestination.equalsIgnoreCase("JEJU");
+    }
+
+    private record DayEndDestination(
+            String destinationType,
+            String destinationName,
+            Double latitude,
+            Double longitude,
+            Long placeId
+    ) {
+
+        private static DayEndDestination from(Place place) {
+            if (place == null) {
+                return null;
+            }
+            return new DayEndDestination(
+                    DAY_END_TRIP_ENDPOINT,
+                    place.getName(),
+                    place.getLatitude(),
+                    place.getLongitude(),
+                    place.getPlaceId()
+            );
+        }
+
+        private static DayEndDestination from(TripAccommodation tripAccommodation) {
+            if (tripAccommodation == null) {
+                return null;
+            }
+            return new DayEndDestination(
+                    DAY_END_ACCOMMODATION,
+                    tripAccommodation.getAccommodation().getName(),
+                    tripAccommodation.getAccommodation().getLatitude(),
+                    tripAccommodation.getAccommodation().getLongitude(),
+                    null
+            );
+        }
     }
 }

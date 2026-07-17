@@ -1,9 +1,10 @@
-import type { Itinerary, PlaceResponse } from '../types/trip';
+import type { DayEndRoute, Itinerary, PlaceResponse } from '../types/trip';
 import { itineraryForm, type ItineraryEditForm, type ViewMode } from '../utils/tripDisplay';
 
 type ItineraryDaySectionProps = {
   dayNo: string;
   dayItineraries: Itinerary[];
+  dayEndRoute?: DayEndRoute;
   viewMode: ViewMode;
   editingItems: Record<number, ItineraryEditForm>;
   pendingItineraryId: number | null;
@@ -30,6 +31,7 @@ type ItineraryDaySectionProps = {
 export function ItineraryDaySection({
   dayNo,
   dayItineraries,
+  dayEndRoute,
   viewMode,
   editingItems,
   pendingItineraryId,
@@ -289,6 +291,18 @@ export function ItineraryDaySection({
           );
         })}
       </ol>
+      {dayEndRoute != null && (
+        <div className={dayEndRoute.arrivalAfterDailyEndTime ? 'day-end-route warning' : 'day-end-route'}>
+          <div>
+            <strong>
+              {dayEndRoute.destinationType === 'ACCOMMODATION' ? '숙소' : '여행 종료지'}까지 약{' '}
+              {dayEndRoute.travelMinutes}분
+            </strong>
+            <span>{dayEndRoute.destinationName} · 예상 도착 {dayEndRoute.estimatedArrivalTime}</span>
+          </div>
+          {dayEndRoute.arrivalAfterDailyEndTime && <b>하루 종료 시간을 넘습니다</b>}
+        </div>
+      )}
     </section>
   );
 }

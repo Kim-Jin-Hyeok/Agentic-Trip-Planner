@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tripagent.common.response.PageResponse;
+import com.tripagent.accommodation.domain.Accommodation;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.repository.ItineraryRepository;
@@ -19,8 +20,10 @@ import com.tripagent.member.domain.Member;
 import com.tripagent.member.repository.MemberRepository;
 import com.tripagent.place.domain.Place;
 import com.tripagent.place.repository.PlaceRepository;
+import com.tripagent.route.RouteCalculationAdapter;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
+import com.tripagent.trip.domain.TripAccommodation;
 import com.tripagent.trip.domain.TripConcept;
 import com.tripagent.trip.domain.TripLike;
 import com.tripagent.trip.domain.TripView;
@@ -81,6 +84,9 @@ class TripServiceTest {
 
     @Mock
     private PlaceRepository placeRepository;
+
+    @Mock
+    private RouteCalculationAdapter routeCalculationAdapter;
 
     @InjectMocks
     private TripService tripService;
@@ -558,6 +564,79 @@ class TripServiceTest {
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.orderNo())
                 .containsExactly(1, 2);
         verify(itineraryRepository).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
+    }
+
+    @Test
+    void getTripReturnsAccommodationAndTripEndArrivalSummaries() {
+        Trip trip = Trip.create(
+                "제주 여행",
+                "JEJU",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                TripConcept.HEALING,
+                Transportation.RENT_CAR,
+                "SEOGWIPO",
+                10L,
+                50L,
+                null
+        );
+        setId(trip, "tripId", 1L);
+        Place dayOnePlace = place(20L, "Day One Last Place");
+        Place dayThreePlace = place(30L, "Day Three Last Place");
+        Place airport = place(50L, "제주국제공항");
+        Itinerary dayOneItinerary = Itinerary.create(
+                trip,
+                dayOnePlace,
+                1,
+                1,
+                LocalTime.of(16, 0),
+                LocalTime.of(17, 0),
+                0,
+                "Day one"
+        );
+        Itinerary dayThreeItinerary = Itinerary.create(
+                trip,
+                dayThreePlace,
+                3,
+                1,
+                LocalTime.of(16, 30),
+                LocalTime.of(17, 30),
+                0,
+                "Day three"
+        );
+        TripAccommodation tripAccommodation = org.mockito.Mockito.mock(TripAccommodation.class);
+        Accommodation accommodation = org.mockito.Mockito.mock(Accommodation.class);
+        when(tripAccommodation.getStayDate()).thenReturn(LocalDate.of(2026, 7, 1));
+        when(tripAccommodation.getAccommodation()).thenReturn(accommodation);
+        when(accommodation.getName()).thenReturn("첫날 숙소");
+        when(accommodation.getLatitude()).thenReturn(33.4);
+        when(accommodation.getLongitude()).thenReturn(126.5);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
+                .thenReturn(List.of(dayOneItinerary, dayThreeItinerary));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(tripAccommodation));
+        when(placeRepository.findById(50L)).thenReturn(Optional.of(airport));
+        when(routeCalculationAdapter.calculateTravelMinutes(any(), any(), any(), any()))
+                .thenReturn(25, 45);
+
+        TripDetailResponse response = tripService.getTrip(1L);
+
+        assertThat(response.dayEndRoutes()).hasSize(2);
+        assertThat(response.dayEndRoutes().get(0).dayNo()).isEqualTo(1);
+        assertThat(response.dayEndRoutes().get(0).destinationType()).isEqualTo("ACCOMMODATION");
+        assertThat(response.dayEndRoutes().get(0).destinationName()).isEqualTo("첫날 숙소");
+        assertThat(response.dayEndRoutes().get(0).travelMinutes()).isEqualTo(25);
+        assertThat(response.dayEndRoutes().get(0).estimatedArrivalTime()).isEqualTo(LocalTime.of(17, 25));
+        assertThat(response.dayEndRoutes().get(0).arrivalAfterDailyEndTime()).isFalse();
+        assertThat(response.dayEndRoutes().get(1).dayNo()).isEqualTo(3);
+        assertThat(response.dayEndRoutes().get(1).destinationType()).isEqualTo("TRIP_END");
+        assertThat(response.dayEndRoutes().get(1).destinationName()).isEqualTo("제주국제공항");
+        assertThat(response.dayEndRoutes().get(1).travelMinutes()).isEqualTo(45);
+        assertThat(response.dayEndRoutes().get(1).estimatedArrivalTime()).isEqualTo(LocalTime.of(18, 15));
+        assertThat(response.dayEndRoutes().get(1).arrivalAfterDailyEndTime()).isTrue();
     }
 
     @Test
