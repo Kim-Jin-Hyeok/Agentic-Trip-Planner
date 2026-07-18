@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { PlaceResponse } from '../src/types/trip.ts';
-import { filterCandidatePlaces } from '../src/utils/itineraryGenerateOptions.ts';
+import type { ItineraryGenerateRequest } from '../src/types/trip.ts';
+import {
+  filterCandidatePlaces,
+  maxPlacesForPace,
+  validateItineraryGenerateOptions
+} from '../src/utils/itineraryGenerateOptions.ts';
 
 const places = [
   place(1, '성산일출봉', 'NATURE', 'EAST', '제주 서귀포시 성산읍'),
@@ -47,6 +52,69 @@ test('filters candidate places by must and excluded selections', () => {
     selection: 'EXCLUDED'
   }).map(place => place.placeId), [2]);
 });
+
+test('uses the same maximum place counts as the backend pace policy', () => {
+  assert.equal(maxPlacesForPace('RELAXED'), 4);
+  assert.equal(maxPlacesForPace('NORMAL'), 5);
+  assert.equal(maxPlacesForPace('BUSY'), 7);
+});
+
+test('rejects too many must places and invalid day time windows', () => {
+  const options = generateOptions({
+    mustVisitPlaceIds: [1, 2, 3, 4, 5],
+    dayTimeWindows: [{ dayNo: 1, startTime: '18:00', endTime: '09:00' }]
+  });
+
+  const result = validateItineraryGenerateOptions(options, 1, null);
+
+  assert.deepEqual(result.issues.map(issue => issue.code), ['TOO_MANY_MUST', 'INVALID_TIME_1']);
+  assert.equal(result.candidateAvailabilityChecked, false);
+});
+
+test('rejects unavailable selections and insufficient candidates after exclusions', () => {
+  const candidatePlaces = Array.from({ length: 6 }, (_, index) =>
+    place(index + 1, `장소 ${index + 1}`, 'NATURE', 'EAST', '제주')
+  );
+  const options = generateOptions({
+    mustVisitPlaceIds: [99],
+    excludedPlaceIds: [1]
+  });
+
+  const result = validateItineraryGenerateOptions(options, 2, candidatePlaces);
+
+  assert.deepEqual(result.issues.map(issue => issue.code), [
+    'UNAVAILABLE_SELECTED_PLACE',
+    'INSUFFICIENT_CANDIDATES'
+  ]);
+  assert.equal(result.candidateAvailabilityChecked, true);
+});
+
+test('accepts valid options when enough candidates remain', () => {
+  const candidatePlaces = Array.from({ length: 8 }, (_, index) =>
+    place(index + 1, `장소 ${index + 1}`, 'NATURE', 'EAST', '제주')
+  );
+
+  const result = validateItineraryGenerateOptions(generateOptions(), 2, candidatePlaces);
+
+  assert.deepEqual(result.issues, []);
+  assert.equal(result.candidateAvailabilityChecked, true);
+});
+
+function generateOptions(overrides: Partial<ItineraryGenerateRequest> = {}): ItineraryGenerateRequest {
+  return {
+    mustVisitPlaceIds: [],
+    excludedPlaceIds: [],
+    pace: 'RELAXED',
+    preferredCategories: [],
+    dayTimeWindows: [
+      { dayNo: 1, startTime: '09:00', endTime: '18:00' },
+      { dayNo: 2, startTime: '09:00', endTime: '18:00' }
+    ],
+    rainyDayMode: false,
+    rainyDayNos: [],
+    ...overrides
+  };
+}
 
 function place(
   placeId: number,

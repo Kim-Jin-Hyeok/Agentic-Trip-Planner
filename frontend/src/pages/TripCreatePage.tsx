@@ -57,6 +57,7 @@ import {
   type PublicListMode,
   type ViewMode
 } from '../utils/tripDisplay';
+import { maxPlacesForPace } from '../utils/itineraryGenerateOptions';
 
 const initialForm: TripCreateRequest = {
   title: '',
@@ -1651,10 +1652,6 @@ function createDefaultGenerateOptions(trip: TripDetail): ItineraryGenerateReques
       };
     })
   };
-}
-
-function maxPlacesForPace(pace: ItineraryGenerateRequest['pace']): number {
-  return pace === 'RELAXED' ? 4 : pace === 'BUSY' ? 7 : 5;
 }
 
 function paceLabel(pace: ItineraryGenerateRequest['pace']): string {

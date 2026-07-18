@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ItineraryGenerateRequest, ItineraryPace, PlaceCategory, PlaceResponse } from '../types/trip';
 import {
   filterCandidatePlaces,
+  type GenerationValidationResult,
   type PlaceSelectionFilter
 } from '../utils/itineraryGenerateOptions';
 
@@ -9,6 +10,7 @@ type ItineraryGenerateOptionsProps = {
   options: ItineraryGenerateRequest;
   candidatePlaces: PlaceResponse[];
   isLoadingPlaces: boolean;
+  validation: GenerationValidationResult;
   onChange: (options: ItineraryGenerateRequest) => void;
   onLoadPlaces: () => void;
 };
@@ -33,6 +35,7 @@ export function ItineraryGenerateOptions({
   options,
   candidatePlaces,
   isLoadingPlaces,
+  validation,
   onChange,
   onLoadPlaces
 }: ItineraryGenerateOptionsProps) {
@@ -198,6 +201,24 @@ export function ItineraryGenerateOptions({
           ))}
         </div>
       )}
+
+      <div
+        className={`generation-validation ${validation.issues.length > 0 ? 'error' : 'valid'}`}
+        role={validation.issues.length > 0 ? 'alert' : 'status'}
+      >
+        <strong>{validation.issues.length > 0 ? '생성 조건을 확인해 주세요' : '생성 조건 점검 완료'}</strong>
+        {validation.issues.length > 0 ? (
+          <ul>
+            {validation.issues.map(issue => <li key={issue.code}>{issue.message}</li>)}
+          </ul>
+        ) : (
+          <span>
+            {validation.candidateAvailabilityChecked
+              ? '현재 조건으로 일정을 생성할 수 있습니다.'
+              : '기본 조건에 문제가 없습니다. 후보 조회 후 장소 가용성도 확인할 수 있습니다.'}
+          </span>
+        )}
+      </div>
 
       {candidatePlaces.length === 0 ? (
         <div className="compact-empty">

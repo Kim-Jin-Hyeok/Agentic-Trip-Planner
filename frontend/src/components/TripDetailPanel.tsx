@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import type {
   Itinerary,
   ItineraryCreateRequest,
@@ -20,6 +20,7 @@ import {
   type ItineraryEditForm,
   type ViewMode
 } from '../utils/tripDisplay';
+import { validateItineraryGenerateOptions } from '../utils/itineraryGenerateOptions';
 import { ItineraryDaySection } from './ItineraryDaySection';
 import { ItineraryAddForm } from './ItineraryAddForm';
 import { ItineraryGenerateOptions } from './ItineraryGenerateOptions';
@@ -194,6 +195,15 @@ export function TripDetailPanel({
     || isAddingItinerary
     || pendingItineraryId != null
     || editingItineraryId != null;
+  const generationValidation = useMemo(
+    () => validateItineraryGenerateOptions(
+      generateOptions,
+      trip == null ? 0 : trip.nights + 1,
+      candidatePlaces.length > 0 ? candidatePlaces : null
+    ),
+    [candidatePlaces, generateOptions, trip]
+  );
+  const hasGenerationErrors = generationValidation.issues.length > 0;
 
   return (
     <div className="result-panel">
@@ -272,12 +282,18 @@ export function TripDetailPanel({
                 type="button"
                 className="regenerate-button"
                 onClick={onRegenerate}
-                disabled={trip == null || isChangingItinerary}
+                disabled={trip == null || isChangingItinerary || hasGenerationErrors}
+                title={hasGenerationErrors ? '일정 생성 옵션의 오류를 먼저 해결해 주세요.' : undefined}
               >
                 {isRegenerating ? '다시 만드는 중...' : '일정 다시 만들기'}
               </button>
             ) : (
-              <button type="button" onClick={onGenerate} disabled={trip == null || isChangingItinerary}>
+              <button
+                type="button"
+                onClick={onGenerate}
+                disabled={trip == null || isChangingItinerary || hasGenerationErrors}
+                title={hasGenerationErrors ? '일정 생성 옵션의 오류를 먼저 해결해 주세요.' : undefined}
+              >
                 {isGenerating ? '생성 중...' : '일정 생성'}
               </button>
             )}
@@ -367,6 +383,7 @@ export function TripDetailPanel({
           options={generateOptions}
           candidatePlaces={candidatePlaces}
           isLoadingPlaces={isLoadingCandidatePlaces}
+          validation={generationValidation}
           onChange={onGenerateOptionsChange}
           onLoadPlaces={onLoadCandidatePlaces}
         />

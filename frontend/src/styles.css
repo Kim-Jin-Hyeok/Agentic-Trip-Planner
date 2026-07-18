@@ -1924,6 +1924,39 @@ button.trip-list-item:hover:not(:disabled),
   gap: 12px;
 }
 
+.generation-validation {
+  display: grid;
+  gap: 5px;
+  border-radius: 11px;
+  font-size: 11px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+  padding: 11px 12px;
+}
+
+.generation-validation.valid {
+  border: 1px solid #cde1d5;
+  background: #eff8f3;
+  color: #245b46;
+}
+
+.generation-validation.error {
+  border: 1px solid #ebc4bd;
+  background: #fff4f2;
+  color: #8d3f35;
+}
+
+.generation-validation strong {
+  font-size: 12px;
+}
+
+.generation-validation ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .candidate-selection-summary {
   display: flex;
   align-items: center;
