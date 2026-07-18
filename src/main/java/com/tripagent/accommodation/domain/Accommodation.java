@@ -14,10 +14,16 @@ import jakarta.persistence.UniqueConstraint;
 @Entity
 @Table(
         name = "accommodations",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_accommodations_name_address",
-                columnNames = {"name", "address"}
-        ),
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_accommodations_name_address",
+                        columnNames = {"name", "address"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_accommodations_external_place",
+                        columnNames = {"external_provider", "external_place_id"}
+                )
+        },
         indexes = {
                 @Index(name = "idx_accommodations_use_region", columnList = "useYn, region"),
                 @Index(name = "idx_accommodations_use_type", columnList = "useYn, accommodationType")
@@ -53,6 +59,15 @@ public class Accommodation {
 
     @Column(length = 1000)
     private String thumbnailUrl;
+
+    @Column(length = 30)
+    private String externalProvider;
+
+    @Column(length = 100)
+    private String externalPlaceId;
+
+    @Column(length = 500)
+    private String externalPlaceUrl;
 
     @Column(nullable = false)
     private Boolean parkingYn;
@@ -155,5 +170,26 @@ public class Accommodation {
 
     public Boolean getUseYn() {
         return useYn;
+    }
+
+    public String getExternalProvider() {
+        return externalProvider;
+    }
+
+    public String getExternalPlaceId() {
+        return externalPlaceId;
+    }
+
+    public String getExternalPlaceUrl() {
+        return externalPlaceUrl;
+    }
+
+    public void linkExternalReference(String provider, String placeId, String placeUrl) {
+        if (provider == null || provider.isBlank() || placeId == null || placeId.isBlank()) {
+            throw new IllegalArgumentException("External accommodation provider and place ID are required.");
+        }
+        this.externalProvider = provider.trim();
+        this.externalPlaceId = placeId.trim();
+        this.externalPlaceUrl = placeUrl == null || placeUrl.isBlank() ? null : placeUrl.trim();
     }
 }
