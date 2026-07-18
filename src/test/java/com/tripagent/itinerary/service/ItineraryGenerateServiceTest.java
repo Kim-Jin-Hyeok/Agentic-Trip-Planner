@@ -34,8 +34,10 @@ import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.domain.ItineraryGenerationSource;
+import com.tripagent.itinerary.domain.ItineraryGenerationPreference;
 import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.itinerary.repository.ItineraryGenerationPreferenceRepository;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.place.dto.PlaceSummaryResponse;
 import com.tripagent.place.dto.PlaceResponse;
@@ -99,6 +101,9 @@ class ItineraryGenerateServiceTest {
 
     @Mock
     private TripAccommodationRepository tripAccommodationRepository;
+
+    @Mock
+    private ItineraryGenerationPreferenceRepository generationPreferenceRepository;
 
     @Spy
     private RouteCalculationAdapter routeCalculationAdapter = new SimpleRouteCalculationAdapter();
@@ -2083,6 +2088,12 @@ class ItineraryGenerateServiceTest {
         assertThat(responses).extracting(ItineraryResponse::placeId)
                 .containsExactly(10L, 20L);
         verify(candidatePlaceValidator).validatePlaceIds(selectedCandidatePlaces, List.of(10L, 20L));
+        ArgumentCaptor<ItineraryGenerationPreference> preferenceCaptor =
+                ArgumentCaptor.forClass(ItineraryGenerationPreference.class);
+        verify(generationPreferenceRepository).save(preferenceCaptor.capture());
+        assertThat(preferenceCaptor.getValue().toRequest()).isEqualTo(new ItineraryGenerateRequest(
+                List.of(20L), List.of(), ItineraryPace.NORMAL, List.of(), List.of(), false, List.of()
+        ));
     }
 
     @Test

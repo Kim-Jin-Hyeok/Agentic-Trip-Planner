@@ -1632,13 +1632,24 @@ async function copyTextToClipboard(text: string) {
 }
 
 function createDefaultGenerateOptions(trip: TripDetail): ItineraryGenerateRequest {
+  const savedOptions = trip.generationOptions;
+  const tripDayCount = trip.nights + 1;
   return {
     ...initialGenerateOptions,
-    dayTimeWindows: Array.from({ length: trip.nights + 1 }, (_, index) => ({
-      dayNo: index + 1,
-      startTime: trip.dailyStartTime,
-      endTime: trip.dailyEndTime
-    }))
+    ...savedOptions,
+    mustVisitPlaceIds: [...(savedOptions?.mustVisitPlaceIds ?? [])],
+    excludedPlaceIds: [...(savedOptions?.excludedPlaceIds ?? [])],
+    preferredCategories: [...(savedOptions?.preferredCategories ?? [])],
+    rainyDayNos: (savedOptions?.rainyDayNos ?? []).filter(dayNo => dayNo <= tripDayCount),
+    dayTimeWindows: Array.from({ length: tripDayCount }, (_, index) => {
+      const dayNo = index + 1;
+      const savedWindow = savedOptions?.dayTimeWindows.find(window => window.dayNo === dayNo);
+      return savedWindow ?? {
+        dayNo,
+        startTime: trip.dailyStartTime,
+        endTime: trip.dailyEndTime
+      };
+    })
   };
 }
 

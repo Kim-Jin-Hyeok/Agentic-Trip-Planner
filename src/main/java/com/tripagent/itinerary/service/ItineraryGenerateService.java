@@ -15,10 +15,12 @@ import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.domain.ItineraryGenerationSource;
+import com.tripagent.itinerary.domain.ItineraryGenerationPreference;
 import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.policy.PaceItineraryPolicy;
 import com.tripagent.place.dto.PlaceCategory;
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.itinerary.repository.ItineraryGenerationPreferenceRepository;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.service.PlaceService;
 import com.tripagent.route.RouteCalculationAdapter;
@@ -78,6 +80,7 @@ public class ItineraryGenerateService {
     private final TripAccommodationRepository tripAccommodationRepository;
     private final RouteCalculationAdapter routeCalculationAdapter;
     private final AccommodationAreaRegionMapper accommodationAreaRegionMapper;
+    private final ItineraryGenerationPreferenceRepository generationPreferenceRepository;
 
     public ItineraryGenerateService(
             TripRepository tripRepository,
@@ -91,7 +94,8 @@ public class ItineraryGenerateService {
             ItineraryRepository itineraryRepository,
             TripAccommodationRepository tripAccommodationRepository,
             RouteCalculationAdapter routeCalculationAdapter,
-            AccommodationAreaRegionMapper accommodationAreaRegionMapper
+            AccommodationAreaRegionMapper accommodationAreaRegionMapper,
+            ItineraryGenerationPreferenceRepository generationPreferenceRepository
     ) {
         this.tripRepository = tripRepository;
         this.placeService = placeService;
@@ -105,6 +109,7 @@ public class ItineraryGenerateService {
         this.tripAccommodationRepository = tripAccommodationRepository;
         this.routeCalculationAdapter = routeCalculationAdapter;
         this.accommodationAreaRegionMapper = accommodationAreaRegionMapper;
+        this.generationPreferenceRepository = generationPreferenceRepository;
     }
 
     @Transactional
@@ -129,8 +134,11 @@ public class ItineraryGenerateService {
             throw new IllegalArgumentException("Itinerary already exists for this trip.");
         }
 
-        DraftGenerationResult result = generateDraftItineraryResult(tripId, request, OPERATION_GENERATE);
-        return saveGeneratedItineraries(tripId, request, result);
+        ItineraryGenerateRequest effectiveRequest = resolveGenerationRequest(tripId, request);
+        DraftGenerationResult result = generateDraftItineraryResult(tripId, effectiveRequest, OPERATION_GENERATE);
+        List<ItineraryResponse> responses = saveGeneratedItineraries(tripId, effectiveRequest, result);
+        saveGenerationPreference(tripId, effectiveRequest);
+        return responses;
     }
 
     @Transactional
@@ -152,14 +160,17 @@ public class ItineraryGenerateService {
         validateTripId(tripId);
         validateTripOwner(tripId, ownerId);
 
+        ItineraryGenerateRequest effectiveRequest = resolveGenerationRequest(tripId, request);
         DraftGenerationResult result = generateDraftItineraryResult(
                 tripId,
-                request,
+                effectiveRequest,
                 OPERATION_REGENERATE
         );
         itineraryRepository.deleteByTrip_TripId(tripId);
 
-        return saveGeneratedItineraries(tripId, request, result);
+        List<ItineraryResponse> responses = saveGeneratedItineraries(tripId, effectiveRequest, result);
+        saveGenerationPreference(tripId, effectiveRequest);
+        return responses;
     }
 
     @Transactional
@@ -172,6 +183,7 @@ public class ItineraryGenerateService {
         validateTripId(tripId);
         validateTripOwner(tripId, ownerId);
 
+        ItineraryGenerateRequest effectiveRequest = resolveGenerationRequest(tripId, request);
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         validateTargetDayNo(trip, dayNo);
@@ -188,7 +200,7 @@ public class ItineraryGenerateService {
                 .filter(itinerary -> !dayNo.equals(itinerary.getDayNo()))
                 .map(itinerary -> itinerary.getPlace().getPlaceId())
                 .collect(Collectors.toSet());
-        ItineraryGenerateRequest dayRequest = requestForDay(request, unavailablePlaceIds, dayNo);
+        ItineraryGenerateRequest dayRequest = requestForDay(effectiveRequest, unavailablePlaceIds, dayNo);
         DraftGenerationResult result = generateDraftItineraryResult(
                 tripId,
                 dayRequest,
@@ -199,7 +211,34 @@ public class ItineraryGenerateService {
 
         itineraryRepository.deleteByTrip_TripIdAndDayNo(tripId, dayNo);
         saveGeneratedItineraries(tripId, dayRequest, result);
+        saveGenerationPreference(tripId, effectiveRequest);
         return itineraryService.getItineraries(tripId, ownerId);
+    }
+
+    private ItineraryGenerateRequest resolveGenerationRequest(
+            Long tripId,
+            ItineraryGenerateRequest request
+    ) {
+        if (request != null) {
+            return request;
+        }
+        return generationPreferenceRepository.findByTrip_TripId(tripId)
+                .map(ItineraryGenerationPreference::toRequest)
+                .orElse(null);
+    }
+
+    private void saveGenerationPreference(Long tripId, ItineraryGenerateRequest request) {
+        if (request == null) {
+            return;
+        }
+        ItineraryGenerationPreference preference = generationPreferenceRepository
+                .findByTrip_TripId(tripId)
+                .orElseGet(() -> ItineraryGenerationPreference.create(
+                        tripRepository.getReferenceById(tripId),
+                        request
+                ));
+        preference.update(request);
+        generationPreferenceRepository.save(preference);
     }
 
     private List<ItineraryResponse> saveGeneratedItineraries(

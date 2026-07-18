@@ -15,8 +15,12 @@ import com.tripagent.common.response.PageResponse;
 import com.tripagent.accommodation.domain.Accommodation;
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.domain.ItineraryGenerationSource;
+import com.tripagent.itinerary.domain.ItineraryGenerationPreference;
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
+import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.itinerary.repository.ItineraryGenerationPreferenceRepository;
 import com.tripagent.member.domain.Member;
 import com.tripagent.member.repository.MemberRepository;
 import com.tripagent.place.domain.Place;
@@ -88,6 +92,9 @@ class TripServiceTest {
 
     @Mock
     private RouteCalculationAdapter routeCalculationAdapter;
+
+    @Mock
+    private ItineraryGenerationPreferenceRepository generationPreferenceRepository;
 
     @InjectMocks
     private TripService tripService;
@@ -510,6 +517,11 @@ class TripServiceTest {
     @Test
     void getTripReturnsTripDetailWithItineraries() {
         Trip trip = trip(1L);
+        ItineraryGenerateRequest generationOptions = new ItineraryGenerateRequest(
+                List.of(10L), List.of(30L), ItineraryPace.RELAXED
+        );
+        ItineraryGenerationPreference generationPreference =
+                ItineraryGenerationPreference.create(trip, generationOptions);
         Place firstPlace = place(10L, "First Place");
         Place secondPlace = place(20L, "Second Place");
         Itinerary firstItinerary = Itinerary.create(
@@ -535,6 +547,8 @@ class TripServiceTest {
         when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
         when(itineraryRepository.findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L))
                 .thenReturn(List.of(firstItinerary, secondItinerary));
+        when(generationPreferenceRepository.findByTrip_TripId(1L))
+                .thenReturn(Optional.of(generationPreference));
 
         TripDetailResponse response = tripService.getTrip(1L);
 
@@ -564,6 +578,7 @@ class TripServiceTest {
                 .containsExactly(1, 1);
         assertThat(response.itineraries()).extracting(itinerary -> itinerary.orderNo())
                 .containsExactly(1, 2);
+        assertThat(response.generationOptions()).isEqualTo(generationPreference.toRequest());
         verify(itineraryRepository).findByTrip_TripIdOrderByDayNoAscOrderNoAsc(1L);
     }
 

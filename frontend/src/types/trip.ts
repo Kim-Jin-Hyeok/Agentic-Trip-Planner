@@ -163,6 +163,7 @@ export type TripDetail = TripResponse & {
   itineraries: Itinerary[];
   dayStartRoutes?: DayStartRoute[];
   dayEndRoutes?: DayEndRoute[];
+  generationOptions?: ItineraryGenerateRequest | null;
 };
 
 export type TripAuthor = {

@@ -19,6 +19,7 @@ import com.tripagent.itinerary.dto.ItineraryPace;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.itinerary.policy.AccommodationAreaRegionMapper;
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.itinerary.repository.ItineraryGenerationPreferenceRepository;
 import com.tripagent.itinerary.service.ItineraryGenerateService;
 import com.tripagent.itinerary.service.ItineraryService;
 import com.tripagent.member.repository.MemberRepository;
@@ -80,6 +81,9 @@ class MvpTripPlanningFlowTest {
     private MemberRepository memberRepository;
 
     @Mock
+    private ItineraryGenerationPreferenceRepository generationPreferenceRepository;
+
+    @Mock
     private PlaceRepository placeRepository;
 
     @Mock
@@ -126,7 +130,8 @@ class MvpTripPlanningFlowTest {
                 itineraryRepository,
                 tripAccommodationRepository,
                 new SimpleRouteCalculationAdapter(),
-                new AccommodationAreaRegionMapper()
+                new AccommodationAreaRegionMapper(),
+                generationPreferenceRepository
         );
 
         stubTripRepository();

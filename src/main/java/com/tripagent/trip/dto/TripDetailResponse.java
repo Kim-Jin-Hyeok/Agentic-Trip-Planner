@@ -1,6 +1,7 @@
 package com.tripagent.trip.dto;
 
 import com.tripagent.itinerary.dto.ItineraryResponse;
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
 import com.tripagent.trip.domain.Transportation;
 import com.tripagent.trip.domain.Trip;
 import com.tripagent.trip.domain.TripConcept;
@@ -15,7 +16,8 @@ public record TripDetailResponse(
         String lastAccommodationArea, Long likeCount, Long viewCount, TripVisibility visibility,
         List<ItineraryResponse> itineraries, String title, Long startPlaceId, Long endPlaceId,
         List<DayStartRouteResponse> dayStartRoutes,
-        List<DayEndRouteResponse> dayEndRoutes
+        List<DayEndRouteResponse> dayEndRoutes,
+        ItineraryGenerateRequest generationOptions
 ) {
 
     public TripDetailResponse(
@@ -26,7 +28,7 @@ public record TripDetailResponse(
     ) {
         this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
                 lastAccommodationArea, likeCount, viewCount, visibility, itineraries, title,
-                null, null, List.of(), List.of());
+                null, null, List.of(), List.of(), null);
     }
 
     public TripDetailResponse(
@@ -37,7 +39,7 @@ public record TripDetailResponse(
     ) {
         this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
                 lastAccommodationArea, likeCount, viewCount, visibility, itineraries, destination + " 여행",
-                null, null, List.of(), List.of());
+                null, null, List.of(), List.of(), null);
     }
 
     public TripDetailResponse(
@@ -48,7 +50,7 @@ public record TripDetailResponse(
     ) {
         this(tripId, destination, startDate, endDate, nights, dailyStartTime, dailyEndTime, concept, transportation,
                 lastAccommodationArea, likeCount, 0L, visibility, itineraries, destination + " 여행",
-                null, null, List.of(), List.of());
+                null, null, List.of(), List.of(), null);
     }
 
     public static TripDetailResponse from(Trip trip, List<ItineraryResponse> itineraries) {
@@ -61,12 +63,22 @@ public record TripDetailResponse(
             List<DayStartRouteResponse> dayStartRoutes,
             List<DayEndRouteResponse> dayEndRoutes
     ) {
+        return from(trip, itineraries, dayStartRoutes, dayEndRoutes, null);
+    }
+
+    public static TripDetailResponse from(
+            Trip trip,
+            List<ItineraryResponse> itineraries,
+            List<DayStartRouteResponse> dayStartRoutes,
+            List<DayEndRouteResponse> dayEndRoutes,
+            ItineraryGenerateRequest generationOptions
+    ) {
         return new TripDetailResponse(
                 trip.getTripId(), trip.getDestination(), trip.getStartDate(), trip.getEndDate(), trip.getNights(),
                 trip.getDailyStartTime(), trip.getDailyEndTime(), trip.getConcept(), trip.getTransportation(),
                 trip.getLastAccommodationArea(), trip.getLikeCount(), trip.getViewCount(), trip.getVisibility(),
                 itineraries, trip.getTitle(), trip.getStartPlaceId(), trip.getEndPlaceId(),
-                dayStartRoutes, dayEndRoutes
+                dayStartRoutes, dayEndRoutes, generationOptions
         );
     }
 }

@@ -2,6 +2,9 @@ package com.tripagent.trip.service;
 
 import com.tripagent.itinerary.domain.Itinerary;
 import com.tripagent.itinerary.repository.ItineraryRepository;
+import com.tripagent.itinerary.domain.ItineraryGenerationPreference;
+import com.tripagent.itinerary.dto.ItineraryGenerateRequest;
+import com.tripagent.itinerary.repository.ItineraryGenerationPreferenceRepository;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.itinerary.dto.ItineraryResponse;
 import com.tripagent.member.domain.Member;
@@ -79,6 +82,7 @@ public class TripService {
     private final MemberRepository memberRepository;
     private final PlaceRepository placeRepository;
     private final RouteCalculationAdapter routeCalculationAdapter;
+    private final ItineraryGenerationPreferenceRepository generationPreferenceRepository;
 
     @Autowired
     public TripService(
@@ -89,7 +93,8 @@ public class TripService {
             TripViewRepository tripViewRepository,
             MemberRepository memberRepository,
             PlaceRepository placeRepository,
-            RouteCalculationAdapter routeCalculationAdapter
+            RouteCalculationAdapter routeCalculationAdapter,
+            ItineraryGenerationPreferenceRepository generationPreferenceRepository
     ) {
         this.tripRepository = tripRepository;
         this.itineraryRepository = itineraryRepository;
@@ -99,6 +104,7 @@ public class TripService {
         this.memberRepository = memberRepository;
         this.placeRepository = placeRepository;
         this.routeCalculationAdapter = routeCalculationAdapter;
+        this.generationPreferenceRepository = generationPreferenceRepository;
     }
 
     public TripService(
@@ -117,7 +123,8 @@ public class TripService {
                 tripViewRepository,
                 memberRepository,
                 null,
-                new SimpleRouteCalculationAdapter()
+                new SimpleRouteCalculationAdapter(),
+                null
         );
     }
 
@@ -246,8 +253,13 @@ public class TripService {
                 .toList();
         List<DayEndRouteResponse> dayEndRoutes = calculateDayEndRoutes(trip, itineraryEntities);
         List<DayStartRouteResponse> dayStartRoutes = calculateDayStartRoutes(trip, itineraryEntities);
+        ItineraryGenerateRequest generationOptions = generationPreferenceRepository == null
+                ? null
+                : generationPreferenceRepository.findByTrip_TripId(tripId)
+                        .map(ItineraryGenerationPreference::toRequest)
+                        .orElse(null);
 
-        return TripDetailResponse.from(trip, itineraries, dayStartRoutes, dayEndRoutes);
+        return TripDetailResponse.from(trip, itineraries, dayStartRoutes, dayEndRoutes, generationOptions);
     }
 
     private List<DayStartRouteResponse> calculateDayStartRoutes(
@@ -888,6 +900,9 @@ public class TripService {
         tripViewRepository.deleteByTripId(tripId);
         tripLikeRepository.deleteByTripId(tripId);
         itineraryRepository.deleteByTrip_TripId(tripId);
+        if (generationPreferenceRepository != null) {
+            generationPreferenceRepository.deleteByTrip_TripId(tripId);
+        }
         tripAccommodationRepository.deleteByTripId(tripId);
         tripRepository.delete(trip);
     }
