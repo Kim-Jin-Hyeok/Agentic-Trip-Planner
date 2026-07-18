@@ -1566,6 +1566,64 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesReducesStayTimesToFitDailyTimeWindowWithoutRetry() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 18),
+                LocalDate.of(2026, 7, 18),
+                LocalTime.of(9, 0),
+                LocalTime.of(12, 0)
+        );
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 120),
+                place(20L, 90)
+        );
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, LocalTime.of(9, 0), LocalTime.of(11, 0), 0),
+                llmItem(20L, 2, LocalTime.of(11, 0), LocalTime.of(12, 30), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, LocalTime.of(9, 0), LocalTime.of(11, 0), 0),
+                request(20L, 2, LocalTime.of(11, 0), LocalTime.of(12, 30), 0)
+        );
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn("prompt");
+        when(llmClient.generate("prompt")).thenReturn("raw response");
+        when(llmItineraryJsonParser.parse("raw response")).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+        when(itineraryService.createItinerary(eq(1L), any()))
+                .thenReturn(response(100L, 1L, 10L, 1));
+
+        itineraryGenerateService.generateItineraries(1L);
+
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor =
+                ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService, times(2)).createItinerary(eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues())
+                .extracting(
+                        ItineraryCreateRequest::placeId,
+                        ItineraryCreateRequest::startTime,
+                        ItineraryCreateRequest::endTime,
+                        ItineraryCreateRequest::travelMinutesFromPrevious
+                )
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                10L, LocalTime.of(9, 0), LocalTime.of(10, 42), 0
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                20L, LocalTime.of(10, 47), LocalTime.of(12, 0), 5
+                        )
+                );
+        verify(llmClient).generate("prompt");
+        verify(itineraryService, times(2)).createGeneratedItinerary(
+                eq(1L), any(ItineraryCreateRequest.class), eq(ItineraryGenerationSource.LLM_ADJUSTED)
+        );
+    }
+
+    @Test
     void generateDraftItinerariesBoostsIndoorAndRainyDayScoreWhenRainyDayModeIsEnabled() {
         Trip trip = trip(1L, TripConcept.FOOD);
         PlaceResponse outdoorHighConceptScore = placeWithFoodScoreRegionIndoorAndRainyScore(
@@ -2714,7 +2772,7 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
-    void generateItinerariesSavesFallbackWhenEndTimeAfterDailyEndTime() {
+    void generateItinerariesCompactsStayTimesWhenEndTimeAfterDailyEndTime() {
         Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(9, 0), LocalTime.of(10, 30));
         List<PlaceResponse> candidatePlaces = List.of(
                 place(10L, 60),
@@ -2740,10 +2798,12 @@ class ItineraryGenerateServiceTest {
 
         List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L);
 
-        assertThat(responses).hasSize(1);
-        verify(llmClient, times(3)).generate(anyString());
-        verify(candidatePlaceValidator, times(3)).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
-        verify(itineraryService).createItinerary(eq(1L), any());
+        assertThat(responses).hasSize(2);
+        verify(llmClient).generate(prompt);
+        verify(candidatePlaceValidator).validatePlaceIds(candidatePlaces, List.of(10L, 20L));
+        verify(itineraryService, times(2)).createGeneratedItinerary(
+                eq(1L), any(ItineraryCreateRequest.class), eq(ItineraryGenerationSource.LLM_ADJUSTED)
+        );
     }
 
     @Test

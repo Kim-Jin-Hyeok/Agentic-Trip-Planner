@@ -1522,9 +1522,14 @@ public class ItineraryGenerateService {
             List<ItineraryCreateRequest> dayRequests = requestsByDayNo.get(dayNo).stream()
                     .sorted(Comparator.comparing(ItineraryCreateRequest::orderNo))
                     .toList();
+            DayTimeWindow dayTimeWindow = dayTimeWindowByDayNo.get(dayNo);
+            if (dayRequests.getFirst().startTime().isBefore(dayTimeWindow.startTime())) {
+                adjustedRequests.addAll(dayRequests);
+                return;
+            }
             RouteAnchor endAnchor = routeAnchorByBoundaryNo.get(dayNo);
-            if (endAnchor == null || arrivesAtEndAnchorWithinTimeWindow(
-                    dayRequests, candidatePlaceById, dayTimeWindowByDayNo.get(dayNo), endAnchor
+            if (fitsWithinDayTimeWindow(
+                    dayRequests, candidatePlaceById, dayTimeWindow, endAnchor
             )) {
                 adjustedRequests.addAll(dayRequests);
                 return;
@@ -1533,11 +1538,12 @@ public class ItineraryGenerateService {
             List<ItineraryCreateRequest> compactedRequests = compactDaySchedule(
                     dayRequests,
                     candidatePlaceById,
-                    dayTimeWindowByDayNo.get(dayNo),
-                    routeAnchorByBoundaryNo.get(dayNo - 1)
+                    dayTimeWindow,
+                    routeAnchorByBoundaryNo.get(dayNo - 1),
+                    endAnchor
             );
-            if (arrivesAtEndAnchorWithinTimeWindow(
-                    compactedRequests, candidatePlaceById, dayTimeWindowByDayNo.get(dayNo), endAnchor
+            if (fitsWithinDayTimeWindow(
+                    compactedRequests, candidatePlaceById, dayTimeWindow, endAnchor
             )) {
                 adjustedRequests.addAll(compactedRequests);
             } else {
@@ -1552,19 +1558,34 @@ public class ItineraryGenerateService {
             List<ItineraryCreateRequest> dayRequests,
             Map<Long, PlaceResponse> candidatePlaceById,
             DayTimeWindow dayTimeWindow,
-            RouteAnchor startAnchor
+            RouteAnchor startAnchor,
+            RouteAnchor endAnchor
     ) {
+        int totalTravelMinutes = fallbackTravelMinutesForDay(
+                dayRequests,
+                candidatePlaceById,
+                startAnchor,
+                endAnchor
+        );
+        int availableStayMinutes = Math.toIntExact(
+                ChronoUnit.MINUTES.between(dayTimeWindow.startTime(), dayTimeWindow.endTime())
+        ) - totalTravelMinutes;
+        List<Integer> stayMinutes = compactedStayMinutes(dayRequests, availableStayMinutes);
+        if (stayMinutes.isEmpty()) {
+            return dayRequests;
+        }
+
         List<ItineraryCreateRequest> compactedRequests = new ArrayList<>();
         LocalTime cursor = dayTimeWindow.startTime();
 
-        for (ItineraryCreateRequest request : dayRequests) {
+        for (int index = 0; index < dayRequests.size(); index++) {
+            ItineraryCreateRequest request = dayRequests.get(index);
             PlaceResponse place = candidatePlaceById.get(request.placeId());
             int travelMinutes = compactedRequests.isEmpty()
                     ? tripEndpointTravelMinutes(startAnchor, place)
                     : request.travelMinutesFromPrevious();
             LocalTime startTime = cursor.plusMinutes(travelMinutes);
-            long stayMinutes = ChronoUnit.MINUTES.between(request.startTime(), request.endTime());
-            LocalTime endTime = startTime.plusMinutes(stayMinutes);
+            LocalTime endTime = startTime.plusMinutes(stayMinutes.get(index));
             compactedRequests.add(new ItineraryCreateRequest(
                     request.placeId(),
                     request.dayNo(),
@@ -1580,16 +1601,84 @@ public class ItineraryGenerateService {
         return compactedRequests;
     }
 
-    private boolean arrivesAtEndAnchorWithinTimeWindow(
+    private int fallbackTravelMinutesForDay(
+            List<ItineraryCreateRequest> dayRequests,
+            Map<Long, PlaceResponse> candidatePlaceById,
+            RouteAnchor startAnchor,
+            RouteAnchor endAnchor
+    ) {
+        PlaceResponse firstPlace = candidatePlaceById.get(dayRequests.getFirst().placeId());
+        PlaceResponse lastPlace = candidatePlaceById.get(dayRequests.getLast().placeId());
+        int betweenPlaceTravelMinutes = dayRequests.stream()
+                .skip(1)
+                .mapToInt(ItineraryCreateRequest::travelMinutesFromPrevious)
+                .sum();
+        return tripEndpointTravelMinutes(startAnchor, firstPlace)
+                + betweenPlaceTravelMinutes
+                + tripEndpointTravelMinutes(lastPlace, endAnchor);
+    }
+
+    private List<Integer> compactedStayMinutes(
+            List<ItineraryCreateRequest> dayRequests,
+            int availableStayMinutes
+    ) {
+        List<Integer> stayMinutes = dayRequests.stream()
+                .map(request -> Math.toIntExact(
+                        ChronoUnit.MINUTES.between(request.startTime(), request.endTime())
+                ))
+                .collect(Collectors.toCollection(ArrayList::new));
+        List<Integer> minimumStayMinutes = stayMinutes.stream()
+                .map(minutes -> Math.min(minutes, MIN_FALLBACK_STAY_MINUTES))
+                .toList();
+        int minimumRequiredStayMinutes = minimumStayMinutes.stream().mapToInt(Integer::intValue).sum();
+        if (availableStayMinutes < minimumRequiredStayMinutes) {
+            return List.of();
+        }
+
+        int reductionMinutes = stayMinutes.stream().mapToInt(Integer::intValue).sum() - availableStayMinutes;
+        while (reductionMinutes > 0) {
+            List<Integer> reducibleIndexes = new ArrayList<>();
+            for (int index = 0; index < stayMinutes.size(); index++) {
+                if (stayMinutes.get(index) > minimumStayMinutes.get(index)) {
+                    reducibleIndexes.add(index);
+                }
+            }
+            if (reducibleIndexes.isEmpty()) {
+                return List.of();
+            }
+
+            int reductionPerPlace = Math.max(
+                    1,
+                    (reductionMinutes + reducibleIndexes.size() - 1) / reducibleIndexes.size()
+            );
+            for (Integer index : reducibleIndexes) {
+                int reducibleMinutes = stayMinutes.get(index) - minimumStayMinutes.get(index);
+                int reducedMinutes = Math.min(
+                        reductionMinutes,
+                        Math.min(reducibleMinutes, reductionPerPlace)
+                );
+                stayMinutes.set(index, stayMinutes.get(index) - reducedMinutes);
+                reductionMinutes -= reducedMinutes;
+                if (reductionMinutes <= 0) {
+                    break;
+                }
+            }
+        }
+        return stayMinutes;
+    }
+
+    private boolean fitsWithinDayTimeWindow(
             List<ItineraryCreateRequest> dayRequests,
             Map<Long, PlaceResponse> candidatePlaceById,
             DayTimeWindow dayTimeWindow,
             RouteAnchor endAnchor
     ) {
+        ItineraryCreateRequest firstRequest = dayRequests.getFirst();
         ItineraryCreateRequest lastRequest = dayRequests.getLast();
         PlaceResponse lastPlace = candidatePlaceById.get(lastRequest.placeId());
         int endAnchorTravelMinutes = tripEndpointTravelMinutes(lastPlace, endAnchor);
-        return !lastRequest.endTime().plusMinutes(endAnchorTravelMinutes).isAfter(dayTimeWindow.endTime());
+        return !firstRequest.startTime().isBefore(dayTimeWindow.startTime())
+                && !lastRequest.endTime().plusMinutes(endAnchorTravelMinutes).isAfter(dayTimeWindow.endTime());
     }
 
     private void validateDraftItineraries(
