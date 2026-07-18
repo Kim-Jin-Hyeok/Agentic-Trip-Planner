@@ -2907,6 +2907,92 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateItinerariesReducesOptionalFallbackPlacesToFitDayTimeWindow() {
+        Trip trip = trip(1L, TripConcept.FOOD, LocalTime.of(9, 0), LocalTime.of(10, 10));
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 60),
+                place(30L, 60),
+                place(40L, 60)
+        );
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                List.of(10L),
+                null,
+                ItineraryPace.NORMAL
+        );
+        String prompt = "prompt";
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenThrow(
+                LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
+        );
+        when(itineraryService.createItinerary(eq(1L), any(ItineraryCreateRequest.class)))
+                .thenAnswer(invocation -> {
+                    ItineraryCreateRequest createRequest = invocation.getArgument(1);
+                    return response(
+                            100L + createRequest.orderNo(),
+                            1L,
+                            createRequest.placeId(),
+                            createRequest.orderNo()
+                    );
+                });
+
+        List<ItineraryResponse> responses = itineraryGenerateService.generateItineraries(1L, request);
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses).extracting(ItineraryResponse::placeId).contains(10L);
+        verify(itineraryService, times(2)).createItinerary(eq(1L), any(ItineraryCreateRequest.class));
+    }
+
+    @Test
+    void generateItinerariesDistributesFallbackMustVisitPlacesAcrossTripDays() {
+        Trip trip = trip(
+                1L,
+                TripConcept.FOOD,
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 4),
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0)
+        );
+        List<PlaceResponse> candidatePlaces = places(16);
+        ItineraryGenerateRequest request = new ItineraryGenerateRequest(
+                List.of(10L, 20L, 30L),
+                null,
+                ItineraryPace.NORMAL
+        );
+        String prompt = "prompt";
+        when(itineraryRepository.existsByTrip_TripId(1L)).thenReturn(false);
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces, request)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenThrow(
+                LlmException.of(LlmFailureType.INSUFFICIENT_QUOTA, "OpenAI quota exceeded.")
+        );
+        when(itineraryService.createItinerary(eq(1L), any(ItineraryCreateRequest.class)))
+                .thenAnswer(invocation -> {
+                    ItineraryCreateRequest createRequest = invocation.getArgument(1);
+                    return response(
+                            100L + createRequest.placeId(),
+                            1L,
+                            createRequest.placeId(),
+                            createRequest.orderNo()
+                    );
+                });
+
+        itineraryGenerateService.generateItineraries(1L, request);
+
+        ArgumentCaptor<ItineraryCreateRequest> requestCaptor =
+                ArgumentCaptor.forClass(ItineraryCreateRequest.class);
+        verify(itineraryService, times(16)).createItinerary(eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues())
+                .filteredOn(createRequest -> List.of(10L, 20L, 30L).contains(createRequest.placeId()))
+                .extracting(ItineraryCreateRequest::dayNo)
+                .containsExactly(1, 2, 3);
+    }
+
+    @Test
     void regenerateItinerariesDeletesExistingItineraryAfterFallbackWhenLlmFails() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(

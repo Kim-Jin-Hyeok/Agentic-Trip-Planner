@@ -479,10 +479,18 @@ public class ItineraryGenerateService {
                 accommodationRegionByDayNo
         );
         List<ItineraryCreateRequest> fallbackCreateRequests = new ArrayList<>();
+        Set<Long> mustVisitPlaceIds = request == null
+                ? Set.of()
+                : new HashSet<>(request.normalizedMustVisitPlaceIds());
         boolean routeFlexibleSelection = hasNoFallbackPlaceControls(request);
         List<PlaceResponse> remainingSelectedPlaces = routeFlexibleSelection
                 ? new ArrayList<>(candidatePlaces)
                 : new ArrayList<>(selectedPlaces);
+        if (!routeFlexibleSelection) {
+            candidatePlaces.stream()
+                    .filter(place -> !remainingSelectedPlaces.contains(place))
+                    .forEach(remainingSelectedPlaces::add);
+        }
 
         int firstDayNo = targetDayNo == null ? 1 : targetDayNo;
         int lastDayNo = targetDayNo == null ? tripDays : targetDayNo;
@@ -516,7 +524,10 @@ public class ItineraryGenerateService {
                         request,
                         dayNo,
                         remainingSelectedPlaces,
-                        dayItemCount
+                        dayItemCount,
+                        lastDayNo - dayNo + 1,
+                        startAccommodation,
+                        endAccommodation
                 );
                 dayPlaces = orderFallbackDayPlacesByRoute(
                         trip,
@@ -527,15 +538,20 @@ public class ItineraryGenerateService {
                         endAccommodation
                 );
             }
-            fallbackCreateRequests.addAll(createFallbackDayItineraries(
+            List<ItineraryCreateRequest> dayCreateRequests = createFittingFallbackDayItineraries(
                     trip,
                     request,
                     dayNo,
                     dayPlaces,
                     startAccommodation,
-                    endAccommodation
-            ));
-            remainingSelectedPlaces.removeAll(dayPlaces);
+                    endAccommodation,
+                    mustVisitPlaceIds
+            );
+            fallbackCreateRequests.addAll(dayCreateRequests);
+            Set<Long> usedPlaceIds = dayCreateRequests.stream()
+                    .map(ItineraryCreateRequest::placeId)
+                    .collect(Collectors.toSet());
+            remainingSelectedPlaces.removeIf(place -> usedPlaceIds.contains(place.placeId()));
         }
 
         List<Long> selectedPlaceIds = fallbackCreateRequests.stream()
@@ -543,7 +559,7 @@ public class ItineraryGenerateService {
                 .toList();
         validateGeneratedPlaceControls(request, selectedPlaceIds);
         candidatePlaceValidator.validatePlaceIds(candidatePlaces, selectedPlaceIds);
-        validateDraftItineraries(trip, request, fallbackCreateRequests, targetDayNo);
+        validateDraftItineraries(trip, request, fallbackCreateRequests, targetDayNo, false);
         validateRouteAnchors(
                 trip,
                 request,
@@ -691,23 +707,61 @@ public class ItineraryGenerateService {
             ItineraryGenerateRequest request,
             int dayNo,
             List<PlaceResponse> remainingPlaces,
-            int dayItemCount
+            int dayItemCount,
+            int remainingDayCount,
+            RouteAnchor startAnchor,
+            RouteAnchor endAnchor
     ) {
-        if (!isRainyDay(request, dayNo) && !hasRainyDayAfter(request, dayNo)) {
-            return new ArrayList<>(remainingPlaces.subList(0, dayItemCount));
-        }
-
-        Comparator<PlaceResponse> rainyDayComparator = Comparator
-                .comparingInt((PlaceResponse place) -> rainyDayScore(place))
-                .thenComparing(PlaceResponse::placeId);
-        if (isRainyDay(request, dayNo)) {
-            rainyDayComparator = rainyDayComparator.reversed();
-        }
-
-        return remainingPlaces.stream()
-                .sorted(rainyDayComparator)
-                .limit(dayItemCount)
+        Set<Long> mustVisitPlaceIds = request == null
+                ? Set.of()
+                : new HashSet<>(request.normalizedMustVisitPlaceIds());
+        List<PlaceResponse> remainingMustVisitPlaces = remainingPlaces.stream()
+                .filter(place -> mustVisitPlaceIds.contains(place.placeId()))
+                .sorted(Comparator.comparingInt((PlaceResponse place) ->
+                                fallbackAnchorTravelScore(place, startAnchor, endAnchor))
+                        .thenComparing(PlaceResponse::placeId))
                 .toList();
+        int mustVisitCountForDay = Math.min(
+                dayItemCount,
+                (remainingMustVisitPlaces.size() + remainingDayCount - 1) / remainingDayCount
+        );
+        List<PlaceResponse> selectedPlaces = new ArrayList<>(
+                remainingMustVisitPlaces.subList(0, mustVisitCountForDay)
+        );
+
+        Comparator<PlaceResponse> optionalPlaceComparator = Comparator
+                .comparingInt((PlaceResponse place) -> fallbackAnchorTravelScore(place, startAnchor, endAnchor));
+        if (isRainyDay(request, dayNo)) {
+            optionalPlaceComparator = optionalPlaceComparator
+                    .thenComparing(Comparator.comparingInt(
+                            (PlaceResponse place) -> rainyDayScore(place)
+                    ).reversed());
+        } else if (hasRainyDayAfter(request, dayNo)) {
+            optionalPlaceComparator = optionalPlaceComparator.thenComparingInt(this::rainyDayScore);
+        }
+
+        remainingPlaces.stream()
+                .filter(place -> !selectedPlaces.contains(place))
+                .filter(place -> !mustVisitPlaceIds.contains(place.placeId()))
+                .sorted(optionalPlaceComparator)
+                .limit(dayItemCount - selectedPlaces.size())
+                .forEach(selectedPlaces::add);
+        return selectedPlaces;
+    }
+
+    private int fallbackAnchorTravelScore(
+            PlaceResponse place,
+            RouteAnchor startAnchor,
+            RouteAnchor endAnchor
+    ) {
+        int score = 0;
+        if (startAnchor != null) {
+            score += travelMinutes(startAnchor, place);
+        }
+        if (endAnchor != null) {
+            score += travelMinutes(place, endAnchor);
+        }
+        return score;
     }
 
     private int targetFallbackItemCount(
@@ -980,6 +1034,89 @@ public class ItineraryGenerateService {
         }
 
         return createRequests;
+    }
+
+    private List<ItineraryCreateRequest> createFittingFallbackDayItineraries(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            int dayNo,
+            List<PlaceResponse> dayPlaces,
+            RouteAnchor startAnchor,
+            RouteAnchor endAnchor,
+            Set<Long> mustVisitPlaceIds
+    ) {
+        List<PlaceResponse> fittingPlaces = new ArrayList<>(dayPlaces);
+
+        while (!fittingPlaces.isEmpty()) {
+            try {
+                validateFallbackDayTravelMinutes(dayNo, fittingPlaces, startAnchor, endAnchor);
+                return createFallbackDayItineraries(
+                        trip,
+                        request,
+                        dayNo,
+                        fittingPlaces,
+                        startAnchor,
+                        endAnchor
+                );
+            } catch (IllegalArgumentException exception) {
+                if (fittingPlaces.size() == 1) {
+                    throw exception;
+                }
+                PlaceResponse removablePlace = findFallbackOptionalPlaceToRemove(
+                        fittingPlaces,
+                        mustVisitPlaceIds
+                );
+                if (removablePlace == null) {
+                    throw exception;
+                }
+                fittingPlaces.remove(removablePlace);
+            }
+        }
+
+        throw new IllegalArgumentException("Fallback itinerary must contain at least one place. dayNo=" + dayNo);
+    }
+
+    private void validateFallbackDayTravelMinutes(
+            int dayNo,
+            List<PlaceResponse> dayPlaces,
+            RouteAnchor startAnchor,
+            RouteAnchor endAnchor
+    ) {
+        if (startAnchor != null
+                && travelMinutes(startAnchor, dayPlaces.getFirst()) > MAX_TRAVEL_MINUTES_BETWEEN_PLACES) {
+            throw new IllegalArgumentException(
+                    "Fallback itinerary start travel time exceeds maximum. dayNo=" + dayNo
+            );
+        }
+
+        for (int index = 1; index < dayPlaces.size(); index++) {
+            int travelMinutes = travelMinutes(dayPlaces.get(index - 1), dayPlaces.get(index));
+            if (travelMinutes > MAX_TRAVEL_MINUTES_BETWEEN_PLACES) {
+                throw new IllegalArgumentException(
+                        "Fallback itinerary travel time exceeds maximum. dayNo=" + dayNo
+                );
+            }
+        }
+
+        if (endAnchor != null
+                && travelMinutes(dayPlaces.getLast(), endAnchor) > MAX_TRAVEL_MINUTES_BETWEEN_PLACES) {
+            throw new IllegalArgumentException(
+                    "Fallback itinerary end travel time exceeds maximum. dayNo=" + dayNo
+            );
+        }
+    }
+
+    private PlaceResponse findFallbackOptionalPlaceToRemove(
+            List<PlaceResponse> dayPlaces,
+            Set<Long> mustVisitPlaceIds
+    ) {
+        return dayPlaces.stream()
+                .filter(place -> !mustVisitPlaceIds.contains(place.placeId()))
+                .max(Comparator.comparingInt((PlaceResponse place) -> place.avgStayMinutes() == null
+                                ? MIN_FALLBACK_STAY_MINUTES
+                                : place.avgStayMinutes())
+                        .thenComparing(PlaceResponse::placeId))
+                .orElse(null);
     }
 
     private List<Integer> fallbackTravelMinutes(List<PlaceResponse> dayPlaces) {
@@ -1400,9 +1537,19 @@ public class ItineraryGenerateService {
             List<ItineraryCreateRequest> createRequests,
             Integer targetDayNo
     ) {
+        validateDraftItineraries(trip, request, createRequests, targetDayNo, true);
+    }
+
+    private void validateDraftItineraries(
+            Trip trip,
+            ItineraryGenerateRequest request,
+            List<ItineraryCreateRequest> createRequests,
+            Integer targetDayNo,
+            boolean enforcePaceMinimum
+    ) {
         validateDayAndOrderPolicies(trip, createRequests);
         validateGeneratedDays(trip, createRequests, targetDayNo);
-        validatePaceItemsPerDay(trip, request, createRequests, targetDayNo);
+        validatePaceItemsPerDay(trip, request, createRequests, targetDayNo, enforcePaceMinimum);
         validateNoDuplicatedPlace(createRequests);
         validateFirstTravelMinutes(createRequests);
         validateTravelMinutesBetweenPlaces(createRequests);
@@ -1550,7 +1697,8 @@ public class ItineraryGenerateService {
             Trip trip,
             ItineraryGenerateRequest request,
             List<ItineraryCreateRequest> createRequests,
-            Integer targetDayNo
+            Integer targetDayNo,
+            boolean enforceMinimum
     ) {
         if (request == null || request.pace() == null) {
             return;
@@ -1565,7 +1713,8 @@ public class ItineraryGenerateService {
         int lastDayNo = targetDayNo == null ? Math.toIntExact(tripDays) : targetDayNo;
         for (int dayNo = firstDayNo; dayNo <= lastDayNo; dayNo++) {
             long itemCount = itemCountByDayNo.getOrDefault(dayNo, 0L);
-            if (itemCount < pacePolicy.minItemsPerDay() || itemCount > pacePolicy.maxItemsPerDay()) {
+            if ((enforceMinimum && itemCount < pacePolicy.minItemsPerDay())
+                    || itemCount > pacePolicy.maxItemsPerDay()) {
                 throw new IllegalArgumentException(
                         "Generated itinerary item count per day does not match pace policy. pace="
                                 + pacePolicy.pace()

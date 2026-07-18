@@ -1922,7 +1922,15 @@ class TripServiceTest {
 
         tripService.deleteTrip(1L);
 
-        InOrder inOrder = inOrder(itineraryRepository, tripAccommodationRepository, tripRepository);
+        InOrder inOrder = inOrder(
+                tripViewRepository,
+                tripLikeRepository,
+                itineraryRepository,
+                tripAccommodationRepository,
+                tripRepository
+        );
+        inOrder.verify(tripViewRepository).deleteByTripId(1L);
+        inOrder.verify(tripLikeRepository).deleteByTripId(1L);
         inOrder.verify(itineraryRepository).deleteByTrip_TripId(1L);
         inOrder.verify(tripAccommodationRepository).deleteByTripId(1L);
         inOrder.verify(tripRepository).delete(trip);
@@ -1943,6 +1951,8 @@ class TripServiceTest {
         assertThatThrownBy(() -> tripService.deleteTrip(1L, 200L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Trip owner does not match. tripId=1");
+        verify(tripViewRepository, never()).deleteByTripId(1L);
+        verify(tripLikeRepository, never()).deleteByTripId(1L);
         verify(itineraryRepository, never()).deleteByTrip_TripId(1L);
         verify(tripAccommodationRepository, never()).deleteByTripId(1L);
         verify(tripRepository, never()).delete(trip);

@@ -7,6 +7,9 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface TripLikeRepository extends JpaRepository<TripLike, Long> {
 
@@ -23,4 +26,8 @@ public interface TripLikeRepository extends JpaRepository<TripLike, Long> {
     List<TripLike> findByUserIdAndTrip_TripIdIn(Long userId, List<Long> tripIds);
 
     long countByTrip_TripId(Long tripId);
+
+    @Modifying
+    @Query("delete from TripLike tl where tl.trip.tripId = :tripId")
+    void deleteByTripId(@Param("tripId") Long tripId);
 }

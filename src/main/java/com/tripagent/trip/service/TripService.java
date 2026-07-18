@@ -885,6 +885,8 @@ public class TripService {
                 .orElseThrow(() -> new NoSuchElementException("Trip not found. tripId=" + tripId));
         validateTripOwner(trip, ownerId);
 
+        tripViewRepository.deleteByTripId(tripId);
+        tripLikeRepository.deleteByTripId(tripId);
         itineraryRepository.deleteByTrip_TripId(tripId);
         tripAccommodationRepository.deleteByTripId(tripId);
         tripRepository.delete(trip);
