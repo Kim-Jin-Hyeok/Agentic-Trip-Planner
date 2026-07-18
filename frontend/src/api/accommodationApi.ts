@@ -1,7 +1,9 @@
 import { apiRequest } from './client';
 import type {
   Accommodation,
+  AccommodationSearchCandidate,
   AccommodationSearchParams,
+  AdminAccommodationCreateRequest,
   TripAccommodation,
   TripAccommodationReplaceRequest
 } from '../types/accommodation';
@@ -37,6 +39,24 @@ export function replaceTripAccommodations(
     method: 'PUT',
     body: JSON.stringify(request)
   }).then(normalizeTripAccommodations);
+}
+
+export function searchAdminAccommodationCandidates(
+  keyword: string
+): Promise<AccommodationSearchCandidate[]> {
+  const searchParams = new URLSearchParams({ keyword });
+  return apiRequest<AccommodationSearchCandidate[]>(
+    `/api/admin/accommodations/candidates?${searchParams.toString()}`
+  );
+}
+
+export function registerAdminAccommodation(
+  request: AdminAccommodationCreateRequest
+): Promise<Accommodation> {
+  return apiRequest<Accommodation>('/api/admin/accommodations', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
 }
 
 function appendIfPresent(searchParams: URLSearchParams, key: string, value: string): void {

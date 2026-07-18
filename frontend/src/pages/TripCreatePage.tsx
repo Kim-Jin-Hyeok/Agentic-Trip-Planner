@@ -25,7 +25,7 @@ import { getStoredAuthSession } from '../api/authStorage';
 import { getRecommendedPlaces, getTripEndpointPlaces } from '../api/placeApi';
 import { getTripWeather } from '../api/weatherApi';
 import { AuthPanel } from '../components/AuthPanel';
-import { AdminPlaceSuggestionPanel } from '../components/AdminPlaceSuggestionPanel';
+import { AdminManagementPanel } from '../components/AdminManagementPanel';
 import { MyTripList } from '../components/MyTripList';
 import { PublicTripList } from '../components/PublicTripList';
 import { PlaceSuggestionPanel } from '../components/PlaceSuggestionPanel';
@@ -1480,14 +1480,14 @@ export function TripCreatePage() {
           {viewMode === 'admin' && canAccessAdminView(session) && (
             <div className="admin-sidebar-summary">
               <p>ADMIN</p>
-              <strong>장소 데이터 관리</strong>
-              <span>장소를 직접 등록하거나 사용자 제안을 검토해 추천 장소로 반영할 수 있습니다.</span>
+              <strong>여행 데이터 관리</strong>
+              <span>장소와 숙소를 직접 등록하거나 사용자 장소 제안을 검토할 수 있습니다.</span>
             </div>
           )}
         </div>
 
         {viewMode === 'admin' && canAccessAdminView(session) ? (
-          <AdminPlaceSuggestionPanel />
+          <AdminManagementPanel />
         ) : (
           <TripDetailPanel
           viewMode={viewMode}

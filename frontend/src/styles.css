@@ -526,6 +526,42 @@ button:disabled {
   gap: 22px;
 }
 
+.admin-management {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.admin-management-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(39, 59, 49, 0.06);
+  padding: 6px;
+}
+
+.admin-management-tabs button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-management-tabs button:hover:not(:disabled) {
+  background: var(--green-50);
+}
+
+.admin-management-tabs button.active {
+  background: var(--green-800);
+  color: #fff;
+}
+
 .admin-direct-registration {
   display: grid;
   gap: 14px;
@@ -887,6 +923,10 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.admin-accommodation-field-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .admin-approval-field-grid label,

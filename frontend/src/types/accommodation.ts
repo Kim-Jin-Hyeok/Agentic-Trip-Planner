@@ -1,4 +1,6 @@
 export type AccommodationType = 'HOTEL' | 'RESORT' | 'PENSION' | 'GUESTHOUSE' | 'CAMPING' | 'OTHER';
+export type AccommodationRegion = 'EAST' | 'WEST' | 'NORTH' | 'SOUTH';
+export type AccommodationDuplicateReason = 'EXTERNAL_PLACE_ID' | 'NAME_AND_ADDRESS' | 'NEARBY_NAME';
 
 export type Accommodation = {
   accommodationId: number;
@@ -34,4 +36,31 @@ export type TripAccommodationItemRequest = {
 
 export type TripAccommodationReplaceRequest = {
   accommodations: TripAccommodationItemRequest[];
+};
+
+export type AccommodationSearchCandidate = {
+  externalPlaceId: string;
+  name: string;
+  address: string | null;
+  roadAddress: string | null;
+  latitude: number;
+  longitude: number;
+  category: string | null;
+  placeUrl: string | null;
+  alreadyRegistered: boolean;
+  duplicateAccommodationId: number | null;
+  duplicateReason: AccommodationDuplicateReason | null;
+};
+
+export type AdminAccommodationCreateRequest = {
+  externalPlaceId: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  accommodationType: AccommodationType;
+  region: AccommodationRegion;
+  parkingYn: boolean;
+  description: string;
+  placeUrl: string;
 };
