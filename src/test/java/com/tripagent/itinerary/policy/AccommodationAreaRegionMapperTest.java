@@ -10,11 +10,14 @@ class AccommodationAreaRegionMapperTest {
 
     @Test
     void mapsKnownAccommodationAreasToPlaceRegions() {
-        assertThat(mapper.toPlaceRegion("SEOGWIPO")).isEqualTo("WEST");
+        assertThat(mapper.toPlaceRegion("SEOGWIPO")).isEqualTo("SOUTH");
         assertThat(mapper.toPlaceRegion("JEJU_CITY")).isEqualTo("NORTH");
         assertThat(mapper.toPlaceRegion("AEWOL")).isEqualTo("WEST");
         assertThat(mapper.toPlaceRegion("JOCHEON")).isEqualTo("EAST");
         assertThat(mapper.toPlaceRegion("SEONGSAN")).isEqualTo("EAST");
+        assertThat(mapper.toPlaceRegion("PYOSEON")).isEqualTo("EAST");
+        assertThat(mapper.toPlaceRegion("ANDEOK")).isEqualTo("WEST");
+        assertThat(mapper.toPlaceRegion("NAMWON")).isEqualTo("SOUTH");
     }
 
     @Test
@@ -22,11 +25,12 @@ class AccommodationAreaRegionMapperTest {
         assertThat(mapper.toPlaceRegion("EAST")).isEqualTo("EAST");
         assertThat(mapper.toPlaceRegion("WEST")).isEqualTo("WEST");
         assertThat(mapper.toPlaceRegion("NORTH")).isEqualTo("NORTH");
+        assertThat(mapper.toPlaceRegion("SOUTH")).isEqualTo("SOUTH");
     }
 
     @Test
     void normalizesAreaBeforeMapping() {
-        assertThat(mapper.toPlaceRegion(" seogwipo ")).isEqualTo("WEST");
+        assertThat(mapper.toPlaceRegion(" seogwipo ")).isEqualTo("SOUTH");
         assertThat(mapper.toPlaceRegion(" west ")).isEqualTo("WEST");
     }
 

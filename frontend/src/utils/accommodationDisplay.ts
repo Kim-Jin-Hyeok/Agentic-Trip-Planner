@@ -1,10 +1,10 @@
 import type {
   AccommodationDuplicateReason,
-  AccommodationRegion,
   AccommodationSearchCandidate,
   AccommodationType,
   AdminAccommodationCreateRequest
 } from '../types/accommodation';
+import { inferJejuRegion } from './jejuRegion.ts';
 
 export type StayContextLabels = {
   stayLabel: string;
@@ -41,7 +41,11 @@ export function createAccommodationRegistrationForm(
     latitude: candidate.latitude,
     longitude: candidate.longitude,
     accommodationType: inferAccommodationType(candidate),
-    region: inferAccommodationRegion(candidate),
+    region: inferJejuRegion(
+      candidate.roadAddress || candidate.address || '',
+      candidate.latitude,
+      candidate.longitude
+    ),
     parkingYn: false,
     description: '',
     placeUrl: candidate.placeUrl ?? ''
@@ -89,18 +93,4 @@ function inferAccommodationType(candidate: AccommodationSearchCandidate): Accomm
     return 'HOTEL';
   }
   return 'OTHER';
-}
-
-function inferAccommodationRegion(candidate: AccommodationSearchCandidate): AccommodationRegion {
-  const address = candidate.roadAddress || candidate.address || '';
-  if (address.includes('서귀포시')) {
-    return 'SOUTH';
-  }
-  if (candidate.longitude >= 126.7) {
-    return 'EAST';
-  }
-  if (candidate.longitude <= 126.4) {
-    return 'WEST';
-  }
-  return 'NORTH';
 }

@@ -229,6 +229,7 @@ export function AdminAccommodationRegistrationPanel() {
                   </label>
                   <label>
                     권역
+                    <span className="admin-auto-region-hint">주소 기반 자동 추천 · 변경 가능</span>
                     <select
                       value={registrationForm.region}
                       onChange={(event) => updateRegistrationForm(

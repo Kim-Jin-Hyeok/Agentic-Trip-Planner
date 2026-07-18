@@ -7,13 +7,22 @@ import org.springframework.stereotype.Component;
 @Component
 public class AccommodationAreaRegionMapper {
 
-    private static final Set<String> PLACE_REGIONS = Set.of("EAST", "WEST", "NORTH");
-    private static final Map<String, String> ACCOMMODATION_AREA_REGION_MAPPINGS = Map.of(
-            "SEOGWIPO", "WEST",
-            "JEJU_CITY", "NORTH",
-            "AEWOL", "WEST",
-            "JOCHEON", "EAST",
-            "SEONGSAN", "EAST"
+    private static final Set<String> PLACE_REGIONS = Set.of("EAST", "WEST", "NORTH", "SOUTH");
+    private static final Map<String, String> ACCOMMODATION_AREA_REGION_MAPPINGS = Map.ofEntries(
+            Map.entry("SEOGWIPO", "SOUTH"),
+            Map.entry("JEJU_CITY", "NORTH"),
+            Map.entry("AEWOL", "WEST"),
+            Map.entry("HALLIM", "WEST"),
+            Map.entry("HANGYEONG", "WEST"),
+            Map.entry("DAEJEONG", "WEST"),
+            Map.entry("ANDEOK", "WEST"),
+            Map.entry("JOCHEON", "EAST"),
+            Map.entry("GUJWA", "EAST"),
+            Map.entry("UDO", "EAST"),
+            Map.entry("SEONGSAN", "EAST"),
+            Map.entry("PYOSEON", "EAST"),
+            Map.entry("NAMWON", "SOUTH"),
+            Map.entry("JUNGMUN", "SOUTH")
     );
 
     public String toPlaceRegion(String accommodationArea) {

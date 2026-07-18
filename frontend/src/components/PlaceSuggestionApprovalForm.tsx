@@ -72,6 +72,7 @@ export function PlaceSuggestionApprovalForm({
         </label>
         <label>
           지역
+          <span className="admin-auto-region-hint">주소 기반 자동 추천 · 변경 가능</span>
           <select
             value={form.region}
             onChange={(event) => onChange('region', event.target.value as PlaceSuggestionApproveRequest['region'])}

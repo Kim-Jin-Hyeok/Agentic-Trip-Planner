@@ -1,12 +1,12 @@
 import type {
   PlaceDuplicateReason,
   PlaceApprovalCategory,
-  PlaceApprovalRegion,
   PlaceSearchCandidate,
   PlaceSuggestionApproveRequest,
   PlaceSuggestionCreateRequest,
   PlaceSuggestionStatus
 } from '../types/placeSuggestion';
+import { inferJejuRegion } from './jejuRegion.ts';
 
 const statusLabels: Record<PlaceSuggestionStatus, string> = {
   PENDING: '검토 대기',
@@ -105,7 +105,11 @@ export function createPlaceRegistrationForm(
     latitude: candidate.latitude,
     longitude: candidate.longitude,
     category,
-    region: inferPlaceRegion(candidate),
+    region: inferJejuRegion(
+      candidate.roadAddress || candidate.address || fallbackAddress,
+      candidate.latitude,
+      candidate.longitude
+    ),
     avgStayMinutes: category === 'NATURE' ? 90 : 60,
     indoorYn: category !== 'NATURE',
     parkingYn: false,
@@ -128,18 +132,4 @@ function inferPlaceCategory(category: string | null): PlaceApprovalCategory {
     return 'FOOD';
   }
   return 'NATURE';
-}
-
-function inferPlaceRegion(candidate: PlaceSearchCandidate): PlaceApprovalRegion {
-  const address = candidate.roadAddress || candidate.address || '';
-  if (address.includes('서귀포시')) {
-    return 'SOUTH';
-  }
-  if (candidate.longitude >= 126.7) {
-    return 'EAST';
-  }
-  if (candidate.longitude <= 126.4) {
-    return 'WEST';
-  }
-  return 'NORTH';
 }

@@ -1056,8 +1056,8 @@ class ItineraryGenerateServiceTest {
         Trip trip = trip(1L, TripConcept.FOOD, "SEOGWIPO");
         PlaceResponse eastHighScore = placeWithFoodScoreAndRegion(10L, "NATURE", 100, "EAST");
         PlaceResponse northLowerScore = placeWithFoodScoreAndRegion(20L, "NATURE", 99, "NORTH");
-        PlaceResponse westHighScore = placeWithFoodScoreAndRegion(30L, "NATURE", 100, "WEST");
-        List<PlaceResponse> candidatePlaces = List.of(eastHighScore, northLowerScore, westHighScore);
+        PlaceResponse southHighScore = placeWithFoodScoreAndRegion(30L, "NATURE", 100, "SOUTH");
+        List<PlaceResponse> candidatePlaces = List.of(eastHighScore, northLowerScore, southHighScore);
         String prompt = "prompt";
         String rawResponse = "raw response";
         List<LlmItineraryItemResponse> parsedItems = List.of(
@@ -2444,7 +2444,7 @@ class ItineraryGenerateServiceTest {
         Trip trip = trip(1L, TripConcept.FOOD, "SEOGWIPO");
         List<PlaceResponse> candidatePlaces = List.of(
                 placeWithFoodScoreAndRegion(10L, "NATURE", 1, "EAST"),
-                placeWithFoodScoreAndRegion(20L, "NATURE", 1, "WEST"),
+                placeWithFoodScoreAndRegion(20L, "NATURE", 1, "SOUTH"),
                 placeWithFoodScoreAndRegion(30L, "NATURE", 1, "NORTH")
         );
         ItineraryGenerateRequest request = new ItineraryGenerateRequest(null, null, ItineraryPace.RELAXED);
