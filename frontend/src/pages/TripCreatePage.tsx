@@ -22,6 +22,7 @@ import {
   updateTripVisibility
 } from '../api/tripApi';
 import { getStoredAuthSession } from '../api/authStorage';
+import { ApiError } from '../api/apiError';
 import { getRecommendedPlaces, getTripEndpointPlaces } from '../api/placeApi';
 import { getTripWeather } from '../api/weatherApi';
 import { AuthPanel } from '../components/AuthPanel';
@@ -538,7 +539,7 @@ export function TripCreatePage() {
       setLockedPlaceIds([]);
       setMessage('일정이 생성되었습니다.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '일정 생성에 실패했습니다.');
+      setMessage(itineraryOperationErrorMessage(error, '일정 생성에 실패했습니다.', false));
     } finally {
       setIsGenerating(false);
     }
@@ -569,7 +570,7 @@ export function TripCreatePage() {
       setMessage('새로운 일정으로 다시 만들었습니다.');
       setIsItineraryAddOpen(false);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '일정 재생성에 실패했습니다. 기존 일정은 유지됩니다.');
+      setMessage(itineraryOperationErrorMessage(error, '일정 재생성에 실패했습니다.', true));
     } finally {
       setIsRegenerating(false);
     }
@@ -636,7 +637,7 @@ export function TripCreatePage() {
       setMessage(`Day ${dayNo} 일정을 새롭게 만들었습니다.`);
       setIsItineraryAddOpen(false);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : `Day ${dayNo} 재생성에 실패했습니다. 기존 일정은 유지됩니다.`);
+      setMessage(itineraryOperationErrorMessage(error, `Day ${dayNo} 재생성에 실패했습니다.`, true));
     } finally {
       setRegeneratingDayNo(null);
     }
@@ -1656,6 +1657,23 @@ function createDefaultGenerateOptions(trip: TripDetail): ItineraryGenerateReques
 
 function paceLabel(pace: ItineraryGenerateRequest['pace']): string {
   return pace === 'RELAXED' ? '여유' : pace === 'BUSY' ? '빡빡' : '보통';
+}
+
+function itineraryOperationErrorMessage(
+  error: unknown,
+  fallbackMessage: string,
+  existingItineraryPreserved: boolean
+): string {
+  const baseMessage = error instanceof Error ? error.message : fallbackMessage;
+  const retryGuide = error instanceof ApiError
+    && error.retryable
+    && !baseMessage.includes('다시 시도')
+    ? ' 잠시 후 다시 시도해 주세요.'
+    : '';
+  const preservedGuide = existingItineraryPreserved
+    ? ' 기존 일정은 변경되지 않았습니다.'
+    : '';
+  return `${baseMessage}${retryGuide}${preservedGuide}`;
 }
 
 function conditionFormFromTrip(trip: TripDetail): TripConditionUpdateRequest {
