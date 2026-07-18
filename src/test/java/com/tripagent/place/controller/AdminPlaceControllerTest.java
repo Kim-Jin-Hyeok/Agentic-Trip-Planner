@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,11 +13,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.exception.ConflictException;
 import com.tripagent.common.exception.GlobalExceptionHandler;
+import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.dto.PlaceDuplicateReason;
 import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.dto.PlaceSuggestionApproveRequest;
 import com.tripagent.place.service.AdminPlaceSuggestionService;
+import com.tripagent.place.service.AdminPlaceService;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,13 +34,15 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 class AdminPlaceControllerTest {
 
     private AdminPlaceSuggestionService adminPlaceSuggestionService;
+    private AdminPlaceService adminPlaceService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         adminPlaceSuggestionService = org.mockito.Mockito.mock(AdminPlaceSuggestionService.class);
+        adminPlaceService = org.mockito.Mockito.mock(AdminPlaceService.class);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new AdminPlaceController(adminPlaceSuggestionService))
+                .standaloneSetup(new AdminPlaceController(adminPlaceSuggestionService, adminPlaceService))
                 .setCustomArgumentResolvers(new TestLoginMemberIdArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -67,6 +72,45 @@ class AdminPlaceControllerTest {
                 .andExpect(jsonPath("$.data[0].alreadyRegistered").value(false));
 
         verify(adminPlaceSuggestionService).searchDirectCandidates(1L, "새별오름");
+    }
+
+    @Test
+    void searchPlacesReturnsAdminPlacePage() throws Exception {
+        when(adminPlaceService.searchPlaces(1L, "오름", null, "WEST", false, 0, 20))
+                .thenReturn(new PageResponse<>(List.of(inactivePlaceResponse()), 0, 20, 1, 1, true, true));
+
+        mockMvc.perform(get("/api/admin/places")
+                        .param("keyword", "오름")
+                        .param("region", "WEST")
+                        .param("useYn", "false")
+                        .param("page", "0")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].placeId").value(301L))
+                .andExpect(jsonPath("$.data.content[0].useYn").value(false));
+    }
+
+    @Test
+    void updateStatusReturnsUpdatedPlace() throws Exception {
+        when(adminPlaceService.updateStatus(1L, 301L, false)).thenReturn(inactivePlaceResponse());
+
+        mockMvc.perform(patch("/api/admin/places/301/status")
+                        .contentType("application/json")
+                        .content("{\"useYn\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.placeId").value(301L))
+                .andExpect(jsonPath("$.data.useYn").value(false));
+
+        verify(adminPlaceService).updateStatus(1L, 301L, false);
+    }
+
+    @Test
+    void updateStatusRejectsMissingStatus() throws Exception {
+        mockMvc.perform(patch("/api/admin/places/301/status")
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test
@@ -133,6 +177,16 @@ class AdminPlaceControllerTest {
                 301L, "새별오름", "NATURE", "WEST", "제주특별자치도 제주시",
                 33.3661, 126.3577, 90, false, true,
                 2, 5, 1, 1, 5, 4, 4, "노을 명소"
+        );
+    }
+
+    private PlaceResponse inactivePlaceResponse() {
+        PlaceResponse place = placeResponse();
+        return new PlaceResponse(
+                place.placeId(), place.name(), place.category(), place.region(), place.address(),
+                place.latitude(), place.longitude(), place.avgStayMinutes(), place.indoorYn(), place.parkingYn(),
+                place.rainyDayScore(), place.healingScore(), place.foodScore(), place.cafeScore(),
+                place.photoScore(), place.coupleScore(), place.familyScore(), place.description(), false
         );
     }
 

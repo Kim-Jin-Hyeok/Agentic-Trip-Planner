@@ -609,6 +609,110 @@ button:disabled {
   min-width: 110px;
 }
 
+.admin-place-management {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  padding: 18px;
+}
+
+.admin-place-management-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-place-management-heading p,
+.admin-place-management-heading h2,
+.admin-place-management-heading span {
+  margin: 0;
+}
+
+.admin-place-management-heading p {
+  color: var(--green-700);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+  margin-bottom: 5px;
+}
+
+.admin-place-management-heading h2 {
+  color: var(--ink);
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+
+.admin-place-management-heading span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 5px;
+}
+
+.admin-place-management-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.6fr) repeat(3, minmax(105px, 1fr));
+  gap: 8px;
+}
+
+.admin-place-management-filter-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.admin-place-management-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-place-management-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.admin-place-management-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.admin-place-management-title > span {
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+  padding: 4px 7px;
+}
+
+.admin-place-management-title > span.active {
+  background: var(--green-100);
+  color: var(--green-800);
+}
+
+.admin-place-management-title > span.inactive {
+  background: #f1efee;
+  color: #716762;
+}
+
+.admin-place-management-item p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 5px 0 0;
+}
+
 .admin-suggestion-header {
   display: flex;
   align-items: flex-start;
@@ -3128,6 +3232,10 @@ button.trip-list-item:hover:not(:disabled),
     grid-template-columns: repeat(4, minmax(55px, 1fr));
   }
 
+  .admin-place-management-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .candidate-place-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3187,6 +3295,15 @@ button.trip-list-item:hover:not(:disabled),
     display: grid;
   }
 
+  .admin-place-management-heading,
+  .admin-place-management-item {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-place-management-heading {
+    display: grid;
+  }
+
   .field-grid,
   .public-filter-form,
   .admin-direct-search-form,
@@ -3198,6 +3315,14 @@ button.trip-list-item:hover:not(:disabled),
   .day-section li,
   .edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-place-management-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-place-management-item > button {
+    width: 100%;
   }
 
   .trip-accommodation-heading,

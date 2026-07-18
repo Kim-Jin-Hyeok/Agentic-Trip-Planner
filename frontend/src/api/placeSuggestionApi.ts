@@ -89,3 +89,39 @@ export function registerAdminPlace(
     body: JSON.stringify(request)
   });
 }
+
+export type AdminPlaceSearchParams = {
+  keyword: string;
+  category: string;
+  region: string;
+  useYn: '' | 'true' | 'false';
+  page: number;
+  size: number;
+};
+
+export function getAdminPlaces(params: AdminPlaceSearchParams): Promise<PageResponse<PlaceResponse>> {
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    size: String(params.size)
+  });
+  if (params.keyword.trim().length > 0) {
+    searchParams.set('keyword', params.keyword.trim());
+  }
+  if (params.category.length > 0) {
+    searchParams.set('category', params.category);
+  }
+  if (params.region.length > 0) {
+    searchParams.set('region', params.region);
+  }
+  if (params.useYn.length > 0) {
+    searchParams.set('useYn', params.useYn);
+  }
+  return apiRequest<PageResponse<PlaceResponse>>(`/api/admin/places?${searchParams.toString()}`);
+}
+
+export function updateAdminPlaceStatus(placeId: number, useYn: boolean): Promise<PlaceResponse> {
+  return apiRequest<PlaceResponse>(`/api/admin/places/${placeId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ useYn })
+  });
+}

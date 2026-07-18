@@ -3,12 +3,35 @@ package com.tripagent.place.repository;
 import com.tripagent.place.domain.Place;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PlaceRepository extends JpaRepository<Place, Long> {
+
+    @Query("""
+            select p
+            from Place p
+            where (:useYn is null or p.useYn = :useYn)
+              and (:region is null or p.region = :region)
+              and (:category is null or p.category = :category)
+              and (
+                    :keyword is null
+                    or lower(p.name) like concat('%', :keyword, '%')
+                    or lower(p.address) like concat('%', :keyword, '%')
+              )
+            order by p.placeId desc
+            """)
+    Page<Place> searchAdminPlaces(
+            @Param("keyword") String keyword,
+            @Param("category") String category,
+            @Param("region") String region,
+            @Param("useYn") Boolean useYn,
+            Pageable pageable
+    );
 
     List<Place> findByUseYnTrueOrderByHealingScoreDesc();
 

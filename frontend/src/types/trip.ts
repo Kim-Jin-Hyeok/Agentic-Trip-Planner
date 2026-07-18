@@ -63,6 +63,7 @@ export type PlaceResponse = PlaceSummary & {
   photoScore: number;
   coupleScore: number;
   familyScore: number;
+  useYn?: boolean;
 };
 
 export type ItineraryPace = 'RELAXED' | 'NORMAL' | 'BUSY';

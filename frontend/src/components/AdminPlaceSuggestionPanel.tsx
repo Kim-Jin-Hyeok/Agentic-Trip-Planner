@@ -21,6 +21,7 @@ import {
 } from '../utils/placeSuggestionDisplay';
 import { PlaceSuggestionApprovalForm } from './PlaceSuggestionApprovalForm';
 import { AdminPlaceDirectRegistrationPanel } from './AdminPlaceDirectRegistrationPanel';
+import { AdminPlaceManagementPanel } from './AdminPlaceManagementPanel';
 
 const pageSize = 20;
 
@@ -211,6 +212,7 @@ export function AdminPlaceSuggestionPanel() {
   return (
     <section className="result-panel admin-suggestion-panel">
       <AdminPlaceDirectRegistrationPanel />
+      <AdminPlaceManagementPanel />
       <div className="admin-suggestion-header">
         <div>
           <p>ADMIN WORKSPACE</p>

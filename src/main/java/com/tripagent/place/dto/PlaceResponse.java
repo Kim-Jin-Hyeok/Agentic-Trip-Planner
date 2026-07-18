@@ -20,8 +20,36 @@ public record PlaceResponse(
         Integer photoScore,
         Integer coupleScore,
         Integer familyScore,
-        String description
+        String description,
+        Boolean useYn
 ) {
+
+    public PlaceResponse(
+            Long placeId,
+            String name,
+            String category,
+            String region,
+            String address,
+            Double latitude,
+            Double longitude,
+            Integer avgStayMinutes,
+            Boolean indoorYn,
+            Boolean parkingYn,
+            Integer rainyDayScore,
+            Integer healingScore,
+            Integer foodScore,
+            Integer cafeScore,
+            Integer photoScore,
+            Integer coupleScore,
+            Integer familyScore,
+            String description
+    ) {
+        this(
+                placeId, name, category, region, address, latitude, longitude, avgStayMinutes,
+                indoorYn, parkingYn, rainyDayScore, healingScore, foodScore, cafeScore, photoScore,
+                coupleScore, familyScore, description, true
+        );
+    }
 
     public static PlaceResponse from(Place place) {
         return new PlaceResponse(
@@ -42,7 +70,8 @@ public record PlaceResponse(
                 place.getPhotoScore(),
                 place.getCoupleScore(),
                 place.getFamilyScore(),
-                place.getDescription()
+                place.getDescription(),
+                place.getUseYn()
         );
     }
 }

@@ -400,6 +400,17 @@ class PlaceServiceTest {
     }
 
     @Test
+    void getPlaceReturnsInactivePlaceForExistingReferences() {
+        Place place = place("Inactive Place", "NATURE", "JEJU", "description", false);
+        when(placeRepository.findById(10L)).thenReturn(Optional.of(place));
+
+        PlaceResponse response = placeService.getPlace(10L);
+
+        assertThat(response.name()).isEqualTo("Inactive Place");
+        assertThat(response.useYn()).isFalse();
+    }
+
+    @Test
     void getPlaceRejectsUnknownPlaceId() {
         when(placeRepository.findById(10L)).thenReturn(Optional.empty());
 

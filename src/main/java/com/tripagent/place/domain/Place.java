@@ -243,6 +243,13 @@ public class Place {
         return useYn;
     }
 
+    public void changeUseYn(Boolean useYn) {
+        if (useYn == null) {
+            throw new IllegalArgumentException("Place useYn is required.");
+        }
+        this.useYn = useYn;
+    }
+
     public void linkExternalReference(String externalProvider, String externalPlaceId) {
         if (externalProvider == null || externalProvider.isBlank()) {
             throw new IllegalArgumentException("External place provider is required.");
