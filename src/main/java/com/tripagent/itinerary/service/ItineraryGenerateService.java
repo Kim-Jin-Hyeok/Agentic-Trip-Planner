@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -1156,6 +1157,7 @@ public class ItineraryGenerateService {
         List<LlmItineraryItemResponse> parsedItems = llmItineraryJsonParser.parse(rawResponse);
         List<ItineraryCreateRequest> createRequests = llmItineraryResponseConverter.toCreateRequests(parsedItems);
         List<ItineraryCreateRequest> originalCreateRequests = createRequests;
+        createRequests = normalizeDayOrderNumbers(createRequests);
         if (repairDuplicatedPlaces) {
             createRequests = replaceDuplicatedPlaces(candidatePlaces, createRequests);
         }
@@ -1180,6 +1182,65 @@ public class ItineraryGenerateService {
                 ? ItineraryGenerationSource.LLM
                 : ItineraryGenerationSource.LLM_ADJUSTED;
         return new DraftGenerationResult(createRequests, generationSource);
+    }
+
+    private List<ItineraryCreateRequest> normalizeDayOrderNumbers(
+            List<ItineraryCreateRequest> createRequests
+    ) {
+        if (createRequests.stream().anyMatch(request -> request.dayNo() == null || request.startTime() == null)) {
+            return createRequests;
+        }
+
+        Map<Integer, List<ItineraryCreateRequest>> requestsByDayNo = createRequests.stream()
+                .collect(Collectors.groupingBy(
+                        ItineraryCreateRequest::dayNo,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+        List<ItineraryCreateRequest> normalizedRequests = new ArrayList<>();
+
+        requestsByDayNo.values().forEach(dayRequests -> {
+            if (hasSequentialDayOrderNumbers(dayRequests)) {
+                normalizedRequests.addAll(dayRequests);
+                return;
+            }
+
+            List<ItineraryCreateRequest> sortedDayRequests = dayRequests.stream()
+                    .sorted(Comparator.comparing(ItineraryCreateRequest::startTime))
+                    .toList();
+            for (int index = 0; index < sortedDayRequests.size(); index++) {
+                ItineraryCreateRequest request = sortedDayRequests.get(index);
+                normalizedRequests.add(new ItineraryCreateRequest(
+                        request.placeId(),
+                        request.dayNo(),
+                        index + 1,
+                        request.startTime(),
+                        request.endTime(),
+                        request.travelMinutesFromPrevious(),
+                        request.reason()
+                ));
+            }
+        });
+
+        return normalizedRequests;
+    }
+
+    private boolean hasSequentialDayOrderNumbers(List<ItineraryCreateRequest> dayRequests) {
+        List<Integer> sortedOrderNumbers = dayRequests.stream()
+                .map(ItineraryCreateRequest::orderNo)
+                .filter(Objects::nonNull)
+                .sorted()
+                .toList();
+        if (sortedOrderNumbers.size() != dayRequests.size()) {
+            return false;
+        }
+
+        for (int index = 0; index < sortedOrderNumbers.size(); index++) {
+            if (!Integer.valueOf(index + 1).equals(sortedOrderNumbers.get(index))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<ItineraryCreateRequest> replaceDuplicatedPlaces(

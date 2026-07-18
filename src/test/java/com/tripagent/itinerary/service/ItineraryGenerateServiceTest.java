@@ -2283,6 +2283,42 @@ class ItineraryGenerateServiceTest {
     }
 
     @Test
+    void generateDraftItinerariesNormalizesDuplicatedDayOrderNumbersWithoutRetry() {
+        Trip trip = trip(1L, TripConcept.FOOD);
+        List<PlaceResponse> candidatePlaces = List.of(
+                place(10L, 60),
+                place(20L, 60),
+                place(30L, 60)
+        );
+        String prompt = "prompt";
+        String rawResponse = "raw response";
+        List<LlmItineraryItemResponse> parsedItems = List.of(
+                llmItem(10L, 1, 1, LocalTime.of(11, 20), LocalTime.of(12, 20), 0),
+                llmItem(20L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                llmItem(30L, 1, 1, LocalTime.of(10, 10), LocalTime.of(11, 10), 0)
+        );
+        List<ItineraryCreateRequest> createRequests = List.of(
+                request(10L, 1, 1, LocalTime.of(11, 20), LocalTime.of(12, 20), 0),
+                request(20L, 1, 1, LocalTime.of(9, 0), LocalTime.of(10, 0), 0),
+                request(30L, 1, 1, LocalTime.of(10, 10), LocalTime.of(11, 10), 0)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(placeService.findCandidatePlaces(TripConcept.FOOD)).thenReturn(candidatePlaces);
+        when(itineraryPromptGenerator.generate(trip, candidatePlaces)).thenReturn(prompt);
+        when(llmClient.generate(prompt)).thenReturn(rawResponse);
+        when(llmItineraryJsonParser.parse(rawResponse)).thenReturn(parsedItems);
+        when(llmItineraryResponseConverter.toCreateRequests(parsedItems)).thenReturn(createRequests);
+
+        List<ItineraryCreateRequest> drafts = itineraryGenerateService.generateDraftItineraries(1L);
+
+        assertThat(drafts).extracting(ItineraryCreateRequest::placeId)
+                .containsExactly(20L, 30L, 10L);
+        assertThat(drafts).extracting(ItineraryCreateRequest::orderNo)
+                .containsExactly(1, 2, 3);
+        verify(llmClient).generate(prompt);
+    }
+
+    @Test
     void generateItinerariesAdjustsOverlappedScheduleWithoutRetry() {
         Trip trip = trip(1L, TripConcept.FOOD);
         List<PlaceResponse> candidatePlaces = List.of(
