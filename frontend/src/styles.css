@@ -1919,6 +1919,109 @@ button.trip-list-item:hover:not(:disabled),
   overflow: auto;
 }
 
+.candidate-place-selector {
+  display: grid;
+  gap: 12px;
+}
+
+.candidate-selection-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #cde1d5;
+  border-radius: 11px;
+  background: #eff8f3;
+  padding: 11px 12px;
+}
+
+.candidate-selection-summary > div {
+  display: grid;
+  gap: 3px;
+}
+
+.candidate-selection-summary strong {
+  color: var(--green-950);
+  font-size: 12px;
+}
+
+.candidate-selection-summary span {
+  color: var(--green-700);
+  font-size: 11px;
+}
+
+.candidate-selection-summary button,
+.candidate-place-result-header button {
+  border: 0;
+  background: transparent;
+  color: var(--green-700);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px;
+}
+
+.selected-place-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.selected-place-chips button {
+  min-height: 30px;
+  border: 1px solid #b8d4c4;
+  border-radius: 999px;
+  background: var(--green-50);
+  color: var(--green-800);
+  font-size: 11px;
+  padding: 5px 10px;
+}
+
+.selected-place-chips button.excluded {
+  border-color: #e1c8c3;
+  background: #fff4f2;
+  color: #8c493f;
+}
+
+.selected-place-chips button span {
+  font-weight: 850;
+  margin-right: 5px;
+}
+
+.candidate-place-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.6fr) repeat(3, minmax(105px, 1fr));
+  gap: 8px;
+}
+
+.candidate-place-filters label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.candidate-place-filters label > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.candidate-place-filters input,
+.candidate-place-filters select {
+  min-width: 0;
+  min-height: 38px;
+  font-size: 11px;
+  padding: 0 9px;
+}
+
+.candidate-place-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .candidate-place-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1934,6 +2037,30 @@ button.trip-list-item:hover:not(:disabled),
   color: var(--muted);
   font-size: 11px;
   margin-top: 4px;
+}
+
+.candidate-selection-button {
+  min-width: 52px;
+  min-height: 34px;
+  border: 1px solid #cfd9d3;
+  border-radius: 9px;
+  background: #f7f9f8;
+  color: #59655e;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 10px;
+}
+
+.candidate-selection-button.must.active {
+  border-color: #78a98f;
+  background: var(--green-100);
+  color: var(--green-800);
+}
+
+.candidate-selection-button.excluded.active {
+  border-color: #d69e94;
+  background: #fff0ee;
+  color: #96382f;
 }
 
 .status-message {
@@ -2967,6 +3094,10 @@ button.trip-list-item:hover:not(:disabled),
   .admin-approval-scores > div {
     grid-template-columns: repeat(4, minmax(55px, 1fr));
   }
+
+  .candidate-place-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -3137,6 +3268,24 @@ button.trip-list-item:hover:not(:disabled),
 
   .itinerary-actions {
     justify-content: flex-start;
+  }
+
+  .candidate-place-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-selection-summary {
+    align-items: flex-start;
+  }
+
+  .candidate-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .candidate-selection-button {
+    min-height: 42px;
+    width: 100%;
   }
 }
 
