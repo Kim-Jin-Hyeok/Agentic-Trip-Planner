@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  createPlaceRegistrationForm,
   placeSuggestionStatusLabel,
   placeDuplicateReasonLabel,
   validatePlaceSuggestion,
@@ -82,4 +83,26 @@ test('validates place suggestion approval fields', () => {
     validatePlaceSuggestionApproval({ ...validForm, address: '서울특별시 강남구' }),
     '제주 지역 주소만 승인할 수 있습니다.'
   );
+});
+
+test('creates direct place registration defaults from external candidate', () => {
+  const form = createPlaceRegistrationForm({
+    externalPlaceId: '123',
+    name: '제주 카페',
+    address: '제주특별자치도 제주시 구주소',
+    roadAddress: '제주특별자치도 제주시 도로명주소',
+    latitude: 33.4,
+    longitude: 126.5,
+    category: '음식점 > 카페',
+    placeUrl: 'https://place.map.kakao.com/123',
+    alreadyRegistered: false,
+    duplicatePlaceId: null,
+    duplicateReason: null
+  });
+
+  assert.equal(form.category, 'CAFE');
+  assert.equal(form.region, 'NORTH');
+  assert.equal(form.address, '제주특별자치도 제주시 도로명주소');
+  assert.equal(form.cafeScore, 5);
+  assert.equal(form.indoorYn, true);
 });

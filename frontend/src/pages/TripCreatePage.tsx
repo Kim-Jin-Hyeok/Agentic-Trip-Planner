@@ -1480,8 +1480,8 @@ export function TripCreatePage() {
           {viewMode === 'admin' && canAccessAdminView(session) && (
             <div className="admin-sidebar-summary">
               <p>ADMIN</p>
-              <strong>장소 제안 관리</strong>
-              <span>상태별 제안 목록을 확인할 수 있습니다. 승인과 거절 처리는 다음 단계에서 제공됩니다.</span>
+              <strong>장소 데이터 관리</strong>
+              <span>장소를 직접 등록하거나 사용자 제안을 검토해 추천 장소로 반영할 수 있습니다.</span>
             </div>
           )}
         </div>

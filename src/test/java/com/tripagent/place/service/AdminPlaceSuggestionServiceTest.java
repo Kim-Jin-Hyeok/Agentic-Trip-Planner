@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.tripagent.auth.service.AdminAuthorizationService;
@@ -23,6 +24,7 @@ import com.tripagent.place.dto.PlaceSuggestionApproveRequest;
 import com.tripagent.place.dto.PlaceSuggestionApprovalResponse;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.dto.PlaceDuplicateReason;
+import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.repository.PlaceRepository;
 import com.tripagent.place.repository.PlaceSuggestionRepository;
 import java.util.List;
@@ -306,7 +308,52 @@ class AdminPlaceSuggestionServiceTest {
 
         assertThatThrownBy(() -> adminPlaceSuggestionService.approveSuggestion(1L, 10L, approveRequest()))
                 .isInstanceOf(ConflictException.class)
-                .hasMessage("동일한 외부 장소가 이미 등록되어 있습니다.");
+                .hasMessage("동일한 장소가 이미 등록되어 있습니다.");
+    }
+
+    @Test
+    void searchDirectCandidatesSearchesJejuAndReturnsDuplicateInformation() {
+        Place duplicatePlace = place(200L, "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577);
+        duplicatePlace.linkExternalReference("KAKAO_LOCAL", "25274725");
+        when(placeSearchAdapter.search("제주 새별오름", 5)).thenReturn(List.of(
+                candidate("25274725", "새별오름", "제주특별자치도 제주시", 33.3661, 126.3577)
+        ));
+        when(placeRepository.findFirstByExternalProviderAndExternalPlaceId("KAKAO_LOCAL", "25274725"))
+                .thenReturn(Optional.of(duplicatePlace));
+
+        List<PlaceSearchCandidateResponse> responses = adminPlaceSuggestionService
+                .searchDirectCandidates(1L, " 새별오름 ");
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.getFirst().alreadyRegistered()).isTrue();
+        assertThat(responses.getFirst().duplicatePlaceId()).isEqualTo(200L);
+        verify(adminAuthorizationService).requireAdmin(1L);
+    }
+
+    @Test
+    void searchDirectCandidatesRejectsBlankKeyword() {
+        assertThatThrownBy(() -> adminPlaceSuggestionService.searchDirectCandidates(1L, " "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Place search keyword is required.");
+
+        verifyNoInteractions(placeSearchAdapter);
+    }
+
+    @Test
+    void registerPlaceCreatesActivePlaceWithoutSuggestion() {
+        when(placeRepository.saveAndFlush(any(Place.class))).thenAnswer(invocation -> {
+            Place savedPlace = invocation.getArgument(0);
+            ReflectionTestUtils.setField(savedPlace, "placeId", 301L);
+            return savedPlace;
+        });
+
+        PlaceResponse response = adminPlaceSuggestionService.registerPlace(1L, approveRequest());
+
+        assertThat(response.placeId()).isEqualTo(301L);
+        assertThat(response.name()).isEqualTo("새별오름");
+        verify(adminAuthorizationService).requireAdmin(1L);
+        verify(placeRepository).saveAndFlush(any(Place.class));
+        verifyNoInteractions(placeSuggestionRepository);
     }
 
     private PlaceSuggestion suggestion(Long suggestionId, Long memberId) {

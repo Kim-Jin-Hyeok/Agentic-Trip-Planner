@@ -7,20 +7,20 @@ import {
 } from '../api/placeSuggestionApi';
 import type {
   AdminPlaceSuggestionResponse,
-  PlaceApprovalCategory,
-  PlaceApprovalRegion,
   PlaceSearchCandidate,
   PlaceSuggestionApproveRequest,
   PlaceSuggestionStatus
 } from '../types/placeSuggestion';
 import type { PageResponse } from '../types/trip';
 import {
+  createPlaceRegistrationForm,
   placeDuplicateReasonLabel,
   placeSuggestionStatusLabel,
   validatePlaceSuggestionApproval,
   validatePlaceSuggestionRejection
 } from '../utils/placeSuggestionDisplay';
 import { PlaceSuggestionApprovalForm } from './PlaceSuggestionApprovalForm';
+import { AdminPlaceDirectRegistrationPanel } from './AdminPlaceDirectRegistrationPanel';
 
 const pageSize = 20;
 
@@ -111,7 +111,7 @@ export function AdminPlaceSuggestionPanel() {
     }
     cancelRejection();
     setApprovingSuggestionId(suggestion.placeSuggestionId);
-    setApprovalForm(createApprovalForm(suggestion, candidate));
+    setApprovalForm(createPlaceRegistrationForm(candidate, suggestion.address, suggestion.description ?? ''));
     setActionFeedback('');
   }
 
@@ -210,6 +210,7 @@ export function AdminPlaceSuggestionPanel() {
 
   return (
     <section className="result-panel admin-suggestion-panel">
+      <AdminPlaceDirectRegistrationPanel />
       <div className="admin-suggestion-header">
         <div>
           <p>ADMIN WORKSPACE</p>
@@ -468,57 +469,6 @@ function candidateClassName(candidate: PlaceSearchCandidate, selected: boolean):
     classNames.push('selected');
   }
   return classNames.join(' ');
-}
-
-function createApprovalForm(
-  suggestion: AdminPlaceSuggestionResponse,
-  candidate: PlaceSearchCandidate
-): PlaceSuggestionApproveRequest {
-  const category = inferApprovalCategory(candidate.category);
-  return {
-    externalPlaceId: candidate.externalPlaceId,
-    name: candidate.name,
-    address: candidate.roadAddress || candidate.address || suggestion.address,
-    latitude: candidate.latitude,
-    longitude: candidate.longitude,
-    category,
-    region: inferApprovalRegion(candidate),
-    avgStayMinutes: category === 'NATURE' ? 90 : 60,
-    indoorYn: category !== 'NATURE',
-    parkingYn: false,
-    rainyDayScore: category === 'NATURE' ? 2 : 4,
-    healingScore: category === 'NATURE' ? 5 : 3,
-    foodScore: category === 'FOOD' ? 5 : 1,
-    cafeScore: category === 'CAFE' ? 5 : 1,
-    photoScore: category === 'NATURE' || category === 'CAFE' ? 4 : 3,
-    coupleScore: 3,
-    familyScore: 3,
-    description: suggestion.description ?? ''
-  };
-}
-
-function inferApprovalCategory(category: string | null): PlaceApprovalCategory {
-  if (category?.includes('음식점')) {
-    return 'FOOD';
-  }
-  if (category?.includes('카페')) {
-    return 'CAFE';
-  }
-  return 'NATURE';
-}
-
-function inferApprovalRegion(candidate: PlaceSearchCandidate): PlaceApprovalRegion {
-  const address = candidate.roadAddress || candidate.address || '';
-  if (address.includes('서귀포시')) {
-    return 'SOUTH';
-  }
-  if (candidate.longitude >= 126.7) {
-    return 'EAST';
-  }
-  if (candidate.longitude <= 126.4) {
-    return 'WEST';
-  }
-  return 'NORTH';
 }
 
 function formatSubmittedAt(createdAt: string): string {

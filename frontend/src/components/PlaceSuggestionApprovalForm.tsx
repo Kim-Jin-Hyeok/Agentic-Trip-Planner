@@ -10,6 +10,9 @@ type PlaceSuggestionApprovalFormProps = {
   ) => void;
   onCancel: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  heading?: string;
+  submitLabel?: string;
+  submittingLabel?: string;
 };
 
 const scoreFields: Array<{
@@ -39,13 +42,16 @@ export function PlaceSuggestionApprovalForm({
   isSubmitting,
   onChange,
   onCancel,
-  onSubmit
+  onSubmit,
+  heading = '추천 정보 입력',
+  submitLabel = '승인하고 장소 등록',
+  submittingLabel = '승인 중...'
 }: PlaceSuggestionApprovalFormProps) {
   return (
     <form className="admin-approval-form" onSubmit={onSubmit}>
       <div className="admin-approval-heading">
         <div>
-          <strong>추천 정보 입력</strong>
+          <strong>{heading}</strong>
           <span>{form.name} · {form.address}</span>
         </div>
         <span>카카오 ID {form.externalPlaceId}</span>
@@ -114,7 +120,7 @@ export function PlaceSuggestionApprovalForm({
       </div>
 
       <fieldset className="admin-approval-scores">
-        <legend>추천 점수</legend>
+        <legend>추천 점수 · 카테고리 기반 초기값</legend>
         <div>
           {scoreFields.map((field) => (
             <label key={field.key}>
@@ -149,7 +155,7 @@ export function PlaceSuggestionApprovalForm({
           취소
         </button>
         <button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? '승인 중...' : '승인하고 장소 등록'}
+          {isSubmitting ? submittingLabel : submitLabel}
         </button>
       </div>
     </form>

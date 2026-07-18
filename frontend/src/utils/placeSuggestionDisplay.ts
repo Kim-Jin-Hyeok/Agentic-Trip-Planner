@@ -1,5 +1,8 @@
 import type {
   PlaceDuplicateReason,
+  PlaceApprovalCategory,
+  PlaceApprovalRegion,
+  PlaceSearchCandidate,
   PlaceSuggestionApproveRequest,
   PlaceSuggestionCreateRequest,
   PlaceSuggestionStatus
@@ -87,4 +90,56 @@ export function validatePlaceSuggestionApproval(form: PlaceSuggestionApproveRequ
     return '설명은 1000자 이하여야 합니다.';
   }
   return '';
+}
+
+export function createPlaceRegistrationForm(
+  candidate: PlaceSearchCandidate,
+  fallbackAddress = '',
+  description = ''
+): PlaceSuggestionApproveRequest {
+  const category = inferPlaceCategory(candidate.category);
+  return {
+    externalPlaceId: candidate.externalPlaceId,
+    name: candidate.name,
+    address: candidate.roadAddress || candidate.address || fallbackAddress,
+    latitude: candidate.latitude,
+    longitude: candidate.longitude,
+    category,
+    region: inferPlaceRegion(candidate),
+    avgStayMinutes: category === 'NATURE' ? 90 : 60,
+    indoorYn: category !== 'NATURE',
+    parkingYn: false,
+    rainyDayScore: category === 'NATURE' ? 2 : 4,
+    healingScore: category === 'NATURE' ? 5 : 3,
+    foodScore: category === 'FOOD' ? 5 : 1,
+    cafeScore: category === 'CAFE' ? 5 : 1,
+    photoScore: category === 'NATURE' || category === 'CAFE' ? 4 : 3,
+    coupleScore: 3,
+    familyScore: 3,
+    description
+  };
+}
+
+function inferPlaceCategory(category: string | null): PlaceApprovalCategory {
+  if (category?.includes('카페')) {
+    return 'CAFE';
+  }
+  if (category?.includes('음식점')) {
+    return 'FOOD';
+  }
+  return 'NATURE';
+}
+
+function inferPlaceRegion(candidate: PlaceSearchCandidate): PlaceApprovalRegion {
+  const address = candidate.roadAddress || candidate.address || '';
+  if (address.includes('서귀포시')) {
+    return 'SOUTH';
+  }
+  if (candidate.longitude >= 126.7) {
+    return 'EAST';
+  }
+  if (candidate.longitude <= 126.4) {
+    return 'WEST';
+  }
+  return 'NORTH';
 }

@@ -14,6 +14,7 @@ import com.tripagent.place.dto.PlaceSuggestionRejectRequest;
 import com.tripagent.place.dto.PlaceSearchCandidateResponse;
 import com.tripagent.place.dto.PlaceSuggestionApproveRequest;
 import com.tripagent.place.dto.PlaceSuggestionApprovalResponse;
+import com.tripagent.place.dto.PlaceResponse;
 import com.tripagent.place.repository.PlaceSuggestionRepository;
 import com.tripagent.place.repository.PlaceRepository;
 import java.util.List;
@@ -110,6 +111,32 @@ public class AdminPlaceSuggestionService {
             throw new IllegalArgumentException("Only pending place suggestions can be approved.");
         }
 
+        Place place = savePlace(request);
+        suggestion.approve();
+        return new PlaceSuggestionApprovalResponse(
+                suggestion.getPlaceSuggestionId(),
+                place.getPlaceId(),
+                suggestion.getStatus(),
+                suggestion.getReviewedAt()
+        );
+    }
+
+    public List<PlaceSearchCandidateResponse> searchDirectCandidates(Long memberId, String keyword) {
+        adminAuthorizationService.requireAdmin(memberId);
+        String normalizedKeyword = normalizeSearchKeyword(keyword);
+        return searchJejuCandidates("제주 " + normalizedKeyword).stream()
+                .limit(5)
+                .map(this::toCandidateResponse)
+                .toList();
+    }
+
+    @Transactional
+    public PlaceResponse registerPlace(Long memberId, PlaceSuggestionApproveRequest request) {
+        adminAuthorizationService.requireAdmin(memberId);
+        return PlaceResponse.from(savePlace(request));
+    }
+
+    private Place savePlace(PlaceSuggestionApproveRequest request) {
         String category = normalizeAllowedValue("Place category", request.category(), ALLOWED_CATEGORIES);
         String region = normalizeAllowedValue("Place region", request.region(), ALLOWED_REGIONS);
         validateJejuLocation(request.address(), request.latitude(), request.longitude());
@@ -138,20 +165,13 @@ public class AdminPlaceSuggestionService {
                 normalizeDescription(request.description()),
                 true
         );
-        place.linkExternalReference(KAKAO_LOCAL_PROVIDER, request.externalPlaceId());
+        place.linkExternalReference(KAKAO_LOCAL_PROVIDER, request.externalPlaceId().trim());
 
         try {
-            placeRepository.saveAndFlush(place);
+            return placeRepository.saveAndFlush(place);
         } catch (DataIntegrityViolationException exception) {
-            throw new ConflictException("동일한 외부 장소가 이미 등록되어 있습니다.", exception);
+            throw new ConflictException("동일한 장소가 이미 등록되어 있습니다.", exception);
         }
-        suggestion.approve();
-        return new PlaceSuggestionApprovalResponse(
-                suggestion.getPlaceSuggestionId(),
-                place.getPlaceId(),
-                suggestion.getStatus(),
-                suggestion.getReviewedAt()
-        );
     }
 
     private PlaceSearchCandidate approvalCandidate(PlaceSuggestionApproveRequest request) {
@@ -189,6 +209,17 @@ public class AdminPlaceSuggestionService {
 
     private String normalizeDescription(String description) {
         return description == null || description.isBlank() ? null : description.trim();
+    }
+
+    private String normalizeSearchKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            throw new IllegalArgumentException("Place search keyword is required.");
+        }
+        String normalizedKeyword = keyword.trim();
+        if (normalizedKeyword.length() > 100) {
+            throw new IllegalArgumentException("Place search keyword must be 100 characters or less.");
+        }
+        return normalizedKeyword;
     }
 
     public List<PlaceSearchCandidateResponse> searchCandidates(Long memberId, Long placeSuggestionId) {

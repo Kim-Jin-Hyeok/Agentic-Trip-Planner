@@ -10,6 +10,7 @@ import type {
   PlaceSuggestionStatus,
   PlaceSearchCandidate
 } from '../types/placeSuggestion';
+import type { PlaceResponse } from '../types/trip';
 
 export function createPlaceSuggestion(
   request: PlaceSuggestionCreateRequest
@@ -71,4 +72,20 @@ export function approvePlaceSuggestion(
       body: JSON.stringify(request)
     }
   );
+}
+
+export function searchAdminPlaceCandidates(keyword: string): Promise<PlaceSearchCandidate[]> {
+  const searchParams = new URLSearchParams({ keyword });
+  return apiRequest<PlaceSearchCandidate[]>(
+    `/api/admin/places/candidates?${searchParams.toString()}`
+  );
+}
+
+export function registerAdminPlace(
+  request: PlaceSuggestionApproveRequest
+): Promise<PlaceResponse> {
+  return apiRequest<PlaceResponse>('/api/admin/places', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
 }
