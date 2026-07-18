@@ -2,6 +2,7 @@ package com.tripagent.ai.llm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -19,13 +20,17 @@ class OpenAiPropertiesTest {
         contextRunner
                 .withPropertyValues(
                         "ai.openai.api-key=test-api-key",
-                        "ai.openai.model=test-model"
+                        "ai.openai.model=test-model",
+                        "ai.openai.connect-timeout=7s",
+                        "ai.openai.read-timeout=45s"
                 )
                 .run(context -> {
                     OpenAiProperties properties = context.getBean(OpenAiProperties.class);
 
                     assertThat(properties.getApiKey()).isEqualTo("test-api-key");
                     assertThat(properties.getModel()).isEqualTo("test-model");
+                    assertThat(properties.getConnectTimeout()).isEqualTo(Duration.ofSeconds(7));
+                    assertThat(properties.getReadTimeout()).isEqualTo(Duration.ofSeconds(45));
                 });
     }
 
@@ -36,6 +41,8 @@ class OpenAiPropertiesTest {
 
             assertThat(properties.getApiKey()).isNull();
             assertThat(properties.getModel()).isNull();
+            assertThat(properties.getConnectTimeout()).isEqualTo(Duration.ofSeconds(5));
+            assertThat(properties.getReadTimeout()).isEqualTo(Duration.ofSeconds(60));
         });
     }
 }

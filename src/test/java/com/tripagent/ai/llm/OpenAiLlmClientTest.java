@@ -10,6 +10,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpHeaders;
@@ -25,7 +27,8 @@ class OpenAiLlmClientTest {
         OpenAiProperties properties = properties("test-api-key", "test-model");
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
         server.expect(requestTo("https://api.openai.com/v1/responses"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("Authorization", "Bearer test-api-key"))
@@ -62,7 +65,7 @@ class OpenAiLlmClientTest {
     void generateRejectsMissingApiKey() {
         OpenAiLlmClient client = new OpenAiLlmClient(
                 properties(null, "test-model"),
-                RestClient.builder()
+                RestClient.builder().build()
         );
 
         assertThatThrownBy(() -> client.generate("prompt"))
@@ -74,7 +77,7 @@ class OpenAiLlmClientTest {
     void generateRejectsMissingModel() {
         OpenAiLlmClient client = new OpenAiLlmClient(
                 properties("test-api-key", null),
-                RestClient.builder()
+                RestClient.builder().build()
         );
 
         assertThatThrownBy(() -> client.generate("prompt"))
@@ -86,7 +89,7 @@ class OpenAiLlmClientTest {
     void generateRejectsBlankPrompt() {
         OpenAiLlmClient client = new OpenAiLlmClient(
                 properties("test-api-key", "test-model"),
-                RestClient.builder()
+                RestClient.builder().build()
         );
 
         assertThatThrownBy(() -> client.generate(" "))
@@ -99,7 +102,8 @@ class OpenAiLlmClientTest {
         OpenAiProperties properties = properties("test-api-key", "test-model");
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
         server.expect(requestTo("https://api.openai.com/v1/responses"))
                 .andRespond(withBadRequest().body("{\"error\":{\"message\":\"bad request\"}}"));
 
@@ -116,7 +120,8 @@ class OpenAiLlmClientTest {
         OpenAiProperties properties = properties("test-api-key", "test-model");
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
         server.expect(requestTo("https://api.openai.com/v1/responses"))
                 .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -147,7 +152,8 @@ class OpenAiLlmClientTest {
         OpenAiProperties properties = properties("test-api-key", "test-model");
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
         server.expect(requestTo("https://api.openai.com/v1/responses"))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -174,7 +180,8 @@ class OpenAiLlmClientTest {
         OpenAiProperties properties = properties("test-api-key", "test-model");
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
         server.expect(requestTo("https://api.openai.com/v1/responses"))
                 .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -201,7 +208,8 @@ class OpenAiLlmClientTest {
         OpenAiProperties properties = properties("test-api-key", "test-model");
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
         server.expect(requestTo("https://api.openai.com/v1/responses"))
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -220,6 +228,46 @@ class OpenAiLlmClientTest {
                 .hasMessage("Model temporarily unavailable.")
                 .extracting(exception -> ((LlmException) exception).getFailureType())
                 .isEqualTo(LlmFailureType.MODEL_ERROR);
+        server.verify();
+    }
+
+    @Test
+    void generateConvertsResponseTimeoutToLlmTimeout() {
+        OpenAiProperties properties = properties("test-api-key", "test-model");
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
+        server.expect(requestTo("https://api.openai.com/v1/responses"))
+                .andRespond(request -> {
+                    throw new SocketTimeoutException("Read timed out");
+                });
+
+        assertThatThrownBy(() -> client.generate("prompt"))
+                .isInstanceOf(LlmException.class)
+                .hasMessage("OpenAI response timed out.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.TIMEOUT);
+        server.verify();
+    }
+
+    @Test
+    void generateConvertsConnectionFailureToLlmConnectionFailure() {
+        OpenAiProperties properties = properties("test-api-key", "test-model");
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
+        server.expect(requestTo("https://api.openai.com/v1/responses"))
+                .andRespond(request -> {
+                    throw new ConnectException("Connection refused");
+                });
+
+        assertThatThrownBy(() -> client.generate("prompt"))
+                .isInstanceOf(LlmException.class)
+                .hasMessage("OpenAI connection failed.")
+                .extracting(exception -> ((LlmException) exception).getFailureType())
+                .isEqualTo(LlmFailureType.CONNECTION_FAILED);
         server.verify();
     }
 
@@ -317,7 +365,8 @@ class OpenAiLlmClientTest {
         OpenAiProperties properties = properties("test-api-key", "test-model");
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        OpenAiLlmClient client = new OpenAiLlmClient(properties, restClientBuilder);
+        OpenAiLlmClient client = new OpenAiLlmClient(
+                properties, restClientBuilder.baseUrl("https://api.openai.com").build());
         server.expect(requestTo("https://api.openai.com/v1/responses"))
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
         return client;

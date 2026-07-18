@@ -13,6 +13,8 @@ ai:
   openai:
     api-key: ${AI_OPENAI_API_KEY:}
     model: ${AI_OPENAI_MODEL:}
+    connect-timeout: ${AI_OPENAI_CONNECT_TIMEOUT:5s}
+    read-timeout: ${AI_OPENAI_READ_TIMEOUT:60s}
 
 auth:
   jwt:

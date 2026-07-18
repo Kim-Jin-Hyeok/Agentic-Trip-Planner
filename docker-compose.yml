@@ -34,6 +34,8 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-local-development-jwt-secret-change-before-prod}
       AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY}
       AI_OPENAI_MODEL: ${AI_OPENAI_MODEL}
+      AI_OPENAI_CONNECT_TIMEOUT: ${AI_OPENAI_CONNECT_TIMEOUT:-5s}
+      AI_OPENAI_READ_TIMEOUT: ${AI_OPENAI_READ_TIMEOUT:-60s}
       KAKAO_LOCAL_REST_API_KEY: ${KAKAO_LOCAL_REST_API_KEY}
     depends_on:
       mysql:

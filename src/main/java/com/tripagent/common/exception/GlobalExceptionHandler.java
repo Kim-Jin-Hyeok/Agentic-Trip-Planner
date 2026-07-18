@@ -151,6 +151,8 @@ public class GlobalExceptionHandler {
             case INSUFFICIENT_QUOTA -> "AI 일정 생성 사용량이 소진되었습니다. 잠시 후 다시 시도하거나 관리자에게 문의해 주세요.";
             case AUTHENTICATION_FAILED -> "AI 일정 생성 설정에 문제가 있습니다. 관리자에게 문의해 주세요.";
             case RATE_LIMITED -> "현재 AI 일정 생성 요청이 많습니다. 잠시 후 다시 시도해 주세요.";
+            case CONNECTION_FAILED -> "AI 일정 생성 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+            case TIMEOUT -> "AI 일정 생성 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
             case MODEL_ERROR -> "AI 일정 생성 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.";
             case EMPTY_OUTPUT, REFUSAL, UNEXPECTED_RESPONSE ->
                     "AI가 사용할 수 있는 일정을 반환하지 않았습니다. 다시 시도하거나 여행 조건을 조정해 주세요.";

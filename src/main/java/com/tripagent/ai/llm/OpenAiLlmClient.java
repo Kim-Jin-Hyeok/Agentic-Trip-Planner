@@ -2,13 +2,22 @@ package com.tripagent.ai.llm;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 
 @Component
 @Profile("(prod | openai) & !local & !dev & !test")
@@ -20,12 +29,25 @@ public class OpenAiLlmClient implements LlmClient {
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
+    @Autowired
     public OpenAiLlmClient(OpenAiProperties openAiProperties, RestClient.Builder restClientBuilder) {
         this.openAiProperties = openAiProperties;
         this.objectMapper = new ObjectMapper();
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(openAiProperties.getConnectTimeout())
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(openAiProperties.getReadTimeout());
         this.restClient = restClientBuilder
                 .baseUrl(OPENAI_BASE_URL)
+                .requestFactory(requestFactory)
                 .build();
+    }
+
+    OpenAiLlmClient(OpenAiProperties openAiProperties, RestClient restClient) {
+        this.openAiProperties = openAiProperties;
+        this.objectMapper = new ObjectMapper();
+        this.restClient = restClient;
     }
 
     @Override
@@ -37,20 +59,49 @@ public class OpenAiLlmClient implements LlmClient {
                 prompt
         );
 
-        OpenAiResponsesResponse response = restClient.post()
-                .uri("/v1/responses")
-                .header("Authorization", "Bearer " + openAiProperties.getApiKey())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
-                    HttpStatusCode statusCode = httpResponse.getStatusCode();
-                    String responseBody = readResponseBody(httpResponse.getBody().readAllBytes());
-                    throw toLlmException(statusCode, responseBody);
-                })
-                .body(OpenAiResponsesResponse.class);
+        OpenAiResponsesResponse response;
+        try {
+            response = restClient.post()
+                    .uri("/v1/responses")
+                    .header("Authorization", "Bearer " + openAiProperties.getApiKey())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
+                        HttpStatusCode statusCode = httpResponse.getStatusCode();
+                        String responseBody = readResponseBody(httpResponse.getBody().readAllBytes());
+                        throw toLlmException(statusCode, responseBody);
+                    })
+                    .body(OpenAiResponsesResponse.class);
+        } catch (ResourceAccessException exception) {
+            throw toLlmConnectionException(exception);
+        }
 
         return extractOutputText(response);
+    }
+
+    private LlmException toLlmConnectionException(ResourceAccessException exception) {
+        if (hasCause(exception, HttpConnectTimeoutException.class)
+                || hasCause(exception, ConnectException.class)
+                || hasCause(exception, UnknownHostException.class)) {
+            return LlmException.of(LlmFailureType.CONNECTION_FAILED, "OpenAI connection failed.");
+        }
+        if (hasCause(exception, HttpTimeoutException.class)
+                || hasCause(exception, SocketTimeoutException.class)) {
+            return LlmException.of(LlmFailureType.TIMEOUT, "OpenAI response timed out.");
+        }
+        return LlmException.of(LlmFailureType.CONNECTION_FAILED, "OpenAI request failed.");
+    }
+
+    private boolean hasCause(Throwable throwable, Class<? extends Throwable> causeType) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (causeType.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private void validateRequiredSettings(String prompt) {

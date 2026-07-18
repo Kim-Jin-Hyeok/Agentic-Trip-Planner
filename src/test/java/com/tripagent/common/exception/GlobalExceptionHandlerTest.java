@@ -72,6 +72,30 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleLlmTimeoutReturnsRetryMessage() {
+        ErrorResponse response = handler.handleLlmException(
+                LlmException.of(LlmFailureType.TIMEOUT, "OpenAI response timed out.")
+        );
+
+        assertThat(response.code()).isEqualTo("TIMEOUT");
+        assertThat(response.message()).isEqualTo(
+                "AI 일정 생성 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요."
+        );
+    }
+
+    @Test
+    void handleLlmConnectionFailureReturnsRetryMessage() {
+        ErrorResponse response = handler.handleLlmException(
+                LlmException.of(LlmFailureType.CONNECTION_FAILED, "OpenAI connection failed.")
+        );
+
+        assertThat(response.code()).isEqualTo("CONNECTION_FAILED");
+        assertThat(response.message()).isEqualTo(
+                "AI 일정 생성 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+        );
+    }
+
+    @Test
     void handleIllegalArgumentExceptionReturnsUserMessageForTooFewCandidatePlaces() {
         ErrorResponse response = handler.handleIllegalArgumentException(
                 new IllegalArgumentException(
