@@ -48,6 +48,7 @@ import type {
 import type { TripWeatherForecast } from '../types/weather';
 import {
   canAccessAdminView,
+  conceptLabel,
   initialPublicFilters,
   itineraryForm,
   type ItineraryEditForm,
@@ -1275,8 +1276,10 @@ export function TripCreatePage() {
     return <main className="page-loading">여행 상세를 불러오는 중입니다.</main>;
   }
 
+  const privateTrip = privateTripId == null ? null : trip;
+
   return (
-    <main className="app-shell">
+    <main className={privateTripId == null ? 'app-shell' : 'app-shell private-trip-detail-page'}>
       <header className="service-header">
         <div className="service-header-inner">
           <div className="brand-lockup" aria-label="TripAgent 홈">
@@ -1286,30 +1289,56 @@ export function TripCreatePage() {
               <span>제주 여행을 더 쉽게</span>
             </div>
           </div>
-          <div className="service-status">
-            <span className="status-dot" aria-hidden="true" />
-            제주 여행 플래너
-          </div>
+          {privateTrip == null ? (
+            <div className="service-status">
+              <span className="status-dot" aria-hidden="true" />
+              제주 여행 플래너
+            </div>
+          ) : (
+            <nav className="private-detail-nav" aria-label="여행 상세 메뉴">
+              <Link to="/trips">내 여행</Link>
+              <Link to="/trips/new">새 여행</Link>
+              <Link to="/?view=public">둘러보기</Link>
+              <span>{session?.nickname}님</span>
+              <button type="button" onClick={handleLogout}>로그아웃</button>
+            </nav>
+          )}
         </div>
       </header>
 
-      <section className="hero-section">
-        <div>
-          <p className="eyebrow">AI TRAVEL PLANNER</p>
-          <h1>취향을 담은 제주 여행,<br />일정은 가볍게 완성하세요.</h1>
-          <p className="hero-description">
-            검증된 장소 데이터를 바탕으로 여행 조건에 맞는 현실적인 일정을 만들어 드립니다.
-          </p>
-        </div>
-        <div className="hero-points" aria-label="서비스 특징">
-          <span><strong>01</strong> 검증된 장소</span>
-          <span><strong>02</strong> 맞춤형 동선</span>
-          <span><strong>03</strong> 자유로운 편집</span>
-        </div>
-      </section>
+      {privateTrip == null ? (
+        <section className="hero-section">
+          <div>
+            <p className="eyebrow">AI TRAVEL PLANNER</p>
+            <h1>취향을 담은 제주 여행,<br />일정은 가볍게 완성하세요.</h1>
+            <p className="hero-description">
+              검증된 장소 데이터를 바탕으로 여행 조건에 맞는 현실적인 일정을 만들어 드립니다.
+            </p>
+          </div>
+          <div className="hero-points" aria-label="서비스 특징">
+            <span><strong>01</strong> 검증된 장소</span>
+            <span><strong>02</strong> 맞춤형 동선</span>
+            <span><strong>03</strong> 자유로운 편집</span>
+          </div>
+        </section>
+      ) : (
+        <section className="private-detail-hero">
+          <div>
+            <p><Link to="/trips">내 여행</Link><span aria-hidden="true">/</span>여행 상세</p>
+            <h1>{privateTrip.title}</h1>
+            <span>{privateTrip.startDate} — {privateTrip.endDate} · {privateTrip.nights}박 {privateTrip.nights + 1}일</span>
+          </div>
+          <div className="private-detail-summary" aria-label="여행 요약">
+            <span>{conceptLabel(privateTrip.concept)}</span>
+            <span>{privateTrip.visibility === 'PUBLIC' ? '공개 여행' : '비공개 여행'}</span>
+            <span>{privateTrip.destination}</span>
+          </div>
+        </section>
+      )}
 
-      <section className="workspace">
-        <div className="form-panel">
+      <section className={privateTripId == null ? 'workspace' : 'workspace private-detail-workspace'}>
+        {privateTripId == null && (
+          <div className="form-panel">
           <header className="page-header">
             <p>MY TRIP WORKSPACE</p>
             <h2>여행 플래너</h2>
@@ -1408,7 +1437,8 @@ export function TripCreatePage() {
               <span>장소와 숙소를 직접 등록하거나 사용자 장소 제안을 검토할 수 있습니다.</span>
             </div>
           )}
-        </div>
+          </div>
+        )}
 
         {viewMode === 'admin' && canAccessAdminView(session) ? (
           <AdminManagementPanel />
