@@ -1,7 +1,8 @@
-import { FormEvent, useState } from 'react';
-import { createMember, login } from '../api/authApi';
+import { type FormEvent, useState } from 'react';
+import { Link } from 'react-router';
+import { login } from '../api/authApi';
 import { clearStoredAuthSession, storeAuthSession } from '../api/authStorage';
-import type { AuthSession, MemberCreateRequest } from '../types/auth';
+import type { AuthSession, LoginRequest } from '../types/auth';
 
 type AuthPanelProps = {
   session: AuthSession | null;
@@ -10,18 +11,16 @@ type AuthPanelProps = {
   onMessage: (message: string) => void;
 };
 
-const initialAuthForm: MemberCreateRequest = {
+const initialAuthForm: LoginRequest = {
   email: '',
-  password: '',
-  nickname: ''
+  password: ''
 };
 
 export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelProps) {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [form, setForm] = useState<MemberCreateRequest>(initialAuthForm);
+  const [form, setForm] = useState<LoginRequest>(initialAuthForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function updateForm<K extends keyof MemberCreateRequest>(key: K, value: MemberCreateRequest[K]) {
+  function updateForm<K extends keyof LoginRequest>(key: K, value: LoginRequest[K]) {
     setForm((current) => ({
       ...current,
       [key]: value
@@ -34,10 +33,6 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
     onMessage('');
 
     try {
-      if (mode === 'signup') {
-        await createMember(form);
-      }
-
       const loginResponse = await login({
         email: form.email,
         password: form.password
@@ -51,7 +46,7 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
       };
       storeAuthSession(loginResponse.accessToken, session);
       onLogin(session);
-      onMessage(mode === 'signup' ? '회원가입 후 로그인되었습니다.' : '로그인되었습니다.');
+      onMessage('로그인되었습니다.');
     } catch (error) {
       onMessage(error instanceof Error ? error.message : '인증 처리에 실패했습니다.');
     } finally {
@@ -87,23 +82,6 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
         <strong>계정으로 시작하기</strong>
         <span>여행을 저장하고 언제든 다시 확인하세요.</span>
       </div>
-      <div className="auth-tabs" role="tablist" aria-label="인증 방식">
-        <button
-          type="button"
-          className={mode === 'login' ? 'tab-button active' : 'tab-button'}
-          onClick={() => setMode('login')}
-        >
-          로그인
-        </button>
-        <button
-          type="button"
-          className={mode === 'signup' ? 'tab-button active' : 'tab-button'}
-          onClick={() => setMode('signup')}
-        >
-          회원가입
-        </button>
-      </div>
-
       <form className="auth-form" onSubmit={handleSubmit}>
         <label>
           이메일
@@ -126,22 +104,13 @@ export function AuthPanel({ session, onLogin, onLogout, onMessage }: AuthPanelPr
           />
         </label>
 
-        {mode === 'signup' && (
-          <label>
-            닉네임
-            <input
-              value={form.nickname}
-              onChange={(event) => updateForm('nickname', event.target.value)}
-              maxLength={50}
-              required
-            />
-          </label>
-        )}
-
         <button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? '처리 중' : mode === 'signup' ? '회원가입' : '로그인'}
+          {isSubmitting ? '로그인 중' : '로그인'}
         </button>
       </form>
+      <p className="auth-signup-link">
+        처음이신가요? <Link to="/signup">회원가입</Link>
+      </p>
     </section>
   );
 }

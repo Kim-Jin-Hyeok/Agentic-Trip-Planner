@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test tests/kakaoRoute.test.ts tests/accommodationDisplay.test.ts tests/placeSuggestionDisplay.test.ts tests/adminNavigation.test.ts tests/jejuRegion.test.ts tests/itineraryGenerateOptions.test.ts tests/apiError.test.ts",
+    "test": "node --test tests/kakaoRoute.test.ts tests/accommodationDisplay.test.ts tests/placeSuggestionDisplay.test.ts tests/adminNavigation.test.ts tests/jejuRegion.test.ts tests/itineraryGenerateOptions.test.ts tests/apiError.test.ts tests/signupValidation.test.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-router": "^8.2.0"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21",

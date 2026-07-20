@@ -76,6 +76,15 @@ button:disabled {
   padding-bottom: 56px;
 }
 
+.page-loading {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .service-header {
   position: sticky;
   z-index: 20;
@@ -1263,6 +1272,18 @@ button:disabled {
 .trip-form {
   display: grid;
   gap: 15px;
+}
+
+.auth-signup-link {
+  color: var(--muted) !important;
+  font-size: 12px !important;
+  text-align: center;
+}
+
+.auth-signup-link a {
+  color: var(--green-700);
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .trip-form {
