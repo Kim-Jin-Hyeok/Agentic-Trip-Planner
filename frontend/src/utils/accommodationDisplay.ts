@@ -48,6 +48,7 @@ export function createAccommodationRegistrationForm(
     ),
     parkingYn: false,
     description: '',
+    thumbnailUrl: '',
     placeUrl: candidate.placeUrl ?? ''
   };
 }
@@ -69,10 +70,26 @@ export function validateAccommodationRegistration(
   if (form.description.trim().length > 1000) {
     return '설명은 1000자 이하여야 합니다.';
   }
+  const thumbnailUrl = form.thumbnailUrl.trim();
+  if (thumbnailUrl.length > 1000) {
+    return '대표 이미지 URL은 1000자 이하여야 합니다.';
+  }
+  if (thumbnailUrl.length > 0 && !isHttpUrl(thumbnailUrl)) {
+    return '대표 이미지 URL은 http:// 또는 https:// 형식이어야 합니다.';
+  }
   if (form.placeUrl.trim().length > 500) {
     return '외부 상세 URL은 500자 이하여야 합니다.';
   }
   return '';
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function inferAccommodationType(candidate: AccommodationSearchCandidate): AccommodationType {

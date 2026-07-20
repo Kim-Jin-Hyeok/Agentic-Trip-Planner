@@ -30,6 +30,7 @@ test('creates accommodation registration defaults from Kakao candidate', () => {
   assert.equal(form.region, 'SOUTH');
   assert.equal(form.address, '제주특별자치도 서귀포시 중문로 1');
   assert.equal(form.parkingYn, false);
+  assert.equal(form.thumbnailUrl, '');
 });
 
 test('validates accommodation registration fields', () => {
@@ -47,6 +48,14 @@ test('validates accommodation registration fields', () => {
   assert.equal(
     validateAccommodationRegistration({ ...form, description: 'a'.repeat(1001) }),
     '설명은 1000자 이하여야 합니다.'
+  );
+  assert.equal(
+    validateAccommodationRegistration({ ...form, thumbnailUrl: 'file:///tmp/hotel.jpg' }),
+    '대표 이미지 URL은 http:// 또는 https:// 형식이어야 합니다.'
+  );
+  assert.equal(
+    validateAccommodationRegistration({ ...form, thumbnailUrl: 'https://images.example.com/hotel.jpg' }),
+    ''
   );
 });
 

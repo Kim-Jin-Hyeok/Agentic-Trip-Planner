@@ -15,6 +15,7 @@ public record AdminAccommodationCreateRequest(
         @NotBlank @Size(max = 50) String region,
         @NotNull Boolean parkingYn,
         @Size(max = 1000) String description,
+        @Size(max = 1000) String thumbnailUrl,
         @Size(max = 500) String placeUrl
 ) {
 }

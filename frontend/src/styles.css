@@ -1380,6 +1380,52 @@ button:disabled {
   min-height: 86px;
 }
 
+.admin-accommodation-image-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
+  align-items: start;
+  gap: 12px;
+}
+
+.admin-accommodation-image-field > label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.admin-accommodation-image-field > label > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 550;
+}
+
+.admin-accommodation-image-preview {
+  overflow: hidden;
+  min-height: 120px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.admin-accommodation-image-preview img {
+  display: block;
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+.admin-accommodation-image-error {
+  margin: 0;
+  border-radius: 10px;
+  background: #fff1ef;
+  color: var(--danger);
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 12px;
+}
+
 .admin-approval-actions {
   display: flex;
   justify-content: flex-end;
@@ -3665,6 +3711,10 @@ button.trip-list-item:hover:not(:disabled),
 
   .admin-approval-heading {
     display: grid;
+  }
+
+  .admin-accommodation-image-field {
+    grid-template-columns: 1fr;
   }
 
   .admin-place-management-heading,

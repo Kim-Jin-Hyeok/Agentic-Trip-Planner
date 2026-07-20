@@ -30,6 +30,7 @@ export function AdminAccommodationRegistrationPanel() {
   const [isSearching, setIsSearching] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [thumbnailPreviewFailed, setThumbnailPreviewFailed] = useState(false);
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,6 +69,7 @@ export function AdminAccommodationRegistrationPanel() {
       return;
     }
     setRegistrationForm(createAccommodationRegistrationForm(candidate));
+    setThumbnailPreviewFailed(false);
     setFeedback('');
   }
 
@@ -76,6 +78,9 @@ export function AdminAccommodationRegistrationPanel() {
     value: AdminAccommodationCreateRequest[K]
   ) {
     setRegistrationForm((current) => current == null ? null : { ...current, [key]: value });
+    if (key === 'thumbnailUrl') {
+      setThumbnailPreviewFailed(false);
+    }
     setFeedback('');
   }
 
@@ -98,6 +103,7 @@ export function AdminAccommodationRegistrationPanel() {
         name: registrationForm.name.trim(),
         address: registrationForm.address.trim(),
         description: registrationForm.description.trim(),
+        thumbnailUrl: registrationForm.thumbnailUrl.trim(),
         placeUrl: registrationForm.placeUrl.trim()
       });
       setKeyword('');
@@ -256,6 +262,35 @@ export function AdminAccommodationRegistrationPanel() {
                     />
                     주차 가능
                   </label>
+                </div>
+
+                <div className="admin-accommodation-image-field">
+                  <label>
+                    대표 이미지 URL <span>선택 사항 · HTTP/HTTPS 이미지 주소</span>
+                    <input
+                      type="url"
+                      value={registrationForm.thumbnailUrl}
+                      onChange={(event) => updateRegistrationForm('thumbnailUrl', event.target.value)}
+                      maxLength={1000}
+                      disabled={isRegistering}
+                      placeholder="https://example.com/accommodation.jpg"
+                    />
+                  </label>
+                  {registrationForm.thumbnailUrl.trim().length > 0 && (
+                    thumbnailPreviewFailed ? (
+                      <p className="admin-accommodation-image-error" role="status">
+                        이미지를 불러올 수 없습니다. 공개적으로 접근 가능한 이미지 주소인지 확인해 주세요.
+                      </p>
+                    ) : (
+                      <div className="admin-accommodation-image-preview">
+                        <img
+                          src={registrationForm.thumbnailUrl.trim()}
+                          alt={`${registrationForm.name} 대표 이미지 미리보기`}
+                          onError={() => setThumbnailPreviewFailed(true)}
+                        />
+                      </div>
+                    )
+                  )}
                 </div>
 
                 <label className="admin-approval-description">

@@ -152,7 +152,21 @@ class AdminAccommodationServiceTest {
         assertThat(saved.getExternalProvider()).isEqualTo("KAKAO_LOCAL");
         assertThat(saved.getExternalPlaceId()).isEqualTo("100");
         assertThat(saved.getExternalPlaceUrl()).isEqualTo("https://place.map.kakao.com/100");
+        assertThat(saved.getThumbnailUrl()).isEqualTo("https://images.example.com/jeju-hotel.jpg");
         verify(adminAuthorizationService).requireAdmin(1L);
+    }
+
+    @Test
+    void registerAccommodationRejectsNonHttpThumbnailUrl() {
+        AdminAccommodationCreateRequest request = new AdminAccommodationCreateRequest(
+                "100", "제주 호텔", "제주특별자치도 제주시 연동 1", 33.48, 126.49,
+                AccommodationType.HOTEL, "NORTH", true, "설명",
+                "file:///tmp/hotel.jpg", "https://place.map.kakao.com/100"
+        );
+
+        assertThatThrownBy(() -> adminAccommodationService.registerAccommodation(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Accommodation thumbnail URL must use HTTP or HTTPS.");
     }
 
     @Test
@@ -182,7 +196,7 @@ class AdminAccommodationServiceTest {
     void registerAccommodationRejectsLocationOutsideJeju() {
         AdminAccommodationCreateRequest request = new AdminAccommodationCreateRequest(
                 "100", "서울 호텔", "서울특별시 강남구", 37.5, 127.0,
-                AccommodationType.HOTEL, "NORTH", true, "설명", null
+                AccommodationType.HOTEL, "NORTH", true, "설명", null, null
         );
 
         assertThatThrownBy(() -> adminAccommodationService.registerAccommodation(1L, request))
@@ -211,6 +225,7 @@ class AdminAccommodationServiceTest {
                 " north ",
                 true,
                 "공항 인근 숙소",
+                "https://images.example.com/jeju-hotel.jpg",
                 "https://place.map.kakao.com/100"
         );
     }

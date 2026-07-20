@@ -92,7 +92,8 @@ class AdminAccommodationControllerTest {
                         .content(createRequestJson("HOTEL")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accommodationId").value(20L))
-                .andExpect(jsonPath("$.data.accommodationType").value("HOTEL"));
+                .andExpect(jsonPath("$.data.accommodationType").value("HOTEL"))
+                .andExpect(jsonPath("$.data.thumbnailUrl").value("https://images.example.com/jeju-hotel.jpg"));
     }
 
     @Test
@@ -151,6 +152,7 @@ class AdminAccommodationControllerTest {
                   "region": "NORTH",
                   "parkingYn": true,
                   "description": "공항 인근 숙소",
+                  "thumbnailUrl": "https://images.example.com/jeju-hotel.jpg",
                   "placeUrl": "https://place.map.kakao.com/100"
                 }
                 """.formatted(typeJson);
@@ -164,7 +166,7 @@ class AdminAccommodationControllerTest {
         return new AccommodationResponse(
                 20L, "제주 호텔", AccommodationType.HOTEL, "NORTH",
                 "제주특별자치도 제주시 연동 1", 33.48, 126.49,
-                "공항 인근 숙소", null, true, useYn
+                "공항 인근 숙소", "https://images.example.com/jeju-hotel.jpg", true, useYn
         );
     }
 

@@ -12,6 +12,8 @@ import com.tripagent.common.exception.ConflictException;
 import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.adapter.PlaceSearchAdapter;
 import com.tripagent.place.adapter.PlaceSearchCandidate;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -108,6 +110,7 @@ public class AdminAccommodationService {
     ) {
         adminAuthorizationService.requireAdmin(memberId);
         String region = normalizeRegion(request.region());
+        String thumbnailUrl = normalizeThumbnailUrl(request.thumbnailUrl());
         validateJejuLocation(request.address(), request.latitude(), request.longitude());
         PlaceSearchCandidate candidate = registrationCandidate(request);
         findDuplicate(candidate).ifPresent(match -> {
@@ -124,7 +127,7 @@ public class AdminAccommodationService {
                 request.latitude(),
                 request.longitude(),
                 normalizeOptional(request.description()),
-                null,
+                thumbnailUrl,
                 request.parkingYn(),
                 true
         );
@@ -308,6 +311,26 @@ public class AdminAccommodationService {
 
     private String normalizeOptional(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String normalizeThumbnailUrl(String thumbnailUrl) {
+        String normalizedUrl = normalizeOptional(thumbnailUrl);
+        if (normalizedUrl == null) {
+            return null;
+        }
+
+        try {
+            URI uri = new URI(normalizedUrl);
+            String scheme = uri.getScheme();
+            if ((scheme == null
+                    || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https")))
+                    || uri.getHost() == null) {
+                throw new IllegalArgumentException("Accommodation thumbnail URL must use HTTP or HTTPS.");
+            }
+            return normalizedUrl;
+        } catch (URISyntaxException exception) {
+            throw new IllegalArgumentException("Accommodation thumbnail URL is invalid.", exception);
+        }
     }
 
     private String normalizeName(String name) {

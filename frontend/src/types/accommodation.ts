@@ -67,5 +67,6 @@ export type AdminAccommodationCreateRequest = {
   region: AccommodationRegion;
   parkingYn: boolean;
   description: string;
+  thumbnailUrl: string;
   placeUrl: string;
 };
