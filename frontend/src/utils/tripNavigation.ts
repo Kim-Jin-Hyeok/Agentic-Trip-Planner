@@ -8,15 +8,19 @@ export type TripWorkspaceNavigation = {
 export function parseTripWorkspaceNavigation(search: string): TripWorkspaceNavigation {
   const searchParams = new URLSearchParams(search);
   const requestedView = searchParams.get('view');
-  const requestedTripId = Number(searchParams.get('tripId'));
+  const requestedTripId = resolveTripIdParam(searchParams.get('tripId'));
 
   return {
     viewMode: requestedView === 'public' || requestedView === 'admin' ? requestedView : 'mine',
-    tripId: Number.isInteger(requestedTripId) && requestedTripId > 0 ? requestedTripId : null
+    tripId: requestedTripId
   };
 }
 
 export function createTripWorkspacePath(viewMode: ViewMode, tripId: number | null = null): string {
+  if (viewMode === 'mine' && tripId != null) {
+    return `/trips/${tripId}`;
+  }
+
   const searchParams = new URLSearchParams();
 
   if (viewMode === 'public') {
@@ -25,10 +29,19 @@ export function createTripWorkspacePath(viewMode: ViewMode, tripId: number | nul
     searchParams.set('view', 'admin');
   }
 
-  if (viewMode !== 'admin' && tripId != null) {
+  if (viewMode === 'public' && tripId != null) {
     searchParams.set('tripId', String(tripId));
   }
 
   const search = searchParams.toString();
   return search.length > 0 ? `/?${search}` : '/';
+}
+
+export function resolveTripIdParam(value: string | null | undefined): number | null {
+  if (value == null || !/^[1-9]\d*$/.test(value)) {
+    return null;
+  }
+
+  const tripId = Number(value);
+  return Number.isSafeInteger(tripId) ? tripId : null;
 }

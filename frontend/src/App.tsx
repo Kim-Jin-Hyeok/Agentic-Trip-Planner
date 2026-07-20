@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { PrivateTripRoute } from './components/PrivateTripRoute';
 
 const SignupPage = lazy(() => import('./pages/SignupPage').then(module => ({
   default: module.SignupPage
@@ -50,6 +51,16 @@ export default function App() {
         element={(
           <RoutePage loadingMessage="여행 생성 화면을 불러오는 중입니다.">
             <TripNewPage />
+          </RoutePage>
+        )}
+      />
+      <Route
+        path="/trips/:tripId"
+        element={(
+          <RoutePage loadingMessage="여행 상세를 불러오는 중입니다.">
+            <PrivateTripRoute>
+              <TripCreatePage />
+            </PrivateTripRoute>
           </RoutePage>
         )}
       />

@@ -200,6 +200,13 @@ button:disabled {
   color: var(--green-800);
 }
 
+.trip-route-state-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 310px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
 @media (max-width: 520px) {
   .error-recovery-card {
     padding: 36px 22px;

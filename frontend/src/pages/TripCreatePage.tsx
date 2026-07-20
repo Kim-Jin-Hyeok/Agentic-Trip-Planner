@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import {
   createItinerary,
   copyPublicTrip,
@@ -29,6 +29,7 @@ import { AdminManagementPanel } from '../components/AdminManagementPanel';
 import { PublicTripList } from '../components/PublicTripList';
 import { PlaceSuggestionPanel } from '../components/PlaceSuggestionPanel';
 import { TripDetailPanel } from '../components/TripDetailPanel';
+import { TripRouteState } from '../components/PrivateTripRoute';
 import type { AuthSession } from '../types/auth';
 import type {
   Itinerary,
@@ -54,7 +55,11 @@ import {
   type ViewMode
 } from '../utils/tripDisplay';
 import { maxPlacesForPace } from '../utils/itineraryGenerateOptions';
-import { createTripWorkspacePath, parseTripWorkspaceNavigation } from '../utils/tripNavigation';
+import {
+  createTripWorkspacePath,
+  parseTripWorkspaceNavigation,
+  resolveTripIdParam
+} from '../utils/tripNavigation';
 
 const publicTripPageSize = 10;
 const initialGenerateOptions: ItineraryGenerateRequest = {
@@ -89,8 +94,15 @@ const initialItineraryAddForm: ItineraryCreateRequest = {
 };
 
 export function TripCreatePage() {
+  const navigate = useNavigate();
+  const { tripId: tripIdParam } = useParams<{ tripId: string }>();
+  const privateTripId = resolveTripIdParam(tripIdParam);
+  const browserNavigation = readBrowserNavigation();
+  const legacyPrivateTripId = privateTripId == null && browserNavigation.viewMode === 'mine'
+    ? browserNavigation.tripId
+    : null;
   const [session, setSession] = useState<AuthSession | null>(() => getStoredAuthSession());
-  const [viewMode, setViewMode] = useState<ViewMode>(() => readBrowserNavigation().viewMode);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => privateTripId == null ? browserNavigation.viewMode : 'mine');
   const [publicTripPage, setPublicTripPage] = useState<PageResponse<PublicTripResponse> | null>(null);
   const [publicSort, setPublicSort] = useState<PublicTripSort>('LATEST');
   const [publicPage, setPublicPage] = useState(0);
@@ -106,7 +118,8 @@ export function TripCreatePage() {
   const [lockedPlaceIds, setLockedPlaceIds] = useState<number[]>([]);
   const [isLoadingCandidatePlaces, setIsLoadingCandidatePlaces] = useState(false);
   const [isLoadingPublicTrips, setIsLoadingPublicTrips] = useState(false);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(privateTripId != null);
+  const [tripLoadError, setTripLoadError] = useState<{ title: string; message: string } | null>(null);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [isUpdatingLike, setIsUpdatingLike] = useState(false);
   const [isCopyingPublicTrip, setIsCopyingPublicTrip] = useState(false);
@@ -200,17 +213,28 @@ export function TripCreatePage() {
   }, [viewMode, session?.role]);
 
   useEffect(() => {
+    if (privateTripId == null) {
+      return;
+    }
+
+    setViewMode('mine');
+    setTrip(null);
+    setPublicTrip(null);
+    setItineraries([]);
+    setTripLoadError(null);
+    void loadTripDetail(privateTripId);
+  }, [privateTripId]);
+
+  useEffect(() => {
     const initialNavigation = readBrowserNavigation();
     if (
       !hasHandledInitialNavigation.current
+      && privateTripId == null
+      && initialNavigation.viewMode === 'public'
       && initialNavigation.tripId != null
     ) {
       hasHandledInitialNavigation.current = true;
-      if (initialNavigation.viewMode === 'public') {
-        void loadPublicTripDetail(initialNavigation.tripId, false);
-      } else if (initialNavigation.viewMode === 'mine' && session != null) {
-        void loadTripDetail(initialNavigation.tripId);
-      }
+      void loadPublicTripDetail(initialNavigation.tripId, false);
     }
 
     function handlePopState() {
@@ -224,8 +248,6 @@ export function TripCreatePage() {
       if (navigation.tripId != null) {
         if (navigation.viewMode === 'public') {
           void loadPublicTripDetail(navigation.tripId, false);
-        } else if (navigation.viewMode === 'mine' && session != null) {
-          void loadTripDetail(navigation.tripId);
         }
       }
     }
@@ -366,8 +388,16 @@ export function TripCreatePage() {
       setLockedPlaceIds([]);
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(detail));
+      setTripLoadError(null);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '여행 상세 조회에 실패했습니다.');
+      const errorMessage = error instanceof Error ? error.message : '여행 상세 조회에 실패했습니다.';
+      setMessage(errorMessage);
+      if (privateTripId === tripId) {
+        setTripLoadError({
+          title: tripDetailErrorTitle(error),
+          message: errorMessage
+        });
+      }
     } finally {
       setIsLoadingDetail(false);
     }
@@ -419,6 +449,9 @@ export function TripCreatePage() {
     setIsEditingTitle(false);
     setTitleDraft('');
     setTitleError('');
+    if (privateTripId != null) {
+      navigate('/login', { replace: true });
+    }
   }
 
   async function handleGenerateItinerary() {
@@ -900,7 +933,7 @@ export function TripCreatePage() {
       setTitleError('');
       setEditingItems({});
       setCandidatePlaces([]);
-      setMessage('여행을 삭제했습니다.');
+      navigate('/trips', { replace: true });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '여행 삭제에 실패했습니다.');
     } finally {
@@ -954,8 +987,7 @@ export function TripCreatePage() {
       setEditingItems({});
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(copiedTrip));
-      updateBrowserNavigation('mine', copiedTrip.tripId);
-      setMessage('공개 여행을 내 여행으로 가져왔습니다. 자유롭게 수정해 보세요.');
+      navigate(createTripWorkspacePath('mine', copiedTrip.tripId));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '공개 여행을 내 여행으로 가져오지 못했습니다.');
     } finally {
@@ -1225,6 +1257,24 @@ export function TripCreatePage() {
     }
   }
 
+  if (legacyPrivateTripId != null) {
+    return <Navigate to={createTripWorkspacePath('mine', legacyPrivateTripId)} replace />;
+  }
+
+  if (privateTripId != null && trip == null) {
+    if (tripLoadError != null) {
+      return (
+        <TripRouteState
+          eyebrow="TRIP UNAVAILABLE"
+          title={tripLoadError.title}
+          message={tripLoadError.message}
+        />
+      );
+    }
+
+    return <main className="page-loading">여행 상세를 불러오는 중입니다.</main>;
+  }
+
   return (
     <main className="app-shell">
       <header className="service-header">
@@ -1443,6 +1493,16 @@ export function TripCreatePage() {
 
 function readBrowserNavigation() {
   return parseTripWorkspaceNavigation(window.location.search);
+}
+
+function tripDetailErrorTitle(error: unknown): string {
+  if (error instanceof ApiError && error.status === 404) {
+    return '여행을 찾을 수 없습니다';
+  }
+  if (error instanceof ApiError && error.status === 403) {
+    return '이 여행을 열 권한이 없습니다';
+  }
+  return '여행 상세를 불러오지 못했습니다';
 }
 
 function createPublicTripUrl(tripId: number): string {
