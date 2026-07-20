@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import {
   createItinerary,
-  createTrip,
   copyPublicTrip,
   deleteTrip,
   deleteItinerary,
@@ -30,7 +30,6 @@ import { AdminManagementPanel } from '../components/AdminManagementPanel';
 import { MyTripList } from '../components/MyTripList';
 import { PublicTripList } from '../components/PublicTripList';
 import { PlaceSuggestionPanel } from '../components/PlaceSuggestionPanel';
-import { TripCreateForm } from '../components/TripCreateForm';
 import { TripDetailPanel } from '../components/TripDetailPanel';
 import type { AuthSession } from '../types/auth';
 import type {
@@ -43,7 +42,6 @@ import type {
   PublicTripResponse,
   PublicTripSearchParams,
   PublicTripSort,
-  TripCreateRequest,
   TripConditionUpdateRequest,
   TripDetail,
   TripResponse,
@@ -59,20 +57,7 @@ import {
   type ViewMode
 } from '../utils/tripDisplay';
 import { maxPlacesForPace } from '../utils/itineraryGenerateOptions';
-
-const initialForm: TripCreateRequest = {
-  title: '',
-  destination: '제주',
-  startDate: '',
-  endDate: '',
-  dailyStartTime: '09:00',
-  dailyEndTime: '20:00',
-  concept: 'HEALING',
-  transportation: 'RENT_CAR',
-  lastAccommodationArea: '',
-  startPlaceId: null,
-  endPlaceId: null
-};
+import { createTripWorkspacePath, parseTripWorkspaceNavigation } from '../utils/tripNavigation';
 
 const publicTripPageSize = 10;
 const initialGenerateOptions: ItineraryGenerateRequest = {
@@ -106,13 +91,7 @@ const initialItineraryAddForm: ItineraryCreateRequest = {
   reason: ''
 };
 
-type BrowserNavigation = {
-  viewMode: ViewMode;
-  publicTripId: number | null;
-};
-
 export function TripCreatePage() {
-  const [form, setForm] = useState<TripCreateRequest>(initialForm);
   const [session, setSession] = useState<AuthSession | null>(() => getStoredAuthSession());
   const [viewMode, setViewMode] = useState<ViewMode>(() => readBrowserNavigation().viewMode);
   const [trips, setTrips] = useState<TripResponse[]>([]);
@@ -125,7 +104,6 @@ export function TripCreatePage() {
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [publicTrip, setPublicTrip] = useState<PublicTripDetail | null>(null);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
-  const [isCreating, setIsCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regeneratingDayNo, setRegeneratingDayNo] = useState<number | null>(null);
@@ -196,12 +174,6 @@ export function TripCreatePage() {
         }
 
         setTripEndpointPlaces(places);
-        const defaultPlaceId = places[0]?.placeId ?? null;
-        setForm((current) => ({
-          ...current,
-          startPlaceId: current.startPlaceId ?? defaultPlaceId,
-          endPlaceId: current.endPlaceId ?? defaultPlaceId
-        }));
       })
       .catch(() => {
         if (!cancelled) {
@@ -244,11 +216,14 @@ export function TripCreatePage() {
     const initialNavigation = readBrowserNavigation();
     if (
       !hasHandledInitialNavigation.current
-      && initialNavigation.viewMode === 'public'
-      && initialNavigation.publicTripId != null
+      && initialNavigation.tripId != null
     ) {
       hasHandledInitialNavigation.current = true;
-      void loadPublicTripDetail(initialNavigation.publicTripId, false);
+      if (initialNavigation.viewMode === 'public') {
+        void loadPublicTripDetail(initialNavigation.tripId, false);
+      } else if (initialNavigation.viewMode === 'mine' && session != null) {
+        void loadTripDetail(initialNavigation.tripId, false);
+      }
     }
 
     function handlePopState() {
@@ -259,8 +234,12 @@ export function TripCreatePage() {
       setItineraries([]);
       setMessage('');
 
-      if (navigation.viewMode === 'public' && navigation.publicTripId != null) {
-        void loadPublicTripDetail(navigation.publicTripId, false);
+      if (navigation.tripId != null) {
+        if (navigation.viewMode === 'public') {
+          void loadPublicTripDetail(navigation.tripId, false);
+        } else if (navigation.viewMode === 'mine' && session != null) {
+          void loadTripDetail(navigation.tripId, false);
+        }
       }
     }
 
@@ -289,13 +268,6 @@ export function TripCreatePage() {
 
     void loadTripWeather(trip.tripId, requestId);
   }, [viewMode, trip?.tripId, trip?.startDate, trip?.endDate]);
-
-  function updateForm<K extends keyof TripCreateRequest>(key: K, value: TripCreateRequest[K]) {
-    setForm((current) => ({
-      ...current,
-      [key]: value
-    }));
-  }
 
   function updatePublicFilter<K extends keyof PublicTripSearchParams>(key: K, value: PublicTripSearchParams[K]) {
     setPublicFilters((current) => ({
@@ -401,7 +373,7 @@ export function TripCreatePage() {
     }
   }
 
-  async function loadTripDetail(tripId: number) {
+  async function loadTripDetail(tripId: number, updateLocation = false) {
     setMessage('');
     setIsLoadingDetail(true);
 
@@ -419,6 +391,9 @@ export function TripCreatePage() {
       setLockedPlaceIds([]);
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(detail));
+      if (updateLocation) {
+        updateBrowserNavigation('mine', tripId);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '여행 상세 조회에 실패했습니다.');
     } finally {
@@ -473,37 +448,6 @@ export function TripCreatePage() {
     setIsEditingTitle(false);
     setTitleDraft('');
     setTitleError('');
-  }
-
-  async function handleCreateTrip(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (session == null) {
-      setMessage('로그인 후 여행을 생성할 수 있습니다.');
-      return;
-    }
-
-    setMessage('');
-    setIsCreating(true);
-
-    try {
-      const createdTrip = await createTrip(form);
-      const detail = await getTrip(createdTrip.tripId);
-      setTrip(detail);
-      setPublicTrip(null);
-      setItineraries(detail.itineraries);
-      setIsEditingTitle(false);
-      setTitleDraft(detail.title);
-      setTitleError('');
-      setEditingItems({});
-      setCandidatePlaces([]);
-      setGenerateOptions(createDefaultGenerateOptions(detail));
-      await loadTrips();
-      setMessage('여행 조건이 저장되었습니다.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '여행 생성에 실패했습니다.');
-    } finally {
-      setIsCreating(false);
-    }
   }
 
   async function handleGenerateItinerary() {
@@ -1049,7 +993,7 @@ export function TripCreatePage() {
       setEditingItems({});
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(copiedTrip));
-      updateBrowserNavigation('mine');
+      updateBrowserNavigation('mine', copiedTrip.tripId);
       await loadTrips();
       setMessage('공개 여행을 내 여행으로 가져왔습니다. 자유롭게 수정해 보세요.');
     } catch (error) {
@@ -1100,7 +1044,7 @@ export function TripCreatePage() {
     setViewMode('mine');
     setPublicTrip(null);
     setItineraries(trip?.itineraries ?? []);
-    updateBrowserNavigation('mine');
+    updateBrowserNavigation('mine', trip?.tripId ?? null);
   }
 
   function handleShowPublicTrips() {
@@ -1412,14 +1356,16 @@ export function TripCreatePage() {
 
           {viewMode === 'mine' && (
             <>
-              <TripCreateForm
-                form={form}
-                isCreating={isCreating}
-                disabled={session == null}
-                endpointPlaces={tripEndpointPlaces}
-                onChange={updateForm}
-                onSubmit={handleCreateTrip}
-              />
+              <section className="new-trip-entry">
+                <div>
+                  <p>NEW JOURNEY</p>
+                  <strong>새로운 제주 여행을 계획해 보세요</strong>
+                  <span>여행 조건 입력은 별도 화면에서 차분하게 진행됩니다.</span>
+                </div>
+                <Link to={session == null ? '/login?returnTo=/trips/new' : '/trips/new'}>
+                  새 여행 만들기
+                </Link>
+              </section>
               <MyTripList
                 session={session}
                 trips={trips}
@@ -1427,7 +1373,7 @@ export function TripCreatePage() {
                 isLoadingTrips={isLoadingTrips}
                 isLoadingDetail={isLoadingDetail}
                 onRefresh={() => void loadTrips()}
-                onSelect={(tripId) => void loadTripDetail(tripId)}
+                onSelect={(tripId) => void loadTripDetail(tripId, true)}
               />
             </>
           )}
@@ -1555,15 +1501,8 @@ export function TripCreatePage() {
   );
 }
 
-function readBrowserNavigation(): BrowserNavigation {
-  const searchParams = new URLSearchParams(window.location.search);
-  const publicTripId = Number(searchParams.get('tripId'));
-
-  const requestedView = searchParams.get('view');
-  return {
-    viewMode: requestedView === 'public' || requestedView === 'admin' ? requestedView : 'mine',
-    publicTripId: Number.isInteger(publicTripId) && publicTripId > 0 ? publicTripId : null
-  };
+function readBrowserNavigation() {
+  return parseTripWorkspaceNavigation(window.location.search);
 }
 
 function createPublicTripUrl(tripId: number): string {
@@ -1577,22 +1516,10 @@ function createPublicTripUrl(tripId: number): string {
 
 function updateBrowserNavigation(
   viewMode: ViewMode,
-  publicTripId: number | null = null,
+  tripId: number | null = null,
   replace = false
 ) {
-  const url = new URL(window.location.href);
-  url.search = '';
-  url.hash = '';
-  if (viewMode === 'public') {
-    url.searchParams.set('view', 'public');
-    if (publicTripId != null) {
-      url.searchParams.set('tripId', String(publicTripId));
-    }
-  } else if (viewMode === 'admin') {
-    url.searchParams.set('view', 'admin');
-  }
-
-  const nextLocation = `${url.pathname}${url.search}`;
+  const nextLocation = createTripWorkspacePath(viewMode, tripId);
   if (replace) {
     window.history.replaceState(null, '', nextLocation);
   } else {

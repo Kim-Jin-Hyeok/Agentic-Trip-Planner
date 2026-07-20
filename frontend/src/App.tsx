@@ -7,6 +7,9 @@ const SignupPage = lazy(() => import('./pages/SignupPage').then(module => ({
 const LoginPage = lazy(() => import('./pages/LoginPage').then(module => ({
   default: module.LoginPage
 })));
+const TripNewPage = lazy(() => import('./pages/TripNewPage').then(module => ({
+  default: module.TripNewPage
+})));
 const TripCreatePage = lazy(() => import('./pages/TripCreatePage').then(module => ({
   default: module.TripCreatePage
 })));
@@ -27,6 +30,14 @@ export default function App() {
         element={(
           <Suspense fallback={<main className="page-loading">회원가입 화면을 불러오는 중입니다.</main>}>
             <SignupPage />
+          </Suspense>
+        )}
+      />
+      <Route
+        path="/trips/new"
+        element={(
+          <Suspense fallback={<main className="page-loading">여행 생성 화면을 불러오는 중입니다.</main>}>
+            <TripNewPage />
           </Suspense>
         )}
       />

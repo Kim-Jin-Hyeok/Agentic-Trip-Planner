@@ -18,6 +18,7 @@ test('validates login email and password', () => {
 
 test('allows only safe internal return paths', () => {
   assert.equal(resolveSafeReturnTo('/?view=public&tripId=10'), '/?view=public&tripId=10');
+  assert.equal(resolveSafeReturnTo('/trips/new'), '/trips/new');
   assert.equal(resolveSafeReturnTo(null), '/');
   assert.equal(resolveSafeReturnTo('https://example.com'), '/');
   assert.equal(resolveSafeReturnTo('//example.com'), '/');

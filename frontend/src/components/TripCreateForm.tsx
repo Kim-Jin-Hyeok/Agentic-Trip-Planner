@@ -58,8 +58,6 @@ export function TripCreateForm({
         </label>
       </div>
 
-      {disabled && <p className="form-notice">로그인 후 나만의 여행을 만들 수 있습니다.</p>}
-
       <label>
         여행 제목
         <input

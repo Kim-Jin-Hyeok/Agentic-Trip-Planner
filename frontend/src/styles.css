@@ -1357,16 +1357,6 @@ button:disabled {
   font-weight: 500;
 }
 
-.form-notice {
-  border-radius: 9px;
-  background: #fff6ed;
-  color: #94562d;
-  font-size: 12px;
-  line-height: 1.5;
-  margin: 0;
-  padding: 10px 12px;
-}
-
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1426,6 +1416,56 @@ textarea {
   border-top: 1px solid var(--line);
   margin-top: 24px;
   padding-top: 22px;
+}
+
+.new-trip-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  border: 1px solid #c9d9ce;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f3f8f4, #fff);
+  padding: 18px;
+}
+
+.new-trip-entry > div {
+  display: grid;
+  gap: 5px;
+}
+
+.new-trip-entry p {
+  margin: 0;
+  color: var(--green-700);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+
+.new-trip-entry strong {
+  color: var(--green-950);
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.new-trip-entry span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.new-trip-entry > a {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--green-950);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 16px;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .section-title-row {
@@ -3324,6 +3364,14 @@ button.trip-list-item:hover:not(:disabled),
   .form-panel,
   .result-panel {
     padding: 18px;
+  }
+
+  .new-trip-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .new-trip-entry > a {
+    width: 100%;
   }
 
   .admin-suggestion-header {
