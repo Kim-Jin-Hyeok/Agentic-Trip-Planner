@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 
 const SignupPage = lazy(() => import('./pages/SignupPage').then(module => ({
   default: module.SignupPage
@@ -23,43 +24,58 @@ export default function App() {
       <Route
         path="/login"
         element={(
-          <Suspense fallback={<main className="page-loading">로그인 화면을 불러오는 중입니다.</main>}>
+          <RoutePage loadingMessage="로그인 화면을 불러오는 중입니다.">
             <LoginPage />
-          </Suspense>
+          </RoutePage>
         )}
       />
       <Route
         path="/signup"
         element={(
-          <Suspense fallback={<main className="page-loading">회원가입 화면을 불러오는 중입니다.</main>}>
+          <RoutePage loadingMessage="회원가입 화면을 불러오는 중입니다.">
             <SignupPage />
-          </Suspense>
+          </RoutePage>
         )}
       />
       <Route
         path="/trips"
         element={(
-          <Suspense fallback={<main className="page-loading">내 여행 목록을 불러오는 중입니다.</main>}>
+          <RoutePage loadingMessage="내 여행 목록을 불러오는 중입니다.">
             <MyTripsPage />
-          </Suspense>
+          </RoutePage>
         )}
       />
       <Route
         path="/trips/new"
         element={(
-          <Suspense fallback={<main className="page-loading">여행 생성 화면을 불러오는 중입니다.</main>}>
+          <RoutePage loadingMessage="여행 생성 화면을 불러오는 중입니다.">
             <TripNewPage />
-          </Suspense>
+          </RoutePage>
         )}
       />
       <Route
         path="*"
         element={(
-          <Suspense fallback={<main className="page-loading">여행 화면을 불러오는 중입니다.</main>}>
+          <RoutePage loadingMessage="여행 화면을 불러오는 중입니다.">
             <TripCreatePage />
-          </Suspense>
+          </RoutePage>
         )}
       />
     </Routes>
+  );
+}
+
+type RoutePageProps = {
+  children: ReactNode;
+  loadingMessage: string;
+};
+
+function RoutePage({ children, loadingMessage }: RoutePageProps) {
+  return (
+    <AppErrorBoundary>
+      <Suspense fallback={<main className="page-loading">{loadingMessage}</main>}>
+        {children}
+      </Suspense>
+    </AppErrorBoundary>
   );
 }
