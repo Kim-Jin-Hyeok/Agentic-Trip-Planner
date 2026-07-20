@@ -1,4 +1,5 @@
 import type { TripWeatherForecast } from '../types/weather';
+import { areForecastRainyDaysApplied } from '../utils/tripWeather';
 
 type TripWeatherPanelProps = {
   forecast: TripWeatherForecast | null;
@@ -19,7 +20,7 @@ export function TripWeatherPanel({
 }: TripWeatherPanelProps) {
   const suggestedRainyDayNos = forecast?.days
     .flatMap((day, index) => day.rainy ? [index + 1] : []) ?? [];
-  const rainyDaysApplied = haveSameDayNos(rainyDayNos, suggestedRainyDayNos);
+  const rainyDaysApplied = areForecastRainyDaysApplied(rainyDayMode, rainyDayNos, suggestedRainyDayNos);
   const rainyDayLabel = suggestedRainyDayNos.map((dayNo) => `Day ${dayNo}`).join(', ');
 
   return (
@@ -60,18 +61,20 @@ export function TripWeatherPanel({
             <div className="rainy-day-suggestion">
               <div>
                 <strong>비 예보가 있는 {rainyDayLabel}가 있습니다.</strong>
-                <span>해당 날짜에만 실내 장소와 우천 점수가 높은 후보를 우선할 수 있습니다.</span>
+                <span>
+                  {rainyDaysApplied
+                    ? '현재 일정 생성 옵션에 반영되어 있습니다. 기존 일정은 재생성해야 변경됩니다.'
+                    : rainyDayMode
+                      ? '전체 우천 모드 대신 비가 예보된 날짜에만 우천 장소를 우선할 수 있습니다.'
+                      : '해당 날짜에만 실내 장소와 우천 점수가 높은 후보를 우선할 수 있습니다.'}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => onApplyRainyDays(suggestedRainyDayNos)}
-                disabled={rainyDayMode || rainyDaysApplied}
+                disabled={rainyDaysApplied}
               >
-                {rainyDayMode
-                  ? '전체 우천 모드 적용됨'
-                  : rainyDaysApplied
-                    ? '비 오는 Day 적용됨'
-                    : '비 오는 Day만 적용'}
+                {rainyDaysApplied ? '이미 옵션에 반영됨' : '비 오는 Day만 적용'}
               </button>
             </div>
           ) : (
@@ -89,10 +92,6 @@ export function TripWeatherPanel({
       </a>
     </section>
   );
-}
-
-function haveSameDayNos(left: number[], right: number[]): boolean {
-  return left.length === right.length && left.every((dayNo) => right.includes(dayNo));
 }
 
 function formatDate(date: string): string {

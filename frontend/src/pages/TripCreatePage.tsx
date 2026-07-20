@@ -1488,7 +1488,14 @@ export function TripCreatePage() {
           onGenerateOptionsChange={setGenerateOptions}
           onLoadCandidatePlaces={() => void handleLoadCandidatePlaces()}
           onRefreshWeather={() => trip != null && void loadTripWeather(trip.tripId)}
-          onApplyRainyDays={(rainyDayNos) => setGenerateOptions((current) => ({ ...current, rainyDayNos }))}
+          onApplyRainyDays={(rainyDayNos) => {
+            setGenerateOptions((current) => ({ ...current, rainyDayMode: false, rainyDayNos }));
+            setMessage(
+              itineraries.length > 0
+                ? '비 오는 Day를 일정 생성 옵션에 반영했습니다. 기존 일정에 적용하려면 일정을 재생성해 주세요.'
+                : '비 오는 Day를 일정 생성 옵션에 반영했습니다. 이 조건으로 일정을 생성할 수 있습니다.'
+            );
+          }}
           onAccommodationBusyChange={setIsSavingAccommodations}
           onAccommodationsSaved={() => void refreshTripDetailAfterAccommodationSave()}
           onUpdateVisibility={(visibility) => void handleUpdateVisibility(visibility)}
