@@ -5,6 +5,7 @@ import type {
   AccommodationSearchParams,
   AdminAccommodationSearchParams,
   AdminAccommodationCreateRequest,
+  AdminAccommodationUpdateRequest,
   TripAccommodation,
   TripAccommodationReplaceRequest
 } from '../types/accommodation';
@@ -83,6 +84,16 @@ export function updateAdminAccommodationStatus(
   return apiRequest<Accommodation>(`/api/admin/accommodations/${accommodationId}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ useYn })
+  });
+}
+
+export function updateAdminAccommodation(
+  accommodationId: number,
+  request: AdminAccommodationUpdateRequest
+): Promise<Accommodation> {
+  return apiRequest<Accommodation>(`/api/admin/accommodations/${accommodationId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(request)
   });
 }
 

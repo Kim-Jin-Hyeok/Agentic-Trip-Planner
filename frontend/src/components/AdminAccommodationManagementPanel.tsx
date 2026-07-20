@@ -1,14 +1,20 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import {
   getAdminAccommodations,
+  updateAdminAccommodation,
   updateAdminAccommodationStatus
 } from '../api/accommodationApi';
 import type {
   Accommodation,
   AccommodationType,
-  AdminAccommodationSearchParams
+  AdminAccommodationSearchParams,
+  AdminAccommodationUpdateRequest
 } from '../types/accommodation';
 import type { PageResponse } from '../types/trip';
+import {
+  createAccommodationUpdateForm,
+  validateAccommodationUpdate
+} from '../utils/accommodationDisplay';
 
 const pageSize = 20;
 
@@ -43,6 +49,10 @@ export function AdminAccommodationManagementPanel() {
   const [accommodationPage, setAccommodationPage] = useState<PageResponse<Accommodation> | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAccommodationId, setPendingAccommodationId] = useState<number | null>(null);
+  const [editingAccommodationId, setEditingAccommodationId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<AdminAccommodationUpdateRequest | null>(null);
+  const [editError, setEditError] = useState('');
+  const [thumbnailPreviewFailed, setThumbnailPreviewFailed] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -107,6 +117,64 @@ export function AdminAccommodationManagementPanel() {
       setRefreshKey(current => current + 1);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '숙소 상태를 변경하지 못했습니다.');
+    } finally {
+      setPendingAccommodationId(null);
+    }
+  }
+
+  function startEditing(accommodation: Accommodation) {
+    setEditingAccommodationId(accommodation.accommodationId);
+    setEditForm(createAccommodationUpdateForm(accommodation));
+    setEditError('');
+    setThumbnailPreviewFailed(false);
+    setFeedback('');
+  }
+
+  function cancelEditing() {
+    setEditingAccommodationId(null);
+    setEditForm(null);
+    setEditError('');
+    setThumbnailPreviewFailed(false);
+  }
+
+  function updateEditForm<K extends keyof AdminAccommodationUpdateRequest>(
+    key: K,
+    value: AdminAccommodationUpdateRequest[K]
+  ) {
+    setEditForm(current => current == null ? null : { ...current, [key]: value });
+    if (key === 'thumbnailUrl') {
+      setThumbnailPreviewFailed(false);
+    }
+    setEditError('');
+  }
+
+  async function handleUpdateAccommodation(
+    event: FormEvent<HTMLFormElement>,
+    accommodation: Accommodation
+  ) {
+    event.preventDefault();
+    if (editForm == null || pendingAccommodationId != null) {
+      return;
+    }
+    const validationMessage = validateAccommodationUpdate(editForm);
+    if (validationMessage.length > 0) {
+      setEditError(validationMessage);
+      return;
+    }
+
+    setPendingAccommodationId(accommodation.accommodationId);
+    setEditError('');
+    try {
+      await updateAdminAccommodation(accommodation.accommodationId, {
+        ...editForm,
+        description: editForm.description.trim(),
+        thumbnailUrl: editForm.thumbnailUrl.trim()
+      });
+      cancelEditing();
+      setFeedback(`${accommodation.name} 정보를 수정했습니다.`);
+      setRefreshKey(current => current + 1);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : '숙소 정보를 수정하지 못했습니다.');
     } finally {
       setPendingAccommodationId(null);
     }
@@ -194,6 +262,7 @@ export function AdminAccommodationManagementPanel() {
         <div className="admin-place-management-list">
           {accommodationPage?.content.map(accommodation => {
             const active = accommodation.useYn !== false;
+            const editing = editingAccommodationId === accommodation.accommodationId && editForm != null;
             return (
               <article className="admin-place-management-item" key={accommodation.accommodationId}>
                 <div>
@@ -207,16 +276,123 @@ export function AdminAccommodationManagementPanel() {
                     {' · '}{accommodation.address}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className={active ? 'danger-button' : 'secondary-button'}
-                  onClick={() => void toggleStatus(accommodation)}
-                  disabled={pendingAccommodationId != null}
-                >
-                  {pendingAccommodationId === accommodation.accommodationId
-                    ? '변경 중...'
-                    : active ? '비활성화' : '활성화'}
-                </button>
+                <div className="admin-accommodation-management-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => editing ? cancelEditing() : startEditing(accommodation)}
+                    disabled={pendingAccommodationId != null}
+                  >
+                    {editing ? '수정 닫기' : '정보 수정'}
+                  </button>
+                  <button
+                    type="button"
+                    className={active ? 'danger-button' : 'secondary-button'}
+                    onClick={() => void toggleStatus(accommodation)}
+                    disabled={pendingAccommodationId != null}
+                  >
+                    {pendingAccommodationId === accommodation.accommodationId && !editing
+                      ? '변경 중...'
+                      : active ? '비활성화' : '활성화'}
+                  </button>
+                </div>
+
+                {editing && (
+                  <form
+                    className="admin-accommodation-edit-form"
+                    onSubmit={event => void handleUpdateAccommodation(event, accommodation)}
+                  >
+                    <p className="admin-accommodation-edit-guide">
+                      숙소명, 주소와 좌표는 고정됩니다. 일정 추천에 사용하는 운영 정보만 수정할 수 있습니다.
+                    </p>
+                    <div className="admin-accommodation-edit-fields">
+                      <label>
+                        숙소 유형
+                        <select
+                          value={editForm.accommodationType}
+                          onChange={event => updateEditForm(
+                            'accommodationType', event.target.value as AccommodationType
+                          )}
+                          disabled={pendingAccommodationId != null}
+                        >
+                          {Object.entries(accommodationTypeLabels).map(([value, label]) => (
+                            <option value={value} key={value}>{label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        권역
+                        <select
+                          value={editForm.region}
+                          onChange={event => updateEditForm(
+                            'region', event.target.value as AdminAccommodationUpdateRequest['region']
+                          )}
+                          disabled={pendingAccommodationId != null}
+                        >
+                          {Object.entries(regionLabels).map(([value, label]) => (
+                            <option value={value} key={value}>{label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="admin-accommodation-edit-check">
+                        <input
+                          type="checkbox"
+                          checked={editForm.parkingYn}
+                          onChange={event => updateEditForm('parkingYn', event.target.checked)}
+                          disabled={pendingAccommodationId != null}
+                        />
+                        주차 가능
+                      </label>
+                    </div>
+                    <label className="admin-accommodation-edit-description">
+                      숙소 설명
+                      <textarea
+                        value={editForm.description}
+                        onChange={event => updateEditForm('description', event.target.value)}
+                        maxLength={1000}
+                        disabled={pendingAccommodationId != null}
+                      />
+                    </label>
+                    <div className="admin-accommodation-edit-image">
+                      <label>
+                        대표 이미지 URL
+                        <input
+                          type="url"
+                          value={editForm.thumbnailUrl}
+                          onChange={event => updateEditForm('thumbnailUrl', event.target.value)}
+                          maxLength={1000}
+                          placeholder="https://example.com/accommodation.jpg"
+                          disabled={pendingAccommodationId != null}
+                        />
+                      </label>
+                      {editForm.thumbnailUrl.trim().length > 0 && (
+                        thumbnailPreviewFailed ? (
+                          <p role="status">이미지를 불러올 수 없습니다. 이미지 주소를 확인해 주세요.</p>
+                        ) : (
+                          <img
+                            src={editForm.thumbnailUrl.trim()}
+                            alt={`${accommodation.name} 대표 이미지 미리보기`}
+                            onError={() => setThumbnailPreviewFailed(true)}
+                          />
+                        )
+                      )}
+                    </div>
+                    {editError.length > 0 && <p className="admin-accommodation-edit-error" role="alert">{editError}</p>}
+                    <div className="admin-accommodation-edit-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={cancelEditing}
+                        disabled={pendingAccommodationId != null}
+                      >
+                        취소
+                      </button>
+                      <button type="submit" disabled={pendingAccommodationId != null}>
+                        {pendingAccommodationId === accommodation.accommodationId ? '저장 중...' : '변경 저장'}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </article>
             );
           })}

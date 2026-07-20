@@ -1,8 +1,11 @@
 import type {
+  Accommodation,
   AccommodationDuplicateReason,
+  AccommodationRegion,
   AccommodationSearchCandidate,
   AccommodationType,
-  AdminAccommodationCreateRequest
+  AdminAccommodationCreateRequest,
+  AdminAccommodationUpdateRequest
 } from '../types/accommodation';
 import { inferJejuRegion } from './jejuRegion.ts';
 
@@ -81,6 +84,41 @@ export function validateAccommodationRegistration(
     return '외부 상세 URL은 500자 이하여야 합니다.';
   }
   return '';
+}
+
+export function createAccommodationUpdateForm(
+  accommodation: Accommodation
+): AdminAccommodationUpdateRequest {
+  return {
+    accommodationType: accommodation.accommodationType,
+    region: normalizeAccommodationRegion(accommodation.region),
+    parkingYn: accommodation.parkingYn,
+    description: accommodation.description ?? '',
+    thumbnailUrl: accommodation.thumbnailUrl ?? ''
+  };
+}
+
+export function validateAccommodationUpdate(form: AdminAccommodationUpdateRequest): string {
+  if (!['EAST', 'WEST', 'NORTH', 'SOUTH'].includes(form.region)) {
+    return '숙소 권역을 선택해 주세요.';
+  }
+  if (form.description.trim().length > 1000) {
+    return '설명은 1000자 이하여야 합니다.';
+  }
+  const thumbnailUrl = form.thumbnailUrl.trim();
+  if (thumbnailUrl.length > 1000) {
+    return '대표 이미지 URL은 1000자 이하여야 합니다.';
+  }
+  if (thumbnailUrl.length > 0 && !isHttpUrl(thumbnailUrl)) {
+    return '대표 이미지 URL은 http:// 또는 https:// 형식이어야 합니다.';
+  }
+  return '';
+}
+
+function normalizeAccommodationRegion(region: string): AccommodationRegion {
+  return ['EAST', 'WEST', 'NORTH', 'SOUTH'].includes(region)
+    ? region as AccommodationRegion
+    : 'NORTH';
 }
 
 function isHttpUrl(value: string): boolean {

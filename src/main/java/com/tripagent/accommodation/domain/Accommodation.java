@@ -191,6 +191,29 @@ public class Accommodation {
         this.useYn = useYn;
     }
 
+    public void updateDetails(
+            AccommodationType accommodationType,
+            String region,
+            Boolean parkingYn,
+            String description,
+            String thumbnailUrl
+    ) {
+        if (accommodationType == null) {
+            throw new IllegalArgumentException("Accommodation type is required.");
+        }
+        if (region == null || region.isBlank()) {
+            throw new IllegalArgumentException("Accommodation region is required.");
+        }
+        if (parkingYn == null) {
+            throw new IllegalArgumentException("Accommodation parkingYn is required.");
+        }
+        this.accommodationType = accommodationType;
+        this.region = region;
+        this.parkingYn = parkingYn;
+        this.description = description;
+        this.thumbnailUrl = thumbnailUrl;
+    }
+
     public void linkExternalReference(String provider, String placeId, String placeUrl) {
         if (provider == null || provider.isBlank() || placeId == null || placeId.isBlank()) {
             throw new IllegalArgumentException("External accommodation provider and place ID are required.");

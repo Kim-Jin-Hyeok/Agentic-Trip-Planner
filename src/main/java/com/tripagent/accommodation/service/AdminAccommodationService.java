@@ -6,6 +6,7 @@ import com.tripagent.accommodation.dto.AccommodationDuplicateReason;
 import com.tripagent.accommodation.dto.AccommodationResponse;
 import com.tripagent.accommodation.dto.AccommodationSearchCandidateResponse;
 import com.tripagent.accommodation.dto.AdminAccommodationCreateRequest;
+import com.tripagent.accommodation.dto.AdminAccommodationUpdateRequest;
 import com.tripagent.accommodation.repository.AccommodationRepository;
 import com.tripagent.auth.service.AdminAuthorizationService;
 import com.tripagent.common.exception.ConflictException;
@@ -100,6 +101,27 @@ public class AdminAccommodationService {
                         "Accommodation not found. accommodationId=" + accommodationId
                 ));
         accommodation.changeUseYn(useYn);
+        return AccommodationResponse.from(accommodation);
+    }
+
+    @Transactional
+    public AccommodationResponse updateAccommodation(
+            Long memberId,
+            Long accommodationId,
+            AdminAccommodationUpdateRequest request
+    ) {
+        adminAuthorizationService.requireAdmin(memberId);
+        Accommodation accommodation = accommodationRepository.findById(accommodationId)
+                .orElseThrow(() -> new java.util.NoSuchElementException(
+                        "Accommodation not found. accommodationId=" + accommodationId
+                ));
+        accommodation.updateDetails(
+                request.accommodationType(),
+                normalizeRegion(request.region()),
+                request.parkingYn(),
+                normalizeOptional(request.description()),
+                normalizeThumbnailUrl(request.thumbnailUrl())
+        );
         return AccommodationResponse.from(accommodation);
     }
 

@@ -14,6 +14,7 @@ import com.tripagent.accommodation.domain.AccommodationType;
 import com.tripagent.accommodation.dto.AccommodationResponse;
 import com.tripagent.accommodation.dto.AccommodationSearchCandidateResponse;
 import com.tripagent.accommodation.dto.AdminAccommodationCreateRequest;
+import com.tripagent.accommodation.dto.AdminAccommodationUpdateRequest;
 import com.tripagent.accommodation.service.AdminAccommodationService;
 import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.exception.ConflictException;
@@ -139,6 +140,30 @@ class AdminAccommodationControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
+    @Test
+    void updateAccommodationReturnsUpdatedDetails() throws Exception {
+        when(adminAccommodationService.updateAccommodation(
+                eq(1L), eq(20L), any(AdminAccommodationUpdateRequest.class)
+        )).thenReturn(response());
+
+        mockMvc.perform(patch("/api/admin/accommodations/20")
+                        .contentType("application/json")
+                        .content(updateRequestJson("HOTEL")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accommodationId").value(20L))
+                .andExpect(jsonPath("$.data.thumbnailUrl")
+                        .value("https://images.example.com/jeju-hotel.jpg"));
+    }
+
+    @Test
+    void updateAccommodationRejectsMissingType() throws Exception {
+        mockMvc.perform(patch("/api/admin/accommodations/20")
+                        .contentType("application/json")
+                        .content(updateRequestJson(null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
     private String createRequestJson(String accommodationType) {
         String typeJson = accommodationType == null ? "null" : "\"" + accommodationType + "\"";
         return """
@@ -154,6 +179,19 @@ class AdminAccommodationControllerTest {
                   "description": "공항 인근 숙소",
                   "thumbnailUrl": "https://images.example.com/jeju-hotel.jpg",
                   "placeUrl": "https://place.map.kakao.com/100"
+                }
+                """.formatted(typeJson);
+    }
+
+    private String updateRequestJson(String accommodationType) {
+        String typeJson = accommodationType == null ? "null" : "\"" + accommodationType + "\"";
+        return """
+                {
+                  "accommodationType": %s,
+                  "region": "NORTH",
+                  "parkingYn": true,
+                  "description": "공항 인근 숙소",
+                  "thumbnailUrl": "https://images.example.com/jeju-hotel.jpg"
                 }
                 """.formatted(typeJson);
     }

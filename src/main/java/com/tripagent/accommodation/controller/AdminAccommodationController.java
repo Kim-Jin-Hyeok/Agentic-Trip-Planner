@@ -4,6 +4,7 @@ import com.tripagent.accommodation.dto.AccommodationResponse;
 import com.tripagent.accommodation.dto.AccommodationSearchCandidateResponse;
 import com.tripagent.accommodation.dto.AdminAccommodationCreateRequest;
 import com.tripagent.accommodation.dto.AdminAccommodationStatusUpdateRequest;
+import com.tripagent.accommodation.dto.AdminAccommodationUpdateRequest;
 import com.tripagent.accommodation.domain.AccommodationType;
 import com.tripagent.accommodation.service.AdminAccommodationService;
 import com.tripagent.auth.support.LoginMemberId;
@@ -69,6 +70,17 @@ public class AdminAccommodationController {
     ) {
         return ApiResponse.success(
                 adminAccommodationService.updateStatus(memberId, accommodationId, request.useYn())
+        );
+    }
+
+    @PatchMapping("/{accommodationId}")
+    public ApiResponse<AccommodationResponse> updateAccommodation(
+            @LoginMemberId Long memberId,
+            @PathVariable Long accommodationId,
+            @Valid @RequestBody AdminAccommodationUpdateRequest request
+    ) {
+        return ApiResponse.success(
+                adminAccommodationService.updateAccommodation(memberId, accommodationId, request)
         );
     }
 }

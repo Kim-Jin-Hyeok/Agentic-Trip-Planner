@@ -70,3 +70,11 @@ export type AdminAccommodationCreateRequest = {
   thumbnailUrl: string;
   placeUrl: string;
 };
+
+export type AdminAccommodationUpdateRequest = {
+  accommodationType: AccommodationType;
+  region: AccommodationRegion;
+  parkingYn: boolean;
+  description: string;
+  thumbnailUrl: string;
+};

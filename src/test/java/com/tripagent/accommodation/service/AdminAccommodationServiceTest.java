@@ -14,6 +14,7 @@ import com.tripagent.accommodation.dto.AccommodationDuplicateReason;
 import com.tripagent.accommodation.dto.AccommodationResponse;
 import com.tripagent.accommodation.dto.AccommodationSearchCandidateResponse;
 import com.tripagent.accommodation.dto.AdminAccommodationCreateRequest;
+import com.tripagent.accommodation.dto.AdminAccommodationUpdateRequest;
 import com.tripagent.accommodation.repository.AccommodationRepository;
 import com.tripagent.auth.service.AdminAuthorizationService;
 import com.tripagent.common.exception.ConflictException;
@@ -130,6 +131,56 @@ class AdminAccommodationServiceTest {
         assertThatThrownBy(() -> adminAccommodationService.updateStatus(1L, 10L, false))
                 .isInstanceOf(java.util.NoSuchElementException.class)
                 .hasMessage("Accommodation not found. accommodationId=10");
+    }
+
+    @Test
+    void updateAccommodationChangesOnlyEditableDetails() {
+        Accommodation accommodation = accommodation(
+                10L, "제주 호텔", "제주특별자치도 제주시 연동 1", 33.48, 126.49
+        );
+        accommodation.linkExternalReference("KAKAO_LOCAL", "100", "https://place.map.kakao.com/100");
+        when(accommodationRepository.findById(10L)).thenReturn(Optional.of(accommodation));
+
+        AccommodationResponse response = adminAccommodationService.updateAccommodation(
+                1L,
+                10L,
+                new AdminAccommodationUpdateRequest(
+                        AccommodationType.RESORT,
+                        " south ",
+                        false,
+                        "  바다 전망 숙소  ",
+                        " https://images.example.com/resort.jpg "
+                )
+        );
+
+        verify(adminAuthorizationService).requireAdmin(1L);
+        assertThat(response.accommodationType()).isEqualTo(AccommodationType.RESORT);
+        assertThat(response.region()).isEqualTo("SOUTH");
+        assertThat(response.parkingYn()).isFalse();
+        assertThat(response.description()).isEqualTo("바다 전망 숙소");
+        assertThat(response.thumbnailUrl()).isEqualTo("https://images.example.com/resort.jpg");
+        assertThat(response.name()).isEqualTo("제주 호텔");
+        assertThat(response.address()).isEqualTo("제주특별자치도 제주시 연동 1");
+        assertThat(accommodation.getExternalPlaceId()).isEqualTo("100");
+        assertThat(response.useYn()).isTrue();
+    }
+
+    @Test
+    void updateAccommodationRejectsNonHttpThumbnailUrl() {
+        Accommodation accommodation = accommodation(
+                10L, "제주 호텔", "제주특별자치도 제주시 연동 1", 33.48, 126.49
+        );
+        when(accommodationRepository.findById(10L)).thenReturn(Optional.of(accommodation));
+
+        assertThatThrownBy(() -> adminAccommodationService.updateAccommodation(
+                1L,
+                10L,
+                new AdminAccommodationUpdateRequest(
+                        AccommodationType.HOTEL, "NORTH", true, null, "file:///tmp/hotel.jpg"
+                )
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Accommodation thumbnail URL must use HTTP or HTTPS.");
     }
 
     @Test

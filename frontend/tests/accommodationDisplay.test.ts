@@ -3,10 +3,12 @@ import test from 'node:test';
 import {
   accommodationDuplicateReasonLabel,
   createAccommodationRegistrationForm,
+  createAccommodationUpdateForm,
   createStayContextLabels,
-  validateAccommodationRegistration
+  validateAccommodationRegistration,
+  validateAccommodationUpdate
 } from '../src/utils/accommodationDisplay.ts';
-import type { AccommodationSearchCandidate } from '../src/types/accommodation.ts';
+import type { Accommodation, AccommodationSearchCandidate } from '../src/types/accommodation.ts';
 
 test('maps each stay to the following day departure schedule', () => {
   assert.deepEqual(createStayContextLabels(0), {
@@ -70,6 +72,23 @@ test('explains accommodation duplicate reasons', () => {
   );
 });
 
+test('creates and validates an accommodation update form', () => {
+  const form = createAccommodationUpdateForm(accommodation({}));
+
+  assert.deepEqual(form, {
+    accommodationType: 'HOTEL',
+    region: 'NORTH',
+    parkingYn: true,
+    description: '공항 인근 숙소',
+    thumbnailUrl: 'https://images.example.com/hotel.jpg'
+  });
+  assert.equal(validateAccommodationUpdate(form), '');
+  assert.equal(
+    validateAccommodationUpdate({ ...form, thumbnailUrl: 'file:///tmp/hotel.jpg' }),
+    '대표 이미지 URL은 http:// 또는 https:// 형식이어야 합니다.'
+  );
+});
+
 function candidate(overrides: Partial<AccommodationSearchCandidate>): AccommodationSearchCandidate {
   return {
     externalPlaceId: '100',
@@ -83,6 +102,23 @@ function candidate(overrides: Partial<AccommodationSearchCandidate>): Accommodat
     alreadyRegistered: false,
     duplicateAccommodationId: null,
     duplicateReason: null,
+    ...overrides
+  };
+}
+
+function accommodation(overrides: Partial<Accommodation>): Accommodation {
+  return {
+    accommodationId: 1,
+    name: '제주 호텔',
+    accommodationType: 'HOTEL',
+    region: 'NORTH',
+    address: '제주특별자치도 제주시 연동 1',
+    latitude: 33.48,
+    longitude: 126.49,
+    description: '공항 인근 숙소',
+    thumbnailUrl: 'https://images.example.com/hotel.jpg',
+    parkingYn: true,
+    useYn: true,
     ...overrides
   };
 }
