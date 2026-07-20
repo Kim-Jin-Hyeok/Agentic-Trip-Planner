@@ -377,6 +377,20 @@
   text-decoration: none;
 }
 
+.login-public-link {
+  display: block;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.login-public-link:hover {
+  color: var(--green-700);
+}
+
 @media (max-width: 980px) {
   .signup-page {
     grid-template-columns: 1fr;

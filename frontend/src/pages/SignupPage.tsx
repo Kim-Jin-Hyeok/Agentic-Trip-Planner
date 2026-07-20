@@ -209,7 +209,7 @@ export function SignupPage() {
         </form>
 
         <p className="signup-login-link">
-          이미 계정이 있나요? <Link to="/">로그인</Link>
+          이미 계정이 있나요? <Link to="/login">로그인</Link>
         </p>
       </section>
     </main>

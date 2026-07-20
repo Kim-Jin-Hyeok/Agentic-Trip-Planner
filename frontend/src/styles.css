@@ -1286,6 +1286,33 @@ button:disabled {
   text-decoration: none;
 }
 
+.auth-entry-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.auth-entry-actions a {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.auth-primary-link {
+  background: var(--green-800);
+  color: #fff;
+}
+
+.auth-secondary-link {
+  border: 1px solid #c7d5cc;
+  background: #fff;
+  color: var(--green-800);
+}
+
 .trip-form {
   border: 1px solid var(--line);
   border-radius: 16px;

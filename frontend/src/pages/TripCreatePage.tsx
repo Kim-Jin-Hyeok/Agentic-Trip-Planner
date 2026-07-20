@@ -464,17 +464,6 @@ export function TripCreatePage() {
     }
   }
 
-  async function handleLogin(loggedInSession: AuthSession) {
-    setSession(loggedInSession);
-    setTrip(null);
-    setPublicTrip(null);
-    setItineraries([]);
-    setIsEditingTitle(false);
-    setTitleDraft('');
-    setTitleError('');
-    await loadTrips();
-  }
-
   function handleLogout() {
     setSession(null);
     setTrips([]);
@@ -1382,9 +1371,6 @@ export function TripCreatePage() {
 
           <AuthPanel
             session={session}
-            onLogin={(loggedInSession) => {
-              void handleLogin(loggedInSession);
-            }}
             onLogout={handleLogout}
             onMessage={setMessage}
           />
