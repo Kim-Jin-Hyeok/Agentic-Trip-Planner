@@ -101,7 +101,7 @@ export function TripNewPage() {
           <span>T</span>
           <strong>TripAgent</strong>
         </Link>
-        <Link className="trip-new-back" to="/">내 여행으로 돌아가기</Link>
+        <Link className="trip-new-back" to="/trips">내 여행으로 돌아가기</Link>
       </header>
 
       <section className="trip-new-layout">

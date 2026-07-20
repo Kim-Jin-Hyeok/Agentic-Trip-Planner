@@ -10,7 +10,6 @@ import {
   getPublicTrip,
   getPublicTrips,
   getTrip,
-  getTrips,
   likePublicTrip,
   regenerateItineraryDay,
   regenerateItinerary,
@@ -27,7 +26,6 @@ import { getRecommendedPlaces, getTripEndpointPlaces } from '../api/placeApi';
 import { getTripWeather } from '../api/weatherApi';
 import { AuthPanel } from '../components/AuthPanel';
 import { AdminManagementPanel } from '../components/AdminManagementPanel';
-import { MyTripList } from '../components/MyTripList';
 import { PublicTripList } from '../components/PublicTripList';
 import { PlaceSuggestionPanel } from '../components/PlaceSuggestionPanel';
 import { TripDetailPanel } from '../components/TripDetailPanel';
@@ -44,7 +42,6 @@ import type {
   PublicTripSort,
   TripConditionUpdateRequest,
   TripDetail,
-  TripResponse,
   TripVisibility
 } from '../types/trip';
 import type { TripWeatherForecast } from '../types/weather';
@@ -94,7 +91,6 @@ const initialItineraryAddForm: ItineraryCreateRequest = {
 export function TripCreatePage() {
   const [session, setSession] = useState<AuthSession | null>(() => getStoredAuthSession());
   const [viewMode, setViewMode] = useState<ViewMode>(() => readBrowserNavigation().viewMode);
-  const [trips, setTrips] = useState<TripResponse[]>([]);
   const [publicTripPage, setPublicTripPage] = useState<PageResponse<PublicTripResponse> | null>(null);
   const [publicSort, setPublicSort] = useState<PublicTripSort>('LATEST');
   const [publicPage, setPublicPage] = useState(0);
@@ -109,7 +105,6 @@ export function TripCreatePage() {
   const [regeneratingDayNo, setRegeneratingDayNo] = useState<number | null>(null);
   const [lockedPlaceIds, setLockedPlaceIds] = useState<number[]>([]);
   const [isLoadingCandidatePlaces, setIsLoadingCandidatePlaces] = useState(false);
-  const [isLoadingTrips, setIsLoadingTrips] = useState(false);
   const [isLoadingPublicTrips, setIsLoadingPublicTrips] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
@@ -155,14 +150,6 @@ export function TripCreatePage() {
       };
     }, {});
   }, [itineraries]);
-
-  useEffect(() => {
-    if (session == null) {
-      return;
-    }
-
-    void loadTrips();
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,7 +209,7 @@ export function TripCreatePage() {
       if (initialNavigation.viewMode === 'public') {
         void loadPublicTripDetail(initialNavigation.tripId, false);
       } else if (initialNavigation.viewMode === 'mine' && session != null) {
-        void loadTripDetail(initialNavigation.tripId, false);
+        void loadTripDetail(initialNavigation.tripId);
       }
     }
 
@@ -238,7 +225,7 @@ export function TripCreatePage() {
         if (navigation.viewMode === 'public') {
           void loadPublicTripDetail(navigation.tripId, false);
         } else if (navigation.viewMode === 'mine' && session != null) {
-          void loadTripDetail(navigation.tripId, false);
+          void loadTripDetail(navigation.tripId);
         }
       }
     }
@@ -310,18 +297,6 @@ export function TripCreatePage() {
     setItineraryEditError('');
   }
 
-  async function loadTrips() {
-    setIsLoadingTrips(true);
-
-    try {
-      setTrips(await getTrips());
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '내 여행 목록 조회에 실패했습니다.');
-    } finally {
-      setIsLoadingTrips(false);
-    }
-  }
-
   async function loadTripWeather(tripId: number, requestId = ++weatherRequestId.current) {
     setIsLoadingWeather(true);
 
@@ -373,7 +348,7 @@ export function TripCreatePage() {
     }
   }
 
-  async function loadTripDetail(tripId: number, updateLocation = false) {
+  async function loadTripDetail(tripId: number) {
     setMessage('');
     setIsLoadingDetail(true);
 
@@ -391,9 +366,6 @@ export function TripCreatePage() {
       setLockedPlaceIds([]);
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(detail));
-      if (updateLocation) {
-        updateBrowserNavigation('mine', tripId);
-      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '여행 상세 조회에 실패했습니다.');
     } finally {
@@ -441,7 +413,6 @@ export function TripCreatePage() {
 
   function handleLogout() {
     setSession(null);
-    setTrips([]);
     setTrip(null);
     setPublicTrip(null);
     setItineraries([]);
@@ -615,7 +586,6 @@ export function TripCreatePage() {
         likeCount: updatedTrip.likeCount,
         viewCount: updatedTrip.viewCount
       });
-      await loadTrips();
       if (viewMode === 'public') {
         await loadPublicTrips(publicSort, publicPage, publicListMode, appliedPublicFilters);
       }
@@ -688,11 +658,6 @@ export function TripCreatePage() {
               ...updatedTrip
             }
           : currentTrip
-      );
-      setTrips((currentTrips) =>
-        currentTrips.map((currentTrip) =>
-          currentTrip.tripId === updatedTrip.tripId ? updatedTrip : currentTrip
-        )
       );
       setTitleDraft(updatedTrip.title);
       setIsEditingTitle(false);
@@ -794,9 +759,6 @@ export function TripCreatePage() {
         }
       }
       setTrip(updatedDetail);
-      setTrips((currentTrips) =>
-        currentTrips.map((currentTrip) => currentTrip.tripId === updatedTrip.tripId ? updatedTrip : currentTrip)
-      );
       setItineraries(updatedDetail.itineraries);
       setEditingItems({});
       setEditingItineraryId(null);
@@ -938,7 +900,6 @@ export function TripCreatePage() {
       setTitleError('');
       setEditingItems({});
       setCandidatePlaces([]);
-      await loadTrips();
       setMessage('여행을 삭제했습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '여행 삭제에 실패했습니다.');
@@ -994,7 +955,6 @@ export function TripCreatePage() {
       setCandidatePlaces([]);
       setGenerateOptions(createDefaultGenerateOptions(copiedTrip));
       updateBrowserNavigation('mine', copiedTrip.tripId);
-      await loadTrips();
       setMessage('공개 여행을 내 여행으로 가져왔습니다. 자유롭게 수정해 보세요.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '공개 여행을 내 여행으로 가져오지 못했습니다.');
@@ -1038,13 +998,6 @@ export function TripCreatePage() {
     } finally {
       setIsSharingPublicTrip(false);
     }
-  }
-
-  function handleShowMyTrips() {
-    setViewMode('mine');
-    setPublicTrip(null);
-    setItineraries(trip?.itineraries ?? []);
-    updateBrowserNavigation('mine', trip?.tripId ?? null);
   }
 
   function handleShowPublicTrips() {
@@ -1326,14 +1279,13 @@ export function TripCreatePage() {
             role="tablist"
             aria-label="서비스 보기 방식"
           >
-            <button
-              type="button"
+            <Link
+              to={session == null ? '/login?returnTo=/trips' : '/trips'}
               className={viewMode === 'mine' ? 'tab-button active' : 'tab-button'}
-              onClick={handleShowMyTrips}
             >
-              <span>내 여행</span>
-              <small>만들고 관리하기</small>
-            </button>
+              <span>내 여행 목록</span>
+              <small>여행 선택하고 관리하기</small>
+            </Link>
             <button
               type="button"
               className={viewMode === 'public' ? 'tab-button active' : 'tab-button'}
@@ -1355,27 +1307,15 @@ export function TripCreatePage() {
           </div>
 
           {viewMode === 'mine' && (
-            <>
-              <section className="new-trip-entry">
-                <div>
-                  <p>NEW JOURNEY</p>
-                  <strong>새로운 제주 여행을 계획해 보세요</strong>
-                  <span>여행 조건 입력은 별도 화면에서 차분하게 진행됩니다.</span>
-                </div>
-                <Link to={session == null ? '/login?returnTo=/trips/new' : '/trips/new'}>
-                  새 여행 만들기
-                </Link>
-              </section>
-              <MyTripList
-                session={session}
-                trips={trips}
-                selectedTripId={trip?.tripId}
-                isLoadingTrips={isLoadingTrips}
-                isLoadingDetail={isLoadingDetail}
-                onRefresh={() => void loadTrips()}
-                onSelect={(tripId) => void loadTripDetail(tripId, true)}
-              />
-            </>
+            <section className="workspace-shortcuts">
+              <p>MY TRIP MENU</p>
+              <strong>{trip == null ? '관리할 여행을 선택해 주세요' : trip.title}</strong>
+              <span>목록에서 기존 여행을 선택하거나 새로운 제주 여행을 시작할 수 있습니다.</span>
+              <div>
+                <Link to={session == null ? '/login?returnTo=/trips' : '/trips'}>내 여행 목록</Link>
+                <Link to={session == null ? '/login?returnTo=/trips/new' : '/trips/new'}>새 여행 만들기</Link>
+              </div>
+            </section>
           )}
 
           {viewMode === 'public' && (

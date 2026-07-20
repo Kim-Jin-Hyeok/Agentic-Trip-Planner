@@ -33,12 +33,13 @@ export type TripConditionUpdateRequest = {
   endPlaceId: number | null;
 };
 
-export type TripResponse = TripCreateRequest & {
+export type TripResponse = Omit<TripCreateRequest, 'lastAccommodationArea'> & {
   tripId: number;
   nights: number;
   likeCount: number;
   viewCount: number;
   visibility: TripVisibility;
+  lastAccommodationArea: string | null;
 };
 
 export type PlaceSummary = {
