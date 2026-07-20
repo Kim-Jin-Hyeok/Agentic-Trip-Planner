@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test tests/kakaoRoute.test.ts tests/accommodationDisplay.test.ts tests/placeSuggestionDisplay.test.ts tests/adminNavigation.test.ts tests/jejuRegion.test.ts tests/itineraryGenerateOptions.test.ts tests/tripWeather.test.ts tests/apiError.test.ts tests/signupValidation.test.ts tests/loginValidation.test.ts tests/tripNavigation.test.ts tests/tripList.test.ts tests/frontendError.test.ts",
+    "test": "node --test tests/kakaoRoute.test.ts tests/accommodationDisplay.test.ts tests/placeSuggestionDisplay.test.ts tests/adminNavigation.test.ts tests/jejuRegion.test.ts tests/itineraryGenerateOptions.test.ts tests/tripWeather.test.ts tests/apiError.test.ts tests/authExpiration.test.ts tests/signupValidation.test.ts tests/loginValidation.test.ts tests/tripNavigation.test.ts tests/tripList.test.ts tests/frontendError.test.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },

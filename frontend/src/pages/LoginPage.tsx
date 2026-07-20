@@ -9,6 +9,7 @@ import {
   resolveSafeReturnTo,
   validateLoginForm
 } from '../utils/loginValidation';
+import { isAuthExpiredReason } from '../utils/authNavigation';
 import './SignupPage.css';
 
 const initialForm: LoginForm = {
@@ -22,6 +23,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = resolveSafeReturnTo(searchParams.get('returnTo'));
+  const sessionExpired = isAuthExpiredReason(searchParams.get('reason'));
   const [form, setForm] = useState(initialForm);
   const [touchedFields, setTouchedFields] = useState<Set<LoginField>>(new Set());
   const [showPassword, setShowPassword] = useState(false);
@@ -118,6 +120,12 @@ export function LoginPage() {
           <h2 id="login-title">로그인</h2>
           <span>내 여행과 저장한 일정을 확인하려면 로그인해 주세요.</span>
         </div>
+
+        {sessionExpired && (
+          <div className="signup-alert" role="status">
+            로그인이 만료되었습니다. 다시 로그인해 주세요.
+          </div>
+        )}
 
         {serverError.length > 0 && (
           <div className="signup-alert" role="alert">{serverError}</div>

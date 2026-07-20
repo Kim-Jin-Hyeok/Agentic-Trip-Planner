@@ -1,25 +1,7 @@
 import { apiErrorFromNetwork, apiErrorFromResponse, parseApiResponse } from './apiError';
+import { expireStoredAuthSession, getStoredAccessToken } from './authStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
-const ACCESS_TOKEN_STORAGE_KEY = 'tripagent.accessToken';
-
-export function getStoredAccessToken(): string {
-  return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) ?? '';
-}
-
-export function storeAccessToken(accessToken: string): void {
-  const trimmedToken = accessToken.trim();
-  if (trimmedToken.length === 0) {
-    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    return;
-  }
-
-  localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, trimmedToken);
-}
-
-export function clearAccessToken(): void {
-  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-}
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
@@ -44,6 +26,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      expireStoredAuthSession();
+    }
     throw await apiErrorFromResponse(response);
   }
 

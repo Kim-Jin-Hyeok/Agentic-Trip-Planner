@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { AuthExpirationHandler } from './components/AuthExpirationHandler';
 import { PrivateTripRoute } from './components/PrivateTripRoute';
 
 const SignupPage = lazy(() => import('./pages/SignupPage').then(module => ({
@@ -21,7 +22,9 @@ const TripCreatePage = lazy(() => import('./pages/TripCreatePage').then(module =
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <AuthExpirationHandler />
+      <Routes>
       <Route
         path="/login"
         element={(
@@ -72,7 +75,8 @@ export default function App() {
           </RoutePage>
         )}
       />
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

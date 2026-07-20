@@ -1,7 +1,14 @@
-import { clearAccessToken, getStoredAccessToken, storeAccessToken } from './client';
 import type { AuthSession } from '../types/auth';
 
+export const AUTH_SESSION_EXPIRED_EVENT = 'tripagent:auth-session-expired';
+
+const ACCESS_TOKEN_STORAGE_KEY = 'tripagent.accessToken';
 const AUTH_SESSION_STORAGE_KEY = 'tripagent.authSession';
+let authExpirationDispatched = false;
+
+export function getStoredAccessToken(): string {
+  return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) ?? '';
+}
 
 export function getStoredAuthSession(): AuthSession | null {
   const accessToken = getStoredAccessToken();
@@ -31,17 +38,37 @@ export function getStoredAuthSession(): AuthSession | null {
 }
 
 export function storeAuthSession(accessToken: string, session: AuthSession): void {
-  if (accessToken.trim().length === 0) {
+  const normalizedAccessToken = accessToken.trim();
+  if (normalizedAccessToken.length === 0) {
     clearStoredAuthSession();
     return;
   }
 
-  storeAccessToken(accessToken);
+  authExpirationDispatched = false;
+  localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, normalizedAccessToken);
   localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(session));
 }
 
 export function clearStoredAuthSession(): void {
-  clearAccessToken();
+  authExpirationDispatched = false;
+  removeStoredAuthSession();
+}
+
+export function expireStoredAuthSession(): boolean {
+  const hadStoredAuth = getStoredAccessToken().length > 0
+    || localStorage.getItem(AUTH_SESSION_STORAGE_KEY) != null;
+  removeStoredAuthSession();
+  if (!hadStoredAuth || authExpirationDispatched) {
+    return false;
+  }
+
+  authExpirationDispatched = true;
+  window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+  return true;
+}
+
+function removeStoredAuthSession(): void {
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
 }
 
