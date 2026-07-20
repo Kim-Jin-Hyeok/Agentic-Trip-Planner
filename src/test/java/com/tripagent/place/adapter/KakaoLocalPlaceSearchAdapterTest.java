@@ -6,13 +6,17 @@ import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
+import java.net.http.HttpTimeoutException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 
 class KakaoLocalPlaceSearchAdapterTest {
 
@@ -68,6 +72,44 @@ class KakaoLocalPlaceSearchAdapterTest {
 
         assertThatThrownBy(() -> adapter.search("제주 새별오름", 5))
                 .isInstanceOf(PlaceSearchAdapterException.class)
-                .hasMessage("Kakao Local API key is not configured.");
+                .hasMessage("Kakao Local API key is not configured.")
+                .satisfies(exception -> assertThat(((PlaceSearchAdapterException) exception).getFailureType())
+                        .isEqualTo(PlaceSearchFailureType.CONFIGURATION));
+    }
+
+    @Test
+    void classifiesTooManyRequestsAsRateLimited() {
+        RestClient.Builder restClientBuilder = RestClient.builder().baseUrl("https://dapi.kakao.com");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        KakaoLocalPlaceSearchAdapter adapter = new KakaoLocalPlaceSearchAdapter(
+                restClientBuilder.build(), "test-key"
+        );
+        server.expect(requestTo(containsString("/v2/local/search/keyword.json")))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+
+        assertThatThrownBy(() -> adapter.search("제주 호텔", 5))
+                .isInstanceOf(PlaceSearchAdapterException.class)
+                .satisfies(exception -> assertThat(((PlaceSearchAdapterException) exception).getFailureType())
+                        .isEqualTo(PlaceSearchFailureType.RATE_LIMITED));
+        server.verify();
+    }
+
+    @Test
+    void classifiesRequestTimeout() {
+        RestClient.Builder restClientBuilder = RestClient.builder().baseUrl("https://dapi.kakao.com");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        KakaoLocalPlaceSearchAdapter adapter = new KakaoLocalPlaceSearchAdapter(
+                restClientBuilder.build(), "test-key"
+        );
+        server.expect(requestTo(containsString("/v2/local/search/keyword.json")))
+                .andRespond(request -> {
+                    throw new ResourceAccessException("timeout", new HttpTimeoutException("timeout"));
+                });
+
+        assertThatThrownBy(() -> adapter.search("제주 호텔", 5))
+                .isInstanceOf(PlaceSearchAdapterException.class)
+                .satisfies(exception -> assertThat(((PlaceSearchAdapterException) exception).getFailureType())
+                        .isEqualTo(PlaceSearchFailureType.TIMEOUT));
+        server.verify();
     }
 }

@@ -6,6 +6,7 @@ import com.tripagent.auth.support.AuthorizationException;
 import com.tripagent.place.adapter.PlaceSearchAdapterException;
 import java.util.NoSuchElementException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -72,12 +73,27 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(PlaceSearchAdapterException.class)
-    @ResponseStatus(HttpStatus.BAD_GATEWAY)
-    public ErrorResponse handlePlaceSearchAdapterException(PlaceSearchAdapterException exception) {
-        return new ErrorResponse(
-                "EXTERNAL_PLACE_SEARCH_FAILED",
-                "외부 장소 검색 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해 주세요."
-        );
+    public ResponseEntity<ErrorResponse> handlePlaceSearchAdapterException(
+            PlaceSearchAdapterException exception
+    ) {
+        return switch (exception.getFailureType()) {
+            case CONFIGURATION -> ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ErrorResponse(
+                    "EXTERNAL_PLACE_SEARCH_CONFIGURATION",
+                    "외부 장소 검색 서비스 설정에 문제가 있습니다. 관리자에게 문의해 주세요."
+            ));
+            case RATE_LIMITED -> ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ErrorResponse(
+                    "EXTERNAL_PLACE_SEARCH_RATE_LIMITED",
+                    "외부 장소 검색 요청이 많습니다. 잠시 후 다시 시도해 주세요."
+            ));
+            case TIMEOUT -> ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ErrorResponse(
+                    "EXTERNAL_PLACE_SEARCH_TIMEOUT",
+                    "외부 장소 검색 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요."
+            ));
+            case UNAVAILABLE -> ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ErrorResponse(
+                    "EXTERNAL_PLACE_SEARCH_FAILED",
+                    "외부 장소 검색 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해 주세요."
+            ));
+        };
     }
 
     private ErrorResponse errorResponseForInvalidRequest(String message) {

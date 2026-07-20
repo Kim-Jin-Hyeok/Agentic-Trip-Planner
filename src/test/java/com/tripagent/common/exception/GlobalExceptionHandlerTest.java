@@ -5,8 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tripagent.ai.llm.LlmException;
 import com.tripagent.ai.llm.LlmFailureType;
 import com.tripagent.auth.support.AuthorizationException;
+import com.tripagent.place.adapter.PlaceSearchAdapterException;
+import com.tripagent.place.adapter.PlaceSearchFailureType;
 import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 class GlobalExceptionHandlerTest {
 
@@ -93,6 +97,41 @@ class GlobalExceptionHandlerTest {
         assertThat(response.message()).isEqualTo(
                 "AI 일정 생성 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
         );
+    }
+
+    @Test
+    void handlePlaceSearchRateLimitReturnsTooManyRequests() {
+        ResponseEntity<ErrorResponse> response = handler.handlePlaceSearchAdapterException(
+                new PlaceSearchAdapterException(PlaceSearchFailureType.RATE_LIMITED, "rate limited")
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("EXTERNAL_PLACE_SEARCH_RATE_LIMITED");
+        assertThat(response.getBody().message()).contains("잠시 후 다시 시도");
+    }
+
+    @Test
+    void handlePlaceSearchTimeoutReturnsRetryableServiceUnavailable() {
+        ResponseEntity<ErrorResponse> response = handler.handlePlaceSearchAdapterException(
+                new PlaceSearchAdapterException(PlaceSearchFailureType.TIMEOUT, "timeout")
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("EXTERNAL_PLACE_SEARCH_TIMEOUT");
+    }
+
+    @Test
+    void handlePlaceSearchConfigurationFailureHidesProviderDetails() {
+        ResponseEntity<ErrorResponse> response = handler.handlePlaceSearchAdapterException(
+                new PlaceSearchAdapterException(PlaceSearchFailureType.CONFIGURATION, "invalid secret")
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("EXTERNAL_PLACE_SEARCH_CONFIGURATION");
+        assertThat(response.getBody().message()).doesNotContain("secret");
     }
 
     @Test

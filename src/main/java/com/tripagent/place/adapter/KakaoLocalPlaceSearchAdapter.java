@@ -3,6 +3,8 @@ package com.tripagent.place.adapter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.tripagent.place.config.KakaoLocalProperties;
 import java.net.http.HttpClient;
+import java.net.http.HttpTimeoutException;
+import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +13,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class KakaoLocalPlaceSearchAdapter implements PlaceSearchAdapter {
@@ -45,7 +48,10 @@ public class KakaoLocalPlaceSearchAdapter implements PlaceSearchAdapter {
     @Override
     public List<PlaceSearchCandidate> search(String query, int size) {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new PlaceSearchAdapterException("Kakao Local API key is not configured.");
+            throw new PlaceSearchAdapterException(
+                    PlaceSearchFailureType.CONFIGURATION,
+                    "Kakao Local API key is not configured."
+            );
         }
         if (query == null || query.isBlank()) {
             throw new IllegalArgumentException("Place search query is required.");
@@ -69,9 +75,57 @@ public class KakaoLocalPlaceSearchAdapter implements PlaceSearchAdapter {
                     .map(this::toCandidate)
                     .filter(Objects::nonNull)
                     .toList();
+        } catch (RestClientResponseException exception) {
+            throw classifyResponseException(exception);
         } catch (RestClientException exception) {
-            throw new PlaceSearchAdapterException("Kakao Local place search request failed.", exception);
+            if (hasCause(exception, HttpTimeoutException.class)
+                    || hasCause(exception, SocketTimeoutException.class)) {
+                throw new PlaceSearchAdapterException(
+                        PlaceSearchFailureType.TIMEOUT,
+                        "Kakao Local place search request timed out.",
+                        exception
+                );
+            }
+            throw new PlaceSearchAdapterException(
+                    PlaceSearchFailureType.UNAVAILABLE,
+                    "Kakao Local place search request failed.",
+                    exception
+            );
         }
+    }
+
+    private PlaceSearchAdapterException classifyResponseException(RestClientResponseException exception) {
+        int statusCode = exception.getStatusCode().value();
+        if (statusCode == 429) {
+            return new PlaceSearchAdapterException(
+                    PlaceSearchFailureType.RATE_LIMITED,
+                    "Kakao Local API rate limit exceeded.",
+                    exception
+            );
+        }
+        if (statusCode == 401 || statusCode == 403) {
+            return new PlaceSearchAdapterException(
+                    PlaceSearchFailureType.CONFIGURATION,
+                    "Kakao Local API authentication failed.",
+                    exception
+            );
+        }
+        return new PlaceSearchAdapterException(
+                PlaceSearchFailureType.UNAVAILABLE,
+                "Kakao Local place search request failed. status=" + statusCode,
+                exception
+        );
+    }
+
+    private boolean hasCause(Throwable throwable, Class<? extends Throwable> causeType) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (causeType.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private PlaceSearchCandidate toCandidate(KakaoLocalDocument document) {
