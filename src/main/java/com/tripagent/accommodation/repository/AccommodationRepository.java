@@ -49,4 +49,26 @@ public interface AccommodationRepository extends JpaRepository<Accommodation, Lo
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    @Query("""
+            select a
+            from Accommodation a
+            where (:useYn is null or a.useYn = :useYn)
+              and (:accommodationType is null or a.accommodationType = :accommodationType)
+              and (:region is null or a.region = :region)
+              and (
+                    :keyword is null
+                    or lower(a.name) like concat('%', :keyword, '%')
+                    or lower(a.address) like concat('%', :keyword, '%')
+                    or lower(coalesce(a.description, '')) like concat('%', :keyword, '%')
+              )
+            order by a.accommodationId desc
+            """)
+    Page<Accommodation> searchAdminAccommodations(
+            @Param("useYn") Boolean useYn,
+            @Param("accommodationType") AccommodationType accommodationType,
+            @Param("region") String region,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
 }

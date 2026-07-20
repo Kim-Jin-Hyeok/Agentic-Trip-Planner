@@ -17,6 +17,7 @@ import com.tripagent.accommodation.dto.AdminAccommodationCreateRequest;
 import com.tripagent.accommodation.repository.AccommodationRepository;
 import com.tripagent.auth.service.AdminAuthorizationService;
 import com.tripagent.common.exception.ConflictException;
+import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.adapter.PlaceSearchAdapter;
 import com.tripagent.place.adapter.PlaceSearchCandidate;
 import java.util.List;
@@ -25,6 +26,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class AdminAccommodationServiceTest {
@@ -84,6 +87,49 @@ class AdminAccommodationServiceTest {
                 .hasMessage("Accommodation search keyword is required.");
 
         verifyNoInteractions(placeSearchAdapter);
+    }
+
+    @Test
+    void searchAccommodationsRequiresAdminAndReturnsFilteredPage() {
+        Accommodation accommodation = accommodation(
+                10L, "제주 호텔", "제주특별자치도 제주시", 33.48, 126.49
+        );
+        PageRequest pageable = PageRequest.of(1, 10);
+        when(accommodationRepository.searchAdminAccommodations(
+                true, AccommodationType.HOTEL, "NORTH", "호텔", pageable
+        )).thenReturn(new PageImpl<>(List.of(accommodation), pageable, 11));
+
+        PageResponse<AccommodationResponse> response = adminAccommodationService.searchAccommodations(
+                1L, AccommodationType.HOTEL, " north ", " 호텔 ", true, 1, 10
+        );
+
+        verify(adminAuthorizationService).requireAdmin(1L);
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().getFirst().useYn()).isTrue();
+        assertThat(response.totalElements()).isEqualTo(11);
+    }
+
+    @Test
+    void updateStatusDeactivatesAccommodation() {
+        Accommodation accommodation = accommodation(
+                10L, "제주 호텔", "제주특별자치도 제주시", 33.48, 126.49
+        );
+        when(accommodationRepository.findById(10L)).thenReturn(Optional.of(accommodation));
+
+        AccommodationResponse response = adminAccommodationService.updateStatus(1L, 10L, false);
+
+        verify(adminAuthorizationService).requireAdmin(1L);
+        assertThat(accommodation.getUseYn()).isFalse();
+        assertThat(response.useYn()).isFalse();
+    }
+
+    @Test
+    void updateStatusRejectsUnknownAccommodation() {
+        when(accommodationRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> adminAccommodationService.updateStatus(1L, 10L, false))
+                .isInstanceOf(java.util.NoSuchElementException.class)
+                .hasMessage("Accommodation not found. accommodationId=10");
     }
 
     @Test

@@ -13,6 +13,7 @@ export type Accommodation = {
   description: string | null;
   thumbnailUrl: string | null;
   parkingYn: boolean;
+  useYn?: boolean;
 };
 
 export type AccommodationSearchParams = {
@@ -21,6 +22,10 @@ export type AccommodationSearchParams = {
   keyword: string;
   page: number;
   size: number;
+};
+
+export type AdminAccommodationSearchParams = AccommodationSearchParams & {
+  useYn: '' | 'true' | 'false';
 };
 
 export type TripAccommodation = {

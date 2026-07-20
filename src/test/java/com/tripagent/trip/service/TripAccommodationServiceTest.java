@@ -106,6 +106,26 @@ class TripAccommodationServiceTest {
     }
 
     @Test
+    void getTripAccommodationsKeepsInactiveAccommodationVisible() {
+        Trip trip = trip(1L, 100L);
+        Accommodation inactiveAccommodation = accommodation(10L, false);
+        TripAccommodation tripAccommodation = TripAccommodation.create(
+                trip,
+                inactiveAccommodation,
+                LocalDate.of(2026, 7, 1)
+        );
+        when(tripRepository.findById(1L)).thenReturn(Optional.of(trip));
+        when(tripAccommodationRepository.findByTripIdOrderByStayDate(1L))
+                .thenReturn(List.of(tripAccommodation));
+
+        List<TripAccommodationResponse> responses = tripAccommodationService.getTripAccommodations(1L, 100L);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.getFirst().accommodation().accommodationId()).isEqualTo(10L);
+        assertThat(responses.getFirst().accommodation().useYn()).isFalse();
+    }
+
+    @Test
     void replaceTripAccommodationsRecalculatesNextDayScheduleFromChangedAccommodation() {
         Trip trip = trip(1L, 100L);
         Accommodation previousAccommodation = accommodation(20L, true);

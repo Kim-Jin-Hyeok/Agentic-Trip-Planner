@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AdminAccommodationRegistrationPanel } from './AdminAccommodationRegistrationPanel';
+import { AdminAccommodationManagementPanel } from './AdminAccommodationManagementPanel';
 import { AdminPlaceSuggestionPanel } from './AdminPlaceSuggestionPanel';
 
 type AdminManagementMode = 'PLACE' | 'ACCOMMODATION';
@@ -29,7 +30,14 @@ export function AdminManagementPanel() {
           숙소 관리
         </button>
       </div>
-      {mode === 'PLACE' ? <AdminPlaceSuggestionPanel /> : <AdminAccommodationRegistrationPanel />}
+      {mode === 'PLACE' ? (
+        <AdminPlaceSuggestionPanel />
+      ) : (
+        <>
+          <AdminAccommodationRegistrationPanel />
+          <AdminAccommodationManagementPanel />
+        </>
+      )}
     </div>
   );
 }

@@ -13,8 +13,27 @@ public record AccommodationResponse(
         Double longitude,
         String description,
         String thumbnailUrl,
-        Boolean parkingYn
+        Boolean parkingYn,
+        Boolean useYn
 ) {
+
+    public AccommodationResponse(
+            Long accommodationId,
+            String name,
+            AccommodationType accommodationType,
+            String region,
+            String address,
+            Double latitude,
+            Double longitude,
+            String description,
+            String thumbnailUrl,
+            Boolean parkingYn
+    ) {
+        this(
+                accommodationId, name, accommodationType, region, address,
+                latitude, longitude, description, thumbnailUrl, parkingYn, true
+        );
+    }
 
     public static AccommodationResponse from(Accommodation accommodation) {
         return new AccommodationResponse(
@@ -27,7 +46,8 @@ public record AccommodationResponse(
                 accommodation.getLongitude(),
                 accommodation.getDescription(),
                 accommodation.getThumbnailUrl(),
-                accommodation.getParkingYn()
+                accommodation.getParkingYn(),
+                accommodation.getUseYn()
         );
     }
 }

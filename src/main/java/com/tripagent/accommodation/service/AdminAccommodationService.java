@@ -1,6 +1,7 @@
 package com.tripagent.accommodation.service;
 
 import com.tripagent.accommodation.domain.Accommodation;
+import com.tripagent.accommodation.domain.AccommodationType;
 import com.tripagent.accommodation.dto.AccommodationDuplicateReason;
 import com.tripagent.accommodation.dto.AccommodationResponse;
 import com.tripagent.accommodation.dto.AccommodationSearchCandidateResponse;
@@ -8,6 +9,7 @@ import com.tripagent.accommodation.dto.AdminAccommodationCreateRequest;
 import com.tripagent.accommodation.repository.AccommodationRepository;
 import com.tripagent.auth.service.AdminAuthorizationService;
 import com.tripagent.common.exception.ConflictException;
+import com.tripagent.common.response.PageResponse;
 import com.tripagent.place.adapter.PlaceSearchAdapter;
 import com.tripagent.place.adapter.PlaceSearchCandidate;
 import java.util.List;
@@ -15,6 +17,9 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +37,9 @@ public class AdminAccommodationService {
     private static final double MINIMUM_JEJU_LONGITUDE = 126.0;
     private static final double MAXIMUM_JEJU_LONGITUDE = 127.0;
     private static final Set<String> ALLOWED_REGIONS = Set.of("EAST", "WEST", "NORTH", "SOUTH");
+    private static final int DEFAULT_PAGE = 0;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 50;
 
     private final AdminAuthorizationService adminAuthorizationService;
     private final PlaceSearchAdapter placeSearchAdapter;
@@ -56,6 +64,41 @@ public class AdminAccommodationService {
                 .limit(5)
                 .map(this::toCandidateResponse)
                 .toList();
+    }
+
+    public PageResponse<AccommodationResponse> searchAccommodations(
+            Long memberId,
+            AccommodationType accommodationType,
+            String region,
+            String keyword,
+            Boolean useYn,
+            Integer page,
+            Integer size
+    ) {
+        adminAuthorizationService.requireAdmin(memberId);
+        Pageable pageable = PageRequest.of(normalizePage(page), normalizePageSize(size));
+        Page<Accommodation> accommodationPage = accommodationRepository.searchAdminAccommodations(
+                useYn,
+                accommodationType,
+                normalizeOptionalRegion(region),
+                normalizeOptionalKeyword(keyword),
+                pageable
+        );
+        return PageResponse.from(accommodationPage.map(AccommodationResponse::from));
+    }
+
+    @Transactional
+    public AccommodationResponse updateStatus(Long memberId, Long accommodationId, Boolean useYn) {
+        adminAuthorizationService.requireAdmin(memberId);
+        if (useYn == null) {
+            throw new IllegalArgumentException("Accommodation useYn is required.");
+        }
+        Accommodation accommodation = accommodationRepository.findById(accommodationId)
+                .orElseThrow(() -> new java.util.NoSuchElementException(
+                        "Accommodation not found. accommodationId=" + accommodationId
+                ));
+        accommodation.changeUseYn(useYn);
+        return AccommodationResponse.from(accommodation);
     }
 
     @Transactional
@@ -203,6 +246,40 @@ public class AdminAccommodationService {
             throw new IllegalArgumentException("Accommodation region is invalid. value=" + region);
         }
         return normalizedRegion;
+    }
+
+    private int normalizePage(Integer page) {
+        if (page == null) {
+            return DEFAULT_PAGE;
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("Page must be greater than or equal to 0.");
+        }
+        return page;
+    }
+
+    private int normalizePageSize(Integer size) {
+        if (size == null) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("Page size must be between 1 and 50.");
+        }
+        return size;
+    }
+
+    private String normalizeOptionalRegion(String region) {
+        if (region == null || region.isBlank()) {
+            return null;
+        }
+        return normalizeRegion(region);
+    }
+
+    private String normalizeOptionalKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        return keyword.trim().toLowerCase(Locale.ROOT);
     }
 
     private void validateJejuLocation(String address, Double latitude, Double longitude) {

@@ -184,6 +184,13 @@ public class Accommodation {
         return externalPlaceUrl;
     }
 
+    public void changeUseYn(Boolean useYn) {
+        if (useYn == null) {
+            throw new IllegalArgumentException("Accommodation useYn is required.");
+        }
+        this.useYn = useYn;
+    }
+
     public void linkExternalReference(String provider, String placeId, String placeUrl) {
         if (provider == null || provider.isBlank() || placeId == null || placeId.isBlank()) {
             throw new IllegalArgumentException("External accommodation provider and place ID are required.");

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,6 +18,7 @@ import com.tripagent.accommodation.service.AdminAccommodationService;
 import com.tripagent.auth.support.LoginMemberId;
 import com.tripagent.common.exception.ConflictException;
 import com.tripagent.common.exception.GlobalExceptionHandler;
+import com.tripagent.common.response.PageResponse;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,24 @@ class AdminAccommodationControllerTest {
     }
 
     @Test
+    void searchAccommodationsReturnsFilteredPage() throws Exception {
+        when(adminAccommodationService.searchAccommodations(
+                1L, AccommodationType.HOTEL, "NORTH", "호텔", false, 0, 20
+        )).thenReturn(new PageResponse<>(List.of(response(false)), 0, 20, 1, 1, true, true));
+
+        mockMvc.perform(get("/api/admin/accommodations")
+                        .param("type", "HOTEL")
+                        .param("region", "NORTH")
+                        .param("keyword", "호텔")
+                        .param("useYn", "false")
+                        .param("page", "0")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].accommodationId").value(20L))
+                .andExpect(jsonPath("$.data.content[0].useYn").value(false));
+    }
+
+    @Test
     void registerAccommodationReturnsCreatedAccommodation() throws Exception {
         when(adminAccommodationService.registerAccommodation(
                 eq(1L), any(AdminAccommodationCreateRequest.class)
@@ -97,6 +117,27 @@ class AdminAccommodationControllerTest {
                 .andExpect(jsonPath("$.code").value("CONFLICT"));
     }
 
+    @Test
+    void updateStatusReturnsUpdatedAccommodation() throws Exception {
+        when(adminAccommodationService.updateStatus(1L, 20L, false)).thenReturn(response(false));
+
+        mockMvc.perform(patch("/api/admin/accommodations/20/status")
+                        .contentType("application/json")
+                        .content("{\"useYn\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accommodationId").value(20L))
+                .andExpect(jsonPath("$.data.useYn").value(false));
+    }
+
+    @Test
+    void updateStatusRejectsMissingUseYn() throws Exception {
+        mockMvc.perform(patch("/api/admin/accommodations/20/status")
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
     private String createRequestJson(String accommodationType) {
         String typeJson = accommodationType == null ? "null" : "\"" + accommodationType + "\"";
         return """
@@ -116,10 +157,14 @@ class AdminAccommodationControllerTest {
     }
 
     private AccommodationResponse response() {
+        return response(true);
+    }
+
+    private AccommodationResponse response(boolean useYn) {
         return new AccommodationResponse(
                 20L, "제주 호텔", AccommodationType.HOTEL, "NORTH",
                 "제주특별자치도 제주시 연동 1", 33.48, 126.49,
-                "공항 인근 숙소", null, true
+                "공항 인근 숙소", null, true, useYn
         );
     }
 

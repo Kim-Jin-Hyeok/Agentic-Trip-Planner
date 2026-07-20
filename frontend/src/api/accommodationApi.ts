@@ -3,6 +3,7 @@ import type {
   Accommodation,
   AccommodationSearchCandidate,
   AccommodationSearchParams,
+  AdminAccommodationSearchParams,
   AdminAccommodationCreateRequest,
   TripAccommodation,
   TripAccommodationReplaceRequest
@@ -56,6 +57,32 @@ export function registerAdminAccommodation(
   return apiRequest<Accommodation>('/api/admin/accommodations', {
     method: 'POST',
     body: JSON.stringify(request)
+  });
+}
+
+export function getAdminAccommodations(
+  params: AdminAccommodationSearchParams
+): Promise<PageResponse<Accommodation>> {
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    size: String(params.size)
+  });
+  appendIfPresent(searchParams, 'type', params.type);
+  appendIfPresent(searchParams, 'region', params.region);
+  appendIfPresent(searchParams, 'keyword', params.keyword);
+  appendIfPresent(searchParams, 'useYn', params.useYn);
+  return apiRequest<PageResponse<Accommodation>>(
+    `/api/admin/accommodations?${searchParams.toString()}`
+  );
+}
+
+export function updateAdminAccommodationStatus(
+  accommodationId: number,
+  useYn: boolean
+): Promise<Accommodation> {
+  return apiRequest<Accommodation>(`/api/admin/accommodations/${accommodationId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ useYn })
   });
 }
 
